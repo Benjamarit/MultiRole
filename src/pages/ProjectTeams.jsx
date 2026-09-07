@@ -7,18 +7,12 @@ import Input from '../components/Input';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TeamFormModal from '../components/TeamFormModal';
-
-// ข้อมูลจำลองทีมในโครงการนี้
-const initialTeams = [
-  { id: 1, name: 'Team Alpha', members: ['สมชาย ใจดี', 'สมศรี เรียนเก่ง'] },
-  { id: 2, name: 'Team Beta', members: ['วิชัย ทำงาน'] },
-  { id: 3, name: 'Team Gamma', members: [] },
-];
+import { deleteTeam, getTeamsByProject, saveTeam } from '../data/TeamStore';
 
 export default function ProjectTeams() {
   const { id } = useParams();
 
-  const [teams, setTeams] = useState(initialTeams);
+  const [teams, setTeams] = useState(() => getTeamsByProject(id));
   const [searchTerm, setSearchTerm] = useState('');
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -48,12 +42,10 @@ export default function ProjectTeams() {
   };
 
   const handleSaveTeam = (teamData) => {
-    if (teamData.id) {
-      setTeams((prev) => prev.map((t) => (t.id === teamData.id ? { ...t, ...teamData } : t)));
-    } else {
-      const nextId = teams.length > 0 ? Math.max(...teams.map((t) => t.id)) + 1 : 1;
-      setTeams((prev) => [{ ...teamData, id: nextId }, ...prev]);
-    }
+    const savedTeam = saveTeam(id, teamData);
+    setTeams((prev) => teamData.id
+      ? prev.map((team) => (team.id === savedTeam.id ? savedTeam : team))
+      : [savedTeam, ...prev]);
     setIsFormOpen(false);
     setEditingTeam(null);
   };
@@ -65,7 +57,8 @@ export default function ProjectTeams() {
 
   const confirmDelete = () => {
     if (teamToDelete) {
-      setTeams((prev) => prev.filter((t) => t.id !== teamToDelete.id));
+      deleteTeam(id, teamToDelete.id);
+      setTeams((prev) => prev.filter((team) => team.id !== teamToDelete.id));
       setIsConfirmOpen(false);
       setTeamToDelete(null);
     }

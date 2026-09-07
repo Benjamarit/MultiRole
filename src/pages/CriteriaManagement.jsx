@@ -8,6 +8,7 @@ import Input from '../components/Input';
 import Select from '../components/Select';
 import Modal from '../components/CriteriaModal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { deleteCriterion, getCriteriaByProject, saveCriterion } from '../data/CriteriaStore';
 
 const SCORING_TYPES = [
   { value: 'STAR', label: 'Star Rating (ให้คะแนนเป็นดาว)' },
@@ -19,12 +20,7 @@ const SCORING_TYPES = [
 export default function CriteriaManagement() {
   const { id } = useParams();
 
-  // ข้อมูลจำลองเกณฑ์ประเมิน
-  const [criteria, setCriteria] = useState([
-    { id: 1, name: 'Innovation (นวัตกรรม)', type: 'STAR', weight: 30, maxScore: 5 },
-    { id: 2, name: 'Technical Score', type: 'NUMERIC', weight: 50, maxScore: 100 },
-    { id: 3, name: 'Presentation', type: 'STAR', weight: 20, maxScore: 5 },
-  ]);
+  const [criteria, setCriteria] = useState(() => getCriteriaByProject(id));
 
   // States สำหรับจัดการ Modal Form
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,22 +43,23 @@ export default function CriteriaManagement() {
       formData.type === 'PERCENTAGE' ? 100 : formData.type === 'PASS_FAIL' ? 1 : Number(formData.maxScore);
 
     if (editingId) {
-      setCriteria((prev) =>
-        prev.map((item) =>
-          item.id === editingId
-            ? { ...item, name: formData.name, type: formData.type, weight: Number(formData.weight), maxScore }
-            : item
-        )
-      );
+      const savedCriterion = saveCriterion(id, {
+        id: editingId,
+        name: formData.name,
+        type: formData.type,
+        weight: Number(formData.weight),
+        maxScore,
+      });
+      setCriteria((prev) => prev.map((item) => (item.id === editingId ? savedCriterion : item)));
     } else {
-      const newCriterion = {
+      const newCriterion = saveCriterion(id, {
         id: Date.now(),
         name: formData.name,
         type: formData.type,
         weight: Number(formData.weight),
         maxScore,
-      };
-      setCriteria([...criteria, newCriterion]);
+      });
+      setCriteria((prev) => [...prev, newCriterion]);
     }
 
     setIsModalOpen(false);
@@ -85,7 +82,8 @@ export default function CriteriaManagement() {
   };
 
   const confirmDelete = () => {
-    setCriteria(criteria.filter(c => c.id !== deleteId));
+    deleteCriterion(id, deleteId);
+    setCriteria((prev) => prev.filter((criterion) => criterion.id !== deleteId));
     setIsConfirmOpen(false);
   };
 

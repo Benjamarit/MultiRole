@@ -1,25 +1,15 @@
 import { useMemo, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CriterionScoreInput from '../components/CriteriaScoreInput';
-
-// เกณฑ์ประเมินของโครงการนี้ — ใช้ชุดเดียวกับ mock ใน CriteriaManagement.jsx เพื่อให้สอดคล้องกันทั้งระบบ
-const criteria = [
-  { id: 1, name: 'Innovation (นวัตกรรม)', type: 'STAR', weight: 30, maxScore: 5 },
-  { id: 2, name: 'Technical Score', type: 'NUMERIC', weight: 50, maxScore: 100 },
-  { id: 3, name: 'Presentation', type: 'STAR', weight: 20, maxScore: 5 },
-];
-
-// ทีมในโครงการ — ใช้ id เดียวกับ mock ใน ProjectTeams.jsx
-const teamsById = {
-  1: 'Team Alpha',
-  2: 'Team Beta',
-  3: 'Team Gamma',
-};
+import { getCriteriaByProject } from '../data/CriteriaStore';
+import { getTeamsByProject } from '../data/TeamStore';
+import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
+import { useAuth } from '../context/AuthContext';
 
 function scoreLabel(criterion, value) {
   if (value === null || value === undefined) return null;
@@ -37,19 +27,23 @@ function normalizedScore(criterion, value) {
 
 export default function JudgeEvaluation() {
   const { projectId, teamId } = useParams();
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  const criteria = getCriteriaByProject(projectId);
+  const team = getTeamsByProject(projectId).find((item) => item.id === Number(teamId));
+  const judgeId = user?.email || 'anonymous-judge';
+  const savedEvaluation = getEvaluation(projectId, teamId, judgeId);
 
-  const teamName = teamsById[teamId] || `ทีม #${teamId}`;
+  const teamName = team?.name || `ทีม #${teamId}`;
 
-  const [scores, setScores] = useState({}); // { [criterionId]: value }
-  const [comment, setComment] = useState('');
-  const [isLocked, setIsLocked] = useState(false);
+  const [scores, setScores] = useState(() => savedEvaluation?.scores || {});
+  const [comment, setComment] = useState(() => savedEvaluation?.comment || '');
+  const [isLocked, setIsLocked] = useState(() => savedEvaluation?.status === 'SUBMITTED');
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState(null);
 
   const allAnswered = useMemo(
     () => criteria.every((c) => scores[c.id] !== undefined && scores[c.id] !== null),
-    [scores]
+    [criteria, scores]
   );
 
   const estimatedTotal = useMemo(() => {
@@ -59,14 +53,23 @@ export default function JudgeEvaluation() {
       0
     );
     return weighted.toFixed(1);
-  }, [scores]);
+  }, [criteria, scores]);
 
   const handleScoreChange = (criterionId, value) => {
     setScores((prev) => ({ ...prev, [criterionId]: value }));
   };
 
-  // TODO: ตอนต่อ API จริง ให้ยิง PATCH /evaluations/:id { status: 'DRAFT', scores, comment } แทน
   const handleSaveDraft = () => {
+    saveEvaluation({
+      projectId,
+      teamId,
+      judgeId,
+      judgeName: user?.name || 'กรรมการ',
+      scores,
+      comment,
+      totalScore: Number(estimatedTotal),
+      status: 'DRAFT',
+    });
     setDraftSavedAt(new Date());
   };
 
@@ -75,16 +78,26 @@ export default function JudgeEvaluation() {
     setIsConfirmOpen(true);
   };
 
-  // TODO: ตอนต่อ API จริง ให้ยิง POST /evaluations/:id/submit แทน (ล็อกฝั่ง backend ด้วย)
   const confirmSubmit = () => {
+    saveEvaluation({
+      projectId,
+      teamId,
+      judgeId,
+      judgeName: user?.name || 'กรรมการ',
+      scores,
+      comment,
+      totalScore: Number(estimatedTotal),
+      status: 'SUBMITTED',
+      submittedAt: new Date().toISOString(),
+    });
     setIsLocked(true);
     setIsConfirmOpen(false);
   };
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <Link to="/judge/dashboard" className="text-sm text-blue-600 hover:underline inline-block">
-        &larr; กลับไปหน้า Judge Dashboard
+      <Link to={`/judge/project/${projectId}/teams`} className="text-sm text-blue-600 hover:underline inline-block">
+        &larr; กลับไปหน้ารายชื่อทีมที่ต้องประเมิน
       </Link>
 
       <PageHeader

@@ -4,11 +4,14 @@ import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import { useAuth } from '../context/AuthContext';
+import { addProject } from '../data/ProjectStore';
 
 const PROJECT_TYPES = ['Technology', 'Software', 'Business', 'Design', 'Other'];
 
 export default function CreateProject() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [form, setForm] = useState({ name: '', type: PROJECT_TYPES[0], description: '' });
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
@@ -35,7 +38,16 @@ export default function CreateProject() {
       // navigate(`/project/${data.id}/dashboard`);
 
       await new Promise((resolve) => setTimeout(resolve, 500)); // จำลองการบันทึก
-      navigate('/admin/projects');
+
+      addProject({
+        name: form.name,
+        type: form.type,
+        description: form.description,
+        ownerEmail: user?.email,
+        ownerName: user?.name,
+      });
+
+      navigate('/workspace');
     } finally {
       setIsSaving(false);
     }
@@ -43,8 +55,8 @@ export default function CreateProject() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
-      <Link to="/admin/projects" className="text-sm text-blue-600 hover:underline inline-block">
-        &larr; กลับไปหน้ารายการโครงการ
+      <Link to="/workspace" className="text-sm text-blue-600 hover:underline inline-block">
+        &larr; กลับไปหน้า Workspace
       </Link>
 
       <PageHeader
@@ -99,7 +111,7 @@ export default function CreateProject() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="text" onClick={() => navigate('/admin/projects')}>
+            <Button type="button" variant="text" onClick={() => navigate('/workspace')}>
               ยกเลิก
             </Button>
             <Button type="submit" disabled={isSaving}>

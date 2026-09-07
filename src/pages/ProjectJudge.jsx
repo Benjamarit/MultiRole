@@ -8,31 +8,21 @@ import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import JudgeAssignModal from '../components/JudgeAssignModal';
 import CoiEditModal from '../components/CoiEditModal';
-
-// ข้อมูลจำลองทีมในโครงการ (ใช้อ้างอิงตอนตั้งค่า COI — โครงสร้างเดียวกับหน้า ProjectTeams)
-const projectTeams = [
-  { id: 1, name: 'Team Alpha' },
-  { id: 2, name: 'Team Beta' },
-  { id: 3, name: 'Team Gamma' },
-];
-
-// ผู้ใช้งานทั้งหมดที่มีบทบาท JUDGE ในระบบ (มาจากหน้า User Management)
-const allJudgeUsers = [
-  { id: 3, name: 'นายวิชัย ทำงาน', email: 'wichai@example.com' },
-  { id: 4, name: 'นางสาวสุดา ยิ้มแย้ม', email: 'suda@example.com' },
-  { id: 5, name: 'นายเอกชัย มั่นคง', email: 'ekachai@example.com' },
-];
-
-// กรรมการที่ถูกเพิ่มเข้าโครงการนี้แล้ว พร้อมรายการทีมที่งดให้คะแนน (COI)
-const initialAssignedJudges = [
-  { id: 3, coiTeamIds: [1] },
-  { id: 4, coiTeamIds: [] },
-];
+import { getTeamsByProject } from '../data/TeamStore';
+import {
+  getJudgeAssignments,
+  inviteJudgeToProject,
+  removeJudgeAssignment,
+  updateJudgeCoi,
+} from '../data/ProjectStore';
+import { getRegisteredUsers } from '../context/AuthContext';
 
 export default function ProjectJudges() {
   const { id } = useParams();
+  const projectTeams = getTeamsByProject(id);
+  const registeredUsers = getRegisteredUsers();
 
-  const [assignedJudges, setAssignedJudges] = useState(initialAssignedJudges);
+  const [assignedJudges, setAssignedJudges] = useState(() => getJudgeAssignments(id));
   const [searchTerm, setSearchTerm] = useState('');
 
   const [isAssignOpen, setIsAssignOpen] = useState(false);
@@ -46,12 +36,14 @@ export default function ProjectJudges() {
   const judgeList = useMemo(() => {
     return assignedJudges
       .map((assignment) => {
-        const user = allJudgeUsers.find((u) => u.id === assignment.id);
+        const user = registeredUsers.find(
+          (candidate) => candidate.email === (assignment.email || assignment.id)
+        );
         if (!user) return null;
-        return { ...user, coiTeamIds: assignment.coiTeamIds };
+        return { ...user, id: assignment.id, coiTeamIds: assignment.coiTeamIds || [] };
       })
       .filter(Boolean);
-  }, [assignedJudges]);
+  }, [assignedJudges, registeredUsers]);
 
   const filteredJudges = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -62,12 +54,13 @@ export default function ProjectJudges() {
   }, [judgeList, searchTerm]);
 
   const availableJudges = useMemo(() => {
-    const assignedIds = new Set(assignedJudges.map((a) => a.id));
-    return allJudgeUsers.filter((u) => !assignedIds.has(u.id));
-  }, [assignedJudges]);
+    const assignedEmails = new Set(assignedJudges.map((assignment) => assignment.email || assignment.id));
+    return registeredUsers.filter((user) => !assignedEmails.has(user.email));
+  }, [assignedJudges, registeredUsers]);
 
-  const handleAssignJudge = (judgeId) => {
-    setAssignedJudges((prev) => [...prev, { id: judgeId, coiTeamIds: [] }]);
+  const handleAssignJudge = (judgeEmail) => {
+    inviteJudgeToProject(id, judgeEmail);
+    setAssignedJudges((prev) => [...prev, { id: judgeEmail, email: judgeEmail, coiTeamIds: [] }]);
     setIsAssignOpen(false);
   };
 
@@ -77,6 +70,7 @@ export default function ProjectJudges() {
   };
 
   const handleSaveCoi = (judgeId, coiTeamIds) => {
+    updateJudgeCoi(id, judgeId, coiTeamIds);
     setAssignedJudges((prev) =>
       prev.map((a) => (a.id === judgeId ? { ...a, coiTeamIds } : a))
     );
@@ -91,7 +85,8 @@ export default function ProjectJudges() {
 
   const confirmRemove = () => {
     if (judgeToRemove) {
-      setAssignedJudges((prev) => prev.filter((a) => a.id !== judgeToRemove.id));
+      removeJudgeAssignment(id, judgeToRemove.id, judgeToRemove.email);
+      setAssignedJudges((prev) => prev.filter((assignment) => assignment.id !== judgeToRemove.id));
       setIsConfirmOpen(false);
       setJudgeToRemove(null);
     }
@@ -183,7 +178,7 @@ export default function ProjectJudges() {
 
       <JudgeAssignModal
         isOpen={isAssignOpen}
-        availableJudges={availableJudges}
+        availableUsers={availableJudges}
         onAssign={handleAssignJudge}
         onClose={() => setIsAssignOpen(false)}
       />

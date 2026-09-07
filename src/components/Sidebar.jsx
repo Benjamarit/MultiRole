@@ -1,35 +1,29 @@
-import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, FolderKanban, ClipboardCheck, X } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+import { FolderKanban, Users, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+const adminMenus = [
+  { name: 'User Management', path: '/admin/users', icon: Users },
+];
+
+const userMenus = [
+  { name: 'Workspace', path: '/workspace', icon: FolderKanban },
+];
 
 export default function Sidebar({ isOpen, onClose }) {
-  const location = useLocation();
-
-  // Judge URL
-  const isJudgeMode = location.pathname.startsWith('/judge');
-
-  // Admin (System Admin / Project Admin)
-  const adminMenus = [
-    { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-    { name: 'User Management', path: '/admin/users', icon: Users },
-    { name: 'Project Management', path: '/admin/projects', icon: FolderKanban },
-  ];
-
-  // Judge Menus
-  const judgeMenus = [
-    { name: 'Judge Dashboard', path: '/judge/dashboard', icon: ClipboardCheck },
-  ];
-
-  // เลือกชุดเมนูที่จะนำมา Render ตามโหมดปัจจุบัน
-  const menuItems = isJudgeMode ? judgeMenus : adminMenus;
-  const portalLabel = isJudgeMode ? 'Judge Portal' : 'Admin Portal';
+  const { user } = useAuth();
+  const isSystemAdmin = user?.role === 'SYSTEM_ADMIN';
+  const menus = isSystemAdmin ? adminMenus : userMenus;
 
   const navContent = (
     <>
-      {/* โลโก้ หรือ ชื่อระบบ (เปลี่ยนชื่อตามโหมด) */}
+      {/* โลโก้ หรือ ชื่อระบบ */}
       <div className="p-6 border-b border-gray-800 flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-white">CE System</h2>
-          <p className="text-xs text-gray-400 mt-1">{portalLabel}</p>
+          <p className="text-xs text-gray-400 mt-1">
+            {isSystemAdmin ? 'Admin Portal' : 'Workspace'}
+          </p>
         </div>
         {/* ปุ่มปิด แสดงเฉพาะบนมือถือ */}
         <button
@@ -43,24 +37,20 @@ export default function Sidebar({ isOpen, onClose }) {
 
       {/* รายการเมนู */}
       <nav className="flex-1 px-4 py-6 space-y-2">
-        {menuItems.map((item) => {
+        {menus.map((item) => {
           const Icon = item.icon;
 
           return (
             <NavLink
               key={item.path}
               to={item.path}
-              className={({ isActive }) => {
-                // เงื่อนไขพิเศษ: ถ้าอยู่ในหน้าย่อยของ Project ให้ไฮไลต์เมนู Project Management
-                const isProjectSubPage = item.name === 'Project Management' && location.pathname.startsWith('/project/');
-                const activeStyle = isActive || isProjectSubPage;
-
-                return `flex items-center gap-3 px-4 py-3 rounded-md transition-colors text-sm font-medium ${
-                  activeStyle
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-3 rounded-md transition-colors text-sm font-medium ${
+                  isActive
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`;
-              }}
+                }`
+              }
             >
               <Icon className="w-5 h-5" aria-hidden="true" />
               {item.name}

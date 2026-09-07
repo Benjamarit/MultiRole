@@ -4,35 +4,10 @@ import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
-
-// ข้อมูลจำลอง (Mock Data)
-const mockJudgeProgress = [
-  { id: 1, name: 'ดร.สมชาย ใจดี', assigned: 10, completed: 10, status: 'Completed' },
-  { id: 2, name: 'อ.สมศรี เรียนเก่ง', assigned: 10, completed: 7, status: 'In Progress' },
-  { id: 3, name: 'นายวิชัย ทำงาน', assigned: 10, completed: 0, status: 'Not Started' },
-];
-
-const mockTeamProgress = [
-  { id: 101, name: 'ทีม AI Innovators', evaluatedBy: 2, totalJudges: 3, currentScore: 85.5, status: 'Pending' },
-  { id: 102, name: 'ทีม Tech Startup', evaluatedBy: 3, totalJudges: 3, currentScore: 92.0, status: 'Completed' },
-  { id: 103, name: 'ทีม Smart Farm', evaluatedBy: 1, totalJudges: 3, currentScore: 78.0, status: 'Pending' },
-];
-
-// คะแนนย่อยรายกรรมการต่อทีม (ใช้แสดงใน "ดูรายละเอียด")
-const mockTeamJudgeScores = {
-  101: [
-    { judgeName: 'ดร.สมชาย ใจดี', score: 88.0 },
-    { judgeName: 'อ.สมศรี เรียนเก่ง', score: 83.0 },
-  ],
-  102: [
-    { judgeName: 'ดร.สมชาย ใจดี', score: 95.0 },
-    { judgeName: 'อ.สมศรี เรียนเก่ง', score: 90.0 },
-    { judgeName: 'นายวิชัย ทำงาน', score: 91.0 },
-  ],
-  103: [
-    { judgeName: 'ดร.สมชาย ใจดี', score: 78.0 },
-  ],
-};
+import { getProjectById } from '../data/ProjectStore';
+import { getTeamsByProject } from '../data/TeamStore';
+import { getEvaluationsByProject } from '../data/EvaluationStore';
+import { getRegisteredUsers } from '../context/AuthContext';
 
 function formatTime(date) {
   return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -45,6 +20,46 @@ export default function EvaluationMonitoring() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [notifiedJudgeIds, setNotifiedJudgeIds] = useState([]);
   const [detailTeam, setDetailTeam] = useState(null);
+  const project = getProjectById(id);
+  const registeredUsers = getRegisteredUsers();
+  const teams = getTeamsByProject(id);
+  const evaluations = getEvaluationsByProject(id).filter((evaluation) => evaluation.status === 'SUBMITTED');
+  const assignments = project?.judgeAssignments || [];
+  const totalJudges = assignments.length || project?.judgeEmails?.length || 0;
+  const judgeProgress = assignments.map((assignment) => {
+    const judge = registeredUsers.find(
+      (user) => user.email === (assignment.email || assignment.id)
+    );
+    const eligibleTeams = teams.filter((team) => !(assignment.coiTeamIds || []).includes(team.id));
+    const completed = evaluations.filter(
+      (evaluation) => evaluation.judgeId === String(judge?.email || assignment.id)
+    ).length;
+    return {
+      id: assignment.id,
+      name: judge?.name || `กรรมการ ${assignment.email || assignment.id}`,
+      assigned: eligibleTeams.length,
+      completed,
+      status: completed === 0 ? 'Not Started' : completed >= eligibleTeams.length ? 'Completed' : 'In Progress',
+    };
+  });
+  const teamProgress = teams.map((team) => {
+    const teamEvaluations = evaluations.filter((evaluation) => evaluation.teamId === team.id);
+    const currentScore = teamEvaluations.length
+      ? teamEvaluations.reduce((sum, evaluation) => sum + evaluation.totalScore, 0) / teamEvaluations.length
+      : 0;
+    return {
+      ...team,
+      evaluatedBy: teamEvaluations.length,
+      totalJudges,
+      currentScore,
+      status: teamEvaluations.length > 0 && teamEvaluations.length >= totalJudges ? 'Completed' : 'Pending',
+    };
+  });
+  const totalAssignments = teams.length * totalJudges;
+  const completedAssignments = evaluations.length;
+  const completionPercent = totalAssignments ? Math.round((completedAssignments / totalAssignments) * 100) : 0;
+  const completedJudges = judgeProgress.filter((judge) => judge.status === 'Completed').length;
+  const completedTeams = teamProgress.filter((team) => team.status === 'Completed').length;
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -93,20 +108,20 @@ export default function EvaluationMonitoring() {
         <Card>
           <p className="text-sm font-medium text-gray-500 mb-1">ความคืบหน้ารวม</p>
           <div className="flex items-end gap-2">
-            <h3 className="text-3xl font-bold text-blue-600">56%</h3>
-            <p className="text-sm text-gray-600 mb-1">(17/30 รายการ)</p>
+            <h3 className="text-3xl font-bold text-blue-600">{completionPercent}%</h3>
+            <p className="text-sm text-gray-600 mb-1">({completedAssignments}/{totalAssignments} รายการ)</p>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2 mt-4">
-            <div className="bg-blue-600 h-2 rounded-full" style={{ width: '56%' }}></div>
+            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${completionPercent}%` }}></div>
           </div>
         </Card>
         <Card>
           <p className="text-sm font-medium text-gray-500 mb-1">กรรมการที่ประเมินเสร็จแล้ว</p>
-          <h3 className="text-3xl font-bold text-green-600">1 <span className="text-lg text-gray-500 font-normal">/ 3 คน</span></h3>
+            <h3 className="text-3xl font-bold text-green-600">{completedJudges} <span className="text-lg text-gray-500 font-normal">/ {totalJudges} คน</span></h3>
         </Card>
         <Card>
           <p className="text-sm font-medium text-gray-500 mb-1">ทีมที่ได้รับคะแนนครบแล้ว</p>
-          <h3 className="text-3xl font-bold text-purple-600">1 <span className="text-lg text-gray-500 font-normal">/ 10 ทีม</span></h3>
+            <h3 className="text-3xl font-bold text-purple-600">{completedTeams} <span className="text-lg text-gray-500 font-normal">/ {teams.length} ทีม</span></h3>
         </Card>
       </div>
 
@@ -127,7 +142,7 @@ export default function EvaluationMonitoring() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {mockJudgeProgress.map((judge) => {
+              {judgeProgress.map((judge) => {
                 const percent = Math.round((judge.completed / judge.assigned) * 100);
                 const alreadyNotified = notifiedJudgeIds.includes(judge.id);
                 return (
@@ -181,7 +196,7 @@ export default function EvaluationMonitoring() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {mockTeamProgress.map((team) => (
+              {teamProgress.map((team) => (
                 <tr key={team.id} className="hover:bg-gray-50 text-sm">
                   <td className="px-6 py-4 font-medium text-gray-900">{team.name}</td>
                   <td className="px-6 py-4 text-center">{team.evaluatedBy} / {team.totalJudges}</td>
@@ -215,14 +230,14 @@ export default function EvaluationMonitoring() {
               คะแนนย่อย — {detailTeam.name}
             </h2>
             <div className="mt-4 space-y-2">
-              {(mockTeamJudgeScores[detailTeam.id] || []).length > 0 ? (
-                mockTeamJudgeScores[detailTeam.id].map((entry) => (
+              {evaluations.filter((evaluation) => evaluation.teamId === detailTeam.id).length > 0 ? (
+                evaluations.filter((evaluation) => evaluation.teamId === detailTeam.id).map((entry) => (
                   <div
                     key={entry.judgeName}
                     className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm"
                   >
                     <span className="text-gray-700">{entry.judgeName}</span>
-                    <span className="font-mono font-semibold text-gray-900">{entry.score.toFixed(2)}</span>
+                    <span className="font-mono font-semibold text-gray-900">{entry.totalScore.toFixed(2)}</span>
                   </div>
                 ))
               ) : (
