@@ -5,7 +5,7 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { deleteRegisteredUser, getRegisteredUsers, updateRegisteredUser } from '../context/AuthContext';
+import { deleteRegisteredUser, getRegisteredUsers, updateRegisteredUser } from '../context/authStore';
 
 const PAGE_SIZE = 10;
 

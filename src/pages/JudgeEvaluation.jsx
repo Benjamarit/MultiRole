@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import toast from 'react-hot-toast'; // นำเข้าไลบรารี
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
@@ -71,6 +72,7 @@ export default function JudgeEvaluation() {
       status: 'DRAFT',
     });
     setDraftSavedAt(new Date());
+    toast.success('บันทึกแบบร่างเรียบร้อยแล้ว'); // เพิ่มแจ้งเตือนเมื่อบันทึกร่าง
   };
 
   const handleSubmitClick = () => {
@@ -92,6 +94,7 @@ export default function JudgeEvaluation() {
     });
     setIsLocked(true);
     setIsConfirmOpen(false);
+    toast.success('ส่งคะแนนเรียบร้อยแล้ว ระบบได้ล็อกข้อมูลของคุณ'); // เพิ่มแจ้งเตือนเมื่อส่งคะแนน
   };
 
   return (

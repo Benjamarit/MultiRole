@@ -1,4 +1,5 @@
 import { createContext, useContext, useState } from 'react';
+import { getRegisteredUsers } from './authStore';
 
 const AuthContext = createContext(null);
 
@@ -71,34 +72,12 @@ export function AuthProvider({ children }) {
   );
 }
 
-// ใช้ตรวจ credential ตอน Login (นอกเหนือจากบัญชี System Admin ที่ fix ไว้ล่วงหน้า)
-export function getRegisteredUsers() {
-  try {
-    const stored = localStorage.getItem(REGISTERED_USERS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
+// The hook intentionally shares this context module with its provider.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) {
     throw new Error('useAuth ต้องถูกเรียกใช้ภายใน <AuthProvider> เท่านั้น');
   }
   return ctx;
-}
-
-export function updateRegisteredUser(email, changes) {
-  const users = getRegisteredUsers();
-  const updatedUsers = users.map((user) =>
-    user.email === email ? { ...user, ...changes } : user
-  );
-  localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(updatedUsers));
-  return updatedUsers.find((user) => user.email === email);
-}
-
-export function deleteRegisteredUser(email) {
-  const users = getRegisteredUsers().filter((user) => user.email !== email);
-  localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users));
 }

@@ -15,7 +15,7 @@ import {
   removeJudgeAssignment,
   updateJudgeCoi,
 } from '../data/ProjectStore';
-import { getRegisteredUsers } from '../context/AuthContext';
+import { getRegisteredUsers } from '../context/authStore';
 
 export default function ProjectJudges() {
   const { id } = useParams();

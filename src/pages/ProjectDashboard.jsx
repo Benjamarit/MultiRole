@@ -1,30 +1,69 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Users, Scale, ClipboardList, BarChart3 } from 'lucide-react';
+import { Users, Scale, ClipboardList, BarChart3, Trophy } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
+import Badge from '../components/Badge';
+import Button from '../components/Button';
+import { getProjectById, updateProjectStatus } from '../data/ProjectStore';
+
+const statusVariant = (status) => {
+  switch (status) {
+    case 'Active': return 'success';
+    case 'Draft': return 'warning';
+    default: return 'default';
+  }
+};
 
 export default function ProjectDashboard() {
-  const { id } = useParams(); // ดึง id จาก URL (เช่น /project/1/dashboard จะได้ id = 1)
+  const { id } = useParams();
+  const [project, setProject] = useState(() => getProjectById(id));
 
-  // เมนูย่อยสำหรับจัดการโครงการนี้
   const projectMenus = [
     { title: 'จัดการทีม (Teams)', path: `/project/${id}/teams`, icon: Users, desc: 'เพิ่ม/ลบ ทีมผู้เข้าแข่งขัน' },
     { title: 'จัดการกรรมการ (Judges)', path: `/project/${id}/judges`, icon: Scale, desc: 'เพิ่มกรรมการและป้องกัน COI' },
     { title: 'เกณฑ์ประเมิน (Criteria)', path: `/project/${id}/criteria`, icon: ClipboardList, desc: 'ตั้งค่า Dynamic Scoring' },
     { title: 'ติดตามการประเมิน (Monitoring)', path: `/project/${id}/evaluations`, icon: BarChart3, desc: 'ดูความคืบหน้าการให้คะแนน' },
+    { title: 'สรุปผลจัดอันดับ (Leaderboard)', path: `/project/${id}/leaderboard`, icon: Trophy, desc: 'ดูอันดับและ Export ผลคะแนนรวม' }
   ];
+
+  const handleToggleStatus = () => {
+    const nextStatus = project.status === 'Active' ? 'Draft' : 'Active';
+    updateProjectStatus(id, nextStatus);
+    setProject((prev) => ({ ...prev, status: nextStatus }));
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* สามารถเพิ่มปุ่มย้อนกลับไปหน้ารายการโครงการได้ */}
-      <Link to="/admin/projects" className="text-sm text-blue-600 hover:underline mb-2 inline-block">
-        &larr; กลับไปหน้ารายการโครงการ
+      <Link to="/workspace" className="text-sm text-blue-600 hover:underline mb-2 inline-block">
+        &larr; กลับไปหน้า Workspace
       </Link>
-      
-      <PageHeader 
-        title={`Dashboard โครงการ #${id}`} 
+
+      <PageHeader
+        title={project ? project.name : `Dashboard โครงการ #${id}`}
         description="ภาพรวมและการตั้งค่าสำหรับการประกวด"
+        action={
+          project && (
+            <div className="flex items-center gap-3">
+              <Badge variant={statusVariant(project.status)}>
+                {project.status === 'Active' ? 'กำลังเปิดรับคะแนน' : 'Draft — ยังไม่เปิดรับคะแนน'}
+              </Badge>
+              <Button variant={project.status === 'Active' ? 'secondary' : 'primary'} onClick={handleToggleStatus}>
+                {project.status === 'Active' ? 'ปิดรับคะแนนชั่วคราว' : 'เปิดรับคะแนน'}
+              </Button>
+            </div>
+          )
+        }
       />
+
+      {project && project.status !== 'Active' && (
+        <Card className="bg-amber-50 border-amber-200">
+          <p className="text-sm text-amber-700">
+            โครงการนี้ยังเป็นสถานะ Draft — กรรมการที่ถูกเชิญจะยังกดเข้าหน้าประเมินไม่ได้จนกว่าจะกด "เปิดรับคะแนน"
+            แนะนำให้ตั้งค่าทีมและเกณฑ์ประเมินให้ครบก่อนเปิดรับคะแนนจริง
+          </p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {projectMenus.map((menu) => {

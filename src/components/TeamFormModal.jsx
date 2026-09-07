@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Button from './Button';
 import Input from './Input';
 
@@ -17,20 +17,12 @@ const EMPTY_FORM = { name: '', members: '' };
  */
 export default function TeamFormModal({ isOpen, initialTeam, onSave, onClose }) {
   const isEditMode = Boolean(initialTeam);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(() =>
+    initialTeam
+      ? { name: initialTeam.name, members: (initialTeam.members || []).join('\n') }
+      : EMPTY_FORM
+  );
   const [errors, setErrors] = useState({});
-
-  // รีเซ็ตฟอร์มทุกครั้งที่เปิด modal ใหม่ หรือสลับทีมที่จะแก้ไข
-  useEffect(() => {
-    if (isOpen) {
-      setForm(
-        initialTeam
-          ? { name: initialTeam.name, members: (initialTeam.members || []).join('\n') }
-          : EMPTY_FORM
-      );
-      setErrors({});
-    }
-  }, [isOpen, initialTeam]);
 
   if (!isOpen) return null;
 

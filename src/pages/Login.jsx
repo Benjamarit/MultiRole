@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Input from '../components/Input';
-import { useAuth, getRegisteredUsers } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
+import { getRegisteredUsers } from '../context/authStore';
 // import api from '../api/axios'; // เตรียมไว้ใช้ยิง API จริงในอนาคต
 
 // บัญชี System Admin เป็นบัญชีสำรองไว้ล่วงหน้าเพียงบัญชีเดียว ไม่เปิดให้สมัครเอง

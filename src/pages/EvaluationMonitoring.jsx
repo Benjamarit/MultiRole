@@ -7,7 +7,7 @@ import Button from '../components/Button';
 import { getProjectById } from '../data/ProjectStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluationsByProject } from '../data/EvaluationStore';
-import { getRegisteredUsers } from '../context/AuthContext';
+import { getRegisteredUsers } from '../context/authStore';
 
 function formatTime(date) {
   return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });

@@ -122,6 +122,15 @@ export function removeJudgeAssignment(projectId, judgeId, judgeEmail) {
   writeAll(updated);
 }
 
+// TODO: ตอนต่อ API จริง เปลี่ยนเป็น PATCH /projects/:id { status } แทน
+export function updateProjectStatus(projectId, status) {
+  const projects = readAll();
+  const updated = projects.map((project) =>
+    project.id === Number(projectId) ? { ...project, status } : project
+  );
+  writeAll(updated);
+}
+
 export function getProjectById(projectId) {
   return readAll().find((p) => p.id === Number(projectId));
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Button from './Button';
 
 /**
@@ -11,13 +11,7 @@ import Button from './Button';
  * />
  */
 export default function CoiEditModal({ isOpen, judge, teams, onSave, onClose }) {
-  const [selected, setSelected] = useState([]);
-
-  useEffect(() => {
-    if (isOpen && judge) {
-      setSelected(judge.coiTeamIds || []);
-    }
-  }, [isOpen, judge]);
+  const [selected, setSelected] = useState(() => judge?.coiTeamIds || []);
 
   if (!isOpen || !judge) return null;
 
