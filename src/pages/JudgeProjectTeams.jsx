@@ -52,6 +52,14 @@ export default function JudgeProjectTeams() {
             ? `เลือกทีมที่ต้องการประเมินคะแนน (${coiTeamIds.length} ทีมถูกซ่อนไว้เนื่องจากติด COI)`
             : 'เลือกทีมที่ต้องการประเมินคะแนน'
         }
+        action={
+          // แสดงปุ่มเข้าสู่โหมดประเมินเปรียบเทียบ (Matrix) หากมีทีมที่ต้องประเมินมากกว่า 1 ทีม
+          teams.length > 1 && (
+            <Button onClick={() => navigate(`/judge/project/${projectId}/evaluate-multi`)}>
+              โหมดประเมินเปรียบเทียบ (Matrix)
+            </Button>
+          )
+        }
       />
 
       {teams.length > 0 ? (

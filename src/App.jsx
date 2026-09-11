@@ -14,7 +14,7 @@ import EvaluationMonitoring from './pages/EvaluationMonitoring.jsx';
 import JudgeProjectTeams from './pages/JudgeProjectTeams.jsx';
 import JudgeEvaluation from './pages/JudgeEvaluation.jsx';
 import ProjectLeaderboard from './pages/ProjectLeaderboard.jsx';
-
+import JudgeMultiEvaluation from './pages/JudgeMultiEvaluation.jsx';
 
 function App() {
   return (
@@ -29,10 +29,10 @@ function App() {
             fontSize: '14px',
           },
           success: {
-            style: { background: '#10b981', color: 'white' }, // สีเขียวสำหรับ Success
+            style: { background: '#10b981', color: 'white' }, //Success
           },
           error: {
-            style: { background: '#ef4444', color: 'white' }, // สีแดงสำหรับ Error
+            style: { background: '#ef4444', color: 'white' }, //Error
           },
         }} 
       />
@@ -53,6 +53,7 @@ function App() {
           <Route path="/judge/project/:projectId/teams" element={<JudgeProjectTeams />} />
           <Route path="/judge/project/:projectId/evaluate/:teamId" element={<JudgeEvaluation />} />
           <Route path="/project/:id/leaderboard" element={<ProjectLeaderboard />} />
+          <Route path="/judge/project/:projectId/evaluate-multi" element={<JudgeMultiEvaluation />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" />} />

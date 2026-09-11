@@ -1,13 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import Input from '../components/Input';
 import { useAuth } from '../context/AuthContext';
-import { getRegisteredUsers } from '../context/authStore';
-// import api from '../api/axios'; // เตรียมไว้ใช้ยิง API จริงในอนาคต
+import { getRegisteredUsers, updateRegisteredUser } from '../context/authStore';
 
-// บัญชี System Admin เป็นบัญชีสำรองไว้ล่วงหน้าเพียงบัญชีเดียว ไม่เปิดให้สมัครเอง
-// ส่วน Project Admin / Judge ไม่มี role ตายตัวแล้ว — ทุกคนสมัครผ่าน SignUp เป็น 'USER' ธรรมดา
-// แล้วจะได้ role ตามบริบท (สร้างโปรเจกต์ = admin ของโปรเจกต์นั้น, ถูกเชิญ = judge ของโปรเจกต์นั้น)
 const SYSTEM_ADMIN = { email: 'admin@example.com', password: '1234', name: 'ดร.สมชาย ใจดี', role: 'SYSTEM_ADMIN' };
 
 export default function Login() {
@@ -15,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isForgotMode, setIsForgotMode] = useState(false);
 
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -29,17 +27,8 @@ export default function Login() {
     }
 
     setIsLoading(true);
-
     try {
-      /*
-        TODO: ส่วนนี้คือจุดที่จะยิง API ไปหา Spring Boot ในอนาคต
-        const response = await api.post('/auth/login', { email, password });
-        const { token, user } = response.data;
-        localStorage.setItem('token', token);
-        login(user);
-      */
-
-      await new Promise((resolve) => setTimeout(resolve, 800)); // จำลองการดีเลย์เหมือนรอ API
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
       if (email === SYSTEM_ADMIN.email && password === SYSTEM_ADMIN.password) {
         const adminUser = { ...SYSTEM_ADMIN };
@@ -49,7 +38,6 @@ export default function Login() {
         return;
       }
 
-      // เช็คกับบัญชีที่สมัครเองผ่าน SignUp.jsx
       const registeredUsers = getRegisteredUsers();
       const matchedUser = registeredUsers.find((u) => u.email === email && u.password === password);
 
@@ -72,73 +60,143 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!email) {
+      setError('กรุณากรอกอีเมลที่ต้องการขอรหัสผ่านใหม่');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      
+      const registeredUsers = getRegisteredUsers();
+      const userExists = registeredUsers.find((u) => u.email === email);
+
+      if (userExists) {
+        // อัปเดตสถานะให้ Admin ทราบว่าบัญชีนี้ขอรีเซ็ตรหัสผ่าน
+        updateRegisteredUser(email, { resetRequested: true });
+        toast.success('ส่งคำขอสำเร็จ! โปรดติดต่อ System Admin เพื่อรับรหัสผ่านใหม่');
+        setIsForgotMode(false);
+        setPassword('');
+      } else {
+        throw new Error('ไม่พบอีเมลนี้ในระบบ');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-screen items-center justify-center bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">เข้าสู่ระบบ</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isForgotMode ? 'ลืมรหัสผ่าน' : 'เข้าสู่ระบบ'}
+          </h1>
           <p className="mt-2 text-sm text-gray-600">
-            ระบบบริหารจัดการและประเมินผลการประกวด
+            {isForgotMode 
+              ? 'กรอกอีเมลของคุณเพื่อส่งคำขอเปลี่ยนรหัสผ่านไปยังผู้ดูแลระบบ' 
+              : 'ระบบบริหารจัดการและประเมินผลการประกวด'
+            }
           </p>
         </div>
 
         {error && (
-          <div
-            role="alert"
-            aria-live="polite"
-            className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded"
-          >
+          <div role="alert" className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded">
             {error}
           </div>
         )}
 
-        <form className="space-y-4" onSubmit={handleLogin}>
-          <div>
-            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
-              อีเมล (Email)
-            </label>
-            <Input
-              id="login-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@example.com"
-            />
-          </div>
+        {isForgotMode ? (
+          <form className="space-y-4" onSubmit={handleForgotPassword}>
+            <div>
+              <label htmlFor="reset-email" className="block text-sm font-medium text-gray-700 mb-1">
+                อีเมล (Email)
+              </label>
+              <Input
+                id="reset-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@example.com"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full px-4 py-2 text-white font-medium rounded-md transition-colors bg-blue-600 hover:bg-blue-700"
+            >
+              {isLoading ? 'กำลังส่งคำขอ...' : 'ส่งคำขอรีเซ็ตรหัสผ่าน'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsForgotMode(false); setError(''); }}
+              className="w-full px-4 py-2 text-gray-600 font-medium hover:underline"
+            >
+              กลับไปหน้าเข้าสู่ระบบ
+            </button>
+          </form>
+        ) : (
+          <form className="space-y-4" onSubmit={handleLogin}>
+            <div>
+              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
+                อีเมล (Email)
+              </label>
+              <Input
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@example.com"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
-              รหัสผ่าน (Password)
-            </label>
-            <Input
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="กรอกรหัสผ่านของคุณ"
-            />
-          </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="login-password" className="block text-sm font-medium text-gray-700">
+                  รหัสผ่าน (Password)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotMode(true); setError(''); }}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  ลืมรหัสผ่าน?
+                </button>
+              </div>
+              <Input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="กรอกรหัสผ่านของคุณ"
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className={`w-full px-4 py-2 text-white font-medium rounded-md transition-colors
-              ${isLoading
-                ? 'bg-blue-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-              }`}
-          >
-            {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full px-4 py-2 text-white font-medium rounded-md transition-colors bg-blue-600 hover:bg-blue-700"
+            >
+              {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
+            </button>
+          </form>
+        )}
 
-        <p className="text-center text-sm text-gray-500">
-          ยังไม่มีบัญชี?{' '}
-          <Link to="/signup" className="text-blue-600 hover:underline font-medium">
-            สมัครสมาชิก
-          </Link>
-        </p>
+        {!isForgotMode && (
+          <p className="text-center text-sm text-gray-500">
+            ยังไม่มีบัญชี?{' '}
+            <Link to="/signup" className="text-blue-600 hover:underline font-medium">
+              สมัครสมาชิก
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

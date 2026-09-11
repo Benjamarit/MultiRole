@@ -225,19 +225,26 @@ export default function EvaluationMonitoring() {
           aria-labelledby="team-detail-title"
           onKeyDown={(e) => e.key === 'Escape' && setDetailTeam(null)}
         >
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
+          <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-lg max-h-[80vh] overflow-y-auto">
             <h2 id="team-detail-title" className="text-lg font-semibold text-gray-900">
               คะแนนย่อย — {detailTeam.name}
             </h2>
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-3">
               {evaluations.filter((evaluation) => evaluation.teamId === detailTeam.id).length > 0 ? (
                 evaluations.filter((evaluation) => evaluation.teamId === detailTeam.id).map((entry) => (
                   <div
                     key={entry.judgeName}
-                    className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2 text-sm"
+                    className="rounded-md border border-gray-200 px-4 py-3 text-sm space-y-1.5"
                   >
-                    <span className="text-gray-700">{entry.judgeName}</span>
-                    <span className="font-mono font-semibold text-gray-900">{entry.totalScore.toFixed(2)}</span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-900">{entry.judgeName}</span>
+                      <span className="font-mono font-semibold text-blue-600">{entry.totalScore.toFixed(2)}</span>
+                    </div>
+                    {entry.comment && (
+                      <p className="text-gray-600 text-xs whitespace-pre-wrap bg-gray-50 rounded px-2 py-1.5">
+                        {entry.comment}
+                      </p>
+                    )}
                   </div>
                 ))
               ) : (
