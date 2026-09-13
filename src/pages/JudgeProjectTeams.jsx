@@ -66,10 +66,30 @@ export default function JudgeProjectTeams() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {teams.map((team) => (
             <Card key={team.id} className="hover:shadow-md transition-shadow flex flex-col justify-between h-full">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="font-bold text-gray-900 text-lg">{team.name}</h3>
-                {getStatusBadge(team.evaluateStatus)}
+              <div>
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="font-bold text-gray-900 text-lg">{team.name}</h3>
+                  {getStatusBadge(team.evaluateStatus)}
+                </div>
+
+                {team.description && (
+                  <p className="text-sm text-gray-500 mb-2 line-clamp-2">{team.description}</p>
+                )}
+
+                {team.link ? (
+                  <a
+                    href={team.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 hover:underline inline-block break-all mb-2"
+                  >
+                    ดูผลงาน &rarr;
+                  </a>
+                ) : (
+                  <p className="text-xs text-gray-400 mb-2">ทีมนี้ยังไม่ได้แนบลิงก์ผลงาน</p>
+                )}
               </div>
+
               <Button
                 variant={team.evaluateStatus === 'Completed' ? 'secondary' : 'primary'}
                 className="w-full mt-4"

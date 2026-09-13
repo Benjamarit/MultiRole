@@ -27,7 +27,7 @@ export default function ProjectTeams() {
     return teams.filter(
       (team) =>
         team.name.toLowerCase().includes(query) ||
-        team.members.some((m) => m.toLowerCase().includes(query))
+        (team.description || '').toLowerCase().includes(query)
     );
   }, [teams, searchTerm]);
 
@@ -78,11 +78,11 @@ export default function ProjectTeams() {
 
       <div className="max-w-sm">
         <label htmlFor="team-search" className="sr-only">
-          ค้นหาชื่อทีมหรือสมาชิก
+          ค้นหาชื่อทีมหรือรายละเอียดผลงาน
         </label>
         <Input
           id="team-search"
-          placeholder="ค้นหาชื่อทีม หรือ ชื่อสมาชิก..."
+          placeholder="ค้นหาชื่อทีม หรือ รายละเอียดผลงาน..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
@@ -98,19 +98,28 @@ export default function ProjectTeams() {
             <Card key={team.id}>
               <div className="flex items-start justify-between mb-3">
                 <h3 className="text-lg font-bold text-gray-900">{team.name}</h3>
-                <Badge variant={team.members.length > 0 ? 'success' : 'warning'}>
-                  {team.members.length} คน
-                </Badge>
+                {team.link ? (
+                  <Badge variant="success">มีลิงก์ผลงาน</Badge>
+                ) : (
+                  <Badge variant="warning">ยังไม่มีลิงก์</Badge>
+                )}
               </div>
 
-              {team.members.length > 0 ? (
-                <ul className="text-sm text-gray-600 space-y-1 mb-4">
-                  {team.members.map((member) => (
-                    <li key={member}>• {member}</li>
-                  ))}
-                </ul>
+              {team.description ? (
+                <p className="text-sm text-gray-600 mb-4 line-clamp-3">{team.description}</p>
               ) : (
-                <p className="text-sm text-gray-400 mb-4">ยังไม่มีสมาชิก</p>
+                <p className="text-sm text-gray-400 mb-4">ยังไม่มีรายละเอียดผลงาน</p>
+              )}
+
+              {team.link && (
+                <a
+                  href={team.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline mb-4 inline-block break-all"
+                >
+                  ดูผลงาน &rarr;
+                </a>
               )}
 
               <div className="flex justify-end gap-1 pt-2 border-t border-gray-100">

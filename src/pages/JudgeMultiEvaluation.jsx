@@ -203,6 +203,16 @@ export default function JudgeMultiEvaluation() {
                           : <Badge variant="warning">ร่าง</Badge>
                         }
                       </div>
+                      {team.link && (
+                        <a
+                          href={team.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-block text-xs font-normal text-blue-600 hover:underline"
+                        >
+                          ดูผลงาน &rarr;
+                        </a>
+                      )}
                     </th>
                   ))}
                 </tr>

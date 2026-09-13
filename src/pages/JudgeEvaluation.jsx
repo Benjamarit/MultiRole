@@ -124,6 +124,24 @@ export default function JudgeEvaluation() {
         }
       />
 
+      {(team?.description || team?.link) && (
+        <Card>
+          {team.description && (
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{team.description}</p>
+          )}
+          {team.link && (
+            <a
+              href={team.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline break-all"
+            >
+              เปิดดูผลงานของทีมนี้ &rarr;
+            </a>
+          )}
+        </Card>
+      )}
+
       {/* คะแนนรวมโดยประมาณ คำนวณจาก weight ของแต่ละเกณฑ์ */}
       <Card className="bg-blue-50 border-blue-200">
         <div className="flex items-center justify-between">

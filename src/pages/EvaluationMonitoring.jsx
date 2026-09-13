@@ -54,18 +54,21 @@ export default function EvaluationMonitoring() {
   });
   const teamProgress = teams.map((team) => {
     const teamEvaluations = evaluations.filter((evaluation) => evaluation.teamId === team.id);
+    const eligibleJudgeCount = assignments.filter(
+      (assignment) => !(assignment.coiTeamIds || []).includes(team.id)
+    ).length || totalJudges; // fallback เผื่อโปรเจกต์เก่าไม่มี judgeAssignments แบบละเอียด
     const currentScore = teamEvaluations.length
       ? teamEvaluations.reduce((sum, evaluation) => sum + evaluation.totalScore, 0) / teamEvaluations.length
       : 0;
     return {
       ...team,
       evaluatedBy: teamEvaluations.length,
-      totalJudges,
+      totalJudges: eligibleJudgeCount,
       currentScore,
-      status: teamEvaluations.length > 0 && teamEvaluations.length >= totalJudges ? 'Completed' : 'Pending',
+      status: teamEvaluations.length > 0 && teamEvaluations.length >= eligibleJudgeCount ? 'Completed' : 'Pending',
     };
   });
-  const totalAssignments = teams.length * totalJudges;
+  const totalAssignments = teamProgress.reduce((sum, team) => sum + team.totalJudges, 0);
   const completedAssignments = evaluations.length;
   const completionPercent = totalAssignments ? Math.round((completedAssignments / totalAssignments) * 100) : 0;
   const completedJudges = judgeProgress.filter((judge) => judge.status === 'Completed').length;

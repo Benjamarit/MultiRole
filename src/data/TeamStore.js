@@ -1,9 +1,19 @@
 const TEAMS_KEY = 'ce_project_teams';
 
 const seedTeams = [
-  { id: 1, name: 'Team Alpha', members: ['สมชาย ใจดี', 'สมศรี เรียนเก่ง'] },
-  { id: 2, name: 'Team Beta', members: ['วิชัย ทำงาน'] },
-  { id: 3, name: 'Team Gamma', members: [] },
+  {
+    id: 1,
+    name: 'Team Alpha',
+    description: 'แอปพลิเคชันจัดการงานสำหรับทีมขนาดเล็ก พัฒนาด้วย React และ Firebase',
+    link: 'https://github.com/example/team-alpha',
+  },
+  {
+    id: 2,
+    name: 'Team Beta',
+    description: 'ระบบแนะนำสินค้าด้วย Machine Learning',
+    link: '',
+  },
+  { id: 3, name: 'Team Gamma', description: '', link: '' },
 ];
 
 function readAll() {
