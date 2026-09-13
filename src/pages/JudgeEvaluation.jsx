@@ -37,6 +37,9 @@ export default function JudgeEvaluation() {
   const teamName = team?.name || `ทีม #${teamId}`;
 
   const [scores, setScores] = useState(() => savedEvaluation?.scores || {});
+  const [criteriaComments, setCriteriaComments] = useState(
+    () => savedEvaluation?.criteriaComments || {}
+  );
   const [comment, setComment] = useState(() => savedEvaluation?.comment || '');
   const [isLocked, setIsLocked] = useState(() => savedEvaluation?.status === 'SUBMITTED');
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -60,6 +63,10 @@ export default function JudgeEvaluation() {
     setScores((prev) => ({ ...prev, [criterionId]: value }));
   };
 
+  const handleCriterionCommentChange = (criterionId, value) => {
+    setCriteriaComments((prev) => ({ ...prev, [criterionId]: value }));
+  };
+
   const handleSaveDraft = () => {
     saveEvaluation({
       projectId,
@@ -67,6 +74,7 @@ export default function JudgeEvaluation() {
       judgeId,
       judgeName: user?.name || 'กรรมการ',
       scores,
+      criteriaComments,
       comment,
       totalScore: Number(estimatedTotal),
       status: 'DRAFT',
@@ -87,6 +95,7 @@ export default function JudgeEvaluation() {
       judgeId,
       judgeName: user?.name || 'กรรมการ',
       scores,
+      criteriaComments,
       comment,
       totalScore: Number(estimatedTotal),
       status: 'SUBMITTED',
@@ -151,6 +160,24 @@ export default function JudgeEvaluation() {
               onChange={(value) => handleScoreChange(criterion.id, value)}
               disabled={isLocked}
             />
+
+            <div className="mt-3">
+              <label
+                htmlFor={`criterion-comment-${criterion.id}`}
+                className="block text-xs font-medium text-gray-500 mb-1"
+              >
+                ความคิดเห็นสำหรับเกณฑ์นี้ (ถ้ามี)
+              </label>
+              <textarea
+                id={`criterion-comment-${criterion.id}`}
+                rows={2}
+                disabled={isLocked}
+                value={criteriaComments[criterion.id] || ''}
+                onChange={(e) => handleCriterionCommentChange(criterion.id, e.target.value)}
+                placeholder={`เหตุผลของคะแนนที่ให้ ${criterion.name}`}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-200"
+              />
+            </div>
           </Card>
         ))}
 

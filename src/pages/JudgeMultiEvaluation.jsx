@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
@@ -21,7 +21,6 @@ function normalizedScore(criterion, value) {
 
 export default function JudgeMultiEvaluation() {
   const { projectId } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const judgeId = user?.email || 'anonymous-judge';
 
@@ -53,6 +52,16 @@ export default function JudgeMultiEvaluation() {
       initialComments[team.id] = evalData?.comment || '';
     });
     return initialComments;
+  });
+
+  // Comment แยกรายเกณฑ์ต่อทีม: { [teamId]: { [criterionId]: text } }
+  const [criteriaComments, setCriteriaComments] = useState(() => {
+    const initial = {};
+    eligibleTeams.forEach(team => {
+      const evalData = getEvaluation(projectId, team.id, judgeId);
+      initial[team.id] = evalData?.criteriaComments || {};
+    });
+    return initial;
   });
 
   const [statuses, setStatuses] = useState(() => {
@@ -105,6 +114,14 @@ export default function JudgeMultiEvaluation() {
     setComments(prev => ({ ...prev, [teamId]: value }));
   };
 
+  const handleCriterionCommentChange = (teamId, criterionId, value) => {
+    if (statuses[teamId] === 'SUBMITTED') return;
+    setCriteriaComments(prev => ({
+      ...prev,
+      [teamId]: { ...prev[teamId], [criterionId]: value },
+    }));
+  };
+
   const handleSaveDraft = () => {
     eligibleTeams.forEach(team => {
       if (statuses[team.id] === 'SUBMITTED') return; // ไม่เซฟทับตัวที่ส่งแล้ว
@@ -114,6 +131,7 @@ export default function JudgeMultiEvaluation() {
         judgeId,
         judgeName: user?.name || 'กรรมการ',
         scores: matrixScores[team.id],
+        criteriaComments: criteriaComments[team.id] || {},
         comment: comments[team.id] || '',
         totalScore: Number(teamTotals[team.id]),
         status: 'DRAFT',
@@ -134,6 +152,7 @@ export default function JudgeMultiEvaluation() {
         judgeId,
         judgeName: user?.name || 'กรรมการ',
         scores: matrixScores[team.id],
+        criteriaComments: criteriaComments[team.id] || {},
         comment: comments[team.id] || '',
         totalScore: Number(teamTotals[team.id]),
         status: 'SUBMITTED',
@@ -214,6 +233,14 @@ export default function JudgeMultiEvaluation() {
                           criterion={criterion}
                           value={matrixScores[team.id]?.[criterion.id] ?? null}
                           onChange={(val) => handleScoreChange(team.id, criterion.id, val)}
+                          disabled={statuses[team.id] === 'SUBMITTED'}
+                        />
+                        <textarea
+                          rows={2}
+                          className="mt-2 w-full px-2 py-1.5 border border-gray-200 rounded-md text-xs focus:ring-blue-500 disabled:bg-gray-100"
+                          placeholder="หมายเหตุสำหรับเกณฑ์นี้ (ถ้ามี)"
+                          value={criteriaComments[team.id]?.[criterion.id] || ''}
+                          onChange={(e) => handleCriterionCommentChange(team.id, criterion.id, e.target.value)}
                           disabled={statuses[team.id] === 'SUBMITTED'}
                         />
                       </td>

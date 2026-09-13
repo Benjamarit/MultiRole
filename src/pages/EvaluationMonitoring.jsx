@@ -7,10 +7,19 @@ import Button from '../components/Button';
 import { getProjectById } from '../data/ProjectStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluationsByProject } from '../data/EvaluationStore';
+import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getRegisteredUsers } from '../context/authStore';
 
 function formatTime(date) {
   return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function scoreLabel(criterion, value) {
+  if (value === null || value === undefined) return 'ยังไม่ให้คะแนน';
+  if (criterion.type === 'PASS_FAIL') return value === 1 ? 'Pass' : 'Fail';
+  if (criterion.type === 'STAR') return `${value} / ${criterion.maxScore} ดาว`;
+  if (criterion.type === 'PERCENTAGE') return `${value}%`;
+  return `${value} / ${criterion.maxScore}`;
 }
 
 export default function EvaluationMonitoring() {
@@ -23,6 +32,7 @@ export default function EvaluationMonitoring() {
   const project = getProjectById(id);
   const registeredUsers = getRegisteredUsers();
   const teams = getTeamsByProject(id);
+  const criteria = getCriteriaByProject(id);
   const evaluations = getEvaluationsByProject(id).filter((evaluation) => evaluation.status === 'SUBMITTED');
   const assignments = project?.judgeAssignments || [];
   const totalJudges = assignments.length || project?.judgeEmails?.length || 0;
@@ -245,6 +255,27 @@ export default function EvaluationMonitoring() {
                         {entry.comment}
                       </p>
                     )}
+                    {entry.criteriaComments &&
+                      Object.entries(entry.criteriaComments).some(([, text]) => text) && (
+                        <div className="mt-1.5 space-y-1">
+                          {criteria.map((criterion) => {
+                            const text = entry.criteriaComments[criterion.id];
+                            if (!text) return null;
+                            const score = entry.scores?.[criterion.id];
+                            return (
+                              <p
+                                key={criterion.id}
+                                className="text-xs text-gray-600 bg-amber-50 rounded px-2 py-1.5"
+                              >
+                                <span className="font-medium text-gray-700">
+                                  {criterion.name} ({scoreLabel(criterion, score)}):{' '}
+                                </span>
+                                {text}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      )}
                   </div>
                 ))
               ) : (
