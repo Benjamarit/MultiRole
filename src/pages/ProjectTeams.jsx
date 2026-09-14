@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
@@ -7,6 +8,7 @@ import Input from '../components/Input';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TeamFormModal from '../components/TeamFormModal';
+import TeamImportModal from '../components/TeamImportModal';
 import { deleteTeam, getTeamsByProject, saveTeam } from '../data/TeamStore';
 
 export default function ProjectTeams() {
@@ -17,6 +19,8 @@ export default function ProjectTeams() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null); // null = โหมดเพิ่มใหม่
+
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState(null);
@@ -50,6 +54,13 @@ export default function ProjectTeams() {
     setEditingTeam(null);
   };
 
+  const handleImportTeams = (newTeams) => {
+    const savedTeams = newTeams.map((teamData) => saveTeam(id, teamData));
+    setTeams((prev) => [...savedTeams, ...prev]);
+    setIsImportOpen(false);
+    toast.success(`นำเข้าทีมสำเร็จ ${savedTeams.length} ทีม`);
+  };
+
   const handleDeleteClick = (team) => {
     setTeamToDelete(team);
     setIsConfirmOpen(true);
@@ -73,7 +84,14 @@ export default function ProjectTeams() {
       <PageHeader
         title="จัดการทีม (Teams)"
         description={`ทีมผู้เข้าแข่งขันทั้งหมดในโครงการ #${id}`}
-        action={<Button onClick={handleAddClick}>+ เพิ่มทีมใหม่</Button>}
+        action={
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setIsImportOpen(true)}>
+              นำเข้าจาก Excel
+            </Button>
+            <Button onClick={handleAddClick}>+ เพิ่มทีมใหม่</Button>
+          </div>
+        }
       />
 
       <div className="max-w-sm">
@@ -147,6 +165,12 @@ export default function ProjectTeams() {
           setIsFormOpen(false);
           setEditingTeam(null);
         }}
+      />
+
+      <TeamImportModal
+        isOpen={isImportOpen}
+        onImport={handleImportTeams}
+        onClose={() => setIsImportOpen(false)}
       />
 
       <ConfirmDialog
