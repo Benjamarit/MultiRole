@@ -184,6 +184,7 @@ export default function ProjectJudges() {
       />
 
       <CoiEditModal
+        key={coiTarget?.id ?? 'none'}
         isOpen={isCoiOpen}
         judge={coiTarget}
         teams={projectTeams}
