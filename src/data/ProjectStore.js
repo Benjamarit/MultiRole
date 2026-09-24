@@ -17,6 +17,7 @@ function seedProjects() {
         { id: 'wichai@example.com', email: 'wichai@example.com', coiTeamIds: [1] },
         { id: 'suda@example.com', email: 'suda@example.com', coiTeamIds: [] },
       ],
+      evaluationDeadline: null,
     },
   ];
   writeAll(seed);
@@ -26,10 +27,17 @@ function seedProjects() {
 function readAll() {
   try {
     const stored = localStorage.getItem(PROJECTS_KEY);
-    return stored ? JSON.parse(stored) : seedProjects();
+    return stored ? JSON.parse(stored).map(normalizeProject) : seedProjects();
   } catch {
     return seedProjects();
   }
+}
+
+function normalizeProject(project) {
+  return {
+    ...project,
+    evaluationDeadline: project.evaluationDeadline || null,
+  };
 }
 
 function writeAll(projects) {
@@ -51,7 +59,7 @@ export function getJudgingProjects(email) {
 }
 
 // TODO: ตอนต่อ API จริง เปลี่ยนเป็น POST /projects แล้วใช้ response แทนการ generate id เอง
-export function addProject({ name, type, description, ownerEmail, ownerName }) {
+export function addProject({ name, type, description, ownerEmail, ownerName, evaluationDeadline }) {
   const projects = readAll();
   const nextId = projects.length > 0 ? Math.max(...projects.map((p) => p.id)) + 1 : 1;
   const newProject = {
@@ -65,6 +73,7 @@ export function addProject({ name, type, description, ownerEmail, ownerName }) {
     teamsCount: 0,
     judgeEmails: [],
     judgeAssignments: [],
+    evaluationDeadline: evaluationDeadline || null,
   };
   writeAll([newProject, ...projects]);
   return newProject;
@@ -133,4 +142,21 @@ export function updateProjectStatus(projectId, status) {
 
 export function getProjectById(projectId) {
   return readAll().find((p) => p.id === Number(projectId));
+}
+
+export function updateProjectDetails(projectId, details) {
+  const projects = readAll();
+  const updated = projects.map((project) =>
+    project.id === Number(projectId)
+      ? normalizeProject({ ...project, ...details })
+      : project
+  );
+  writeAll(updated);
+  return updated.find((project) => project.id === Number(projectId));
+}
+
+export function isBeforeEvaluationDeadline(project) {
+  if (!project?.evaluationDeadline) return true;
+  const deadline = new Date(project.evaluationDeadline).getTime();
+  return Number.isNaN(deadline) || Date.now() < deadline;
 }

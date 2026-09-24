@@ -12,7 +12,7 @@ const PROJECT_TYPES = ['Technology', 'Software', 'Business', 'Design', 'Other'];
 export default function CreateProject() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [form, setForm] = useState({ name: '', type: PROJECT_TYPES[0], description: '' });
+  const [form, setForm] = useState({ name: '', type: PROJECT_TYPES[0], description: '', evaluationDeadline: '' });
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -45,6 +45,7 @@ export default function CreateProject() {
         description: form.description,
         ownerEmail: user?.email,
         ownerName: user?.name,
+        evaluationDeadline: form.evaluationDeadline || null,
       });
 
       navigate('/workspace');
@@ -78,6 +79,19 @@ export default function CreateProject() {
               autoFocus
             />
             {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="evaluation-deadline" className="block text-sm font-medium text-gray-700 mb-1">
+              กำหนดส่งคะแนน (Evaluation Deadline) ไม่บังคับ
+            </label>
+            <input
+              id="evaluation-deadline"
+              type="datetime-local"
+              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-200"
+              value={form.evaluationDeadline}
+              onChange={handleChange('evaluationDeadline')}
+            />
           </div>
 
           <div>

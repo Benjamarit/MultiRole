@@ -3,7 +3,7 @@ import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
-import { getProjectById, getJudgeAssignments } from '../data/ProjectStore';
+import { getProjectById, getJudgeAssignments, isBeforeEvaluationDeadline } from '../data/ProjectStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation } from '../data/EvaluationStore';
 import { useAuth } from '../context/AuthContext';
@@ -28,15 +28,17 @@ export default function JudgeProjectTeams() {
       const evaluation = getEvaluation(projectId, team.id, user?.email);
       return {
         ...team,
-        evaluateStatus: evaluation?.status === 'SUBMITTED' ? 'Completed' : 'Pending',
+        evaluateStatus: evaluation?.status || 'NOT_STARTED',
       };
     });
 
   const getStatusBadge = (status) =>
-    status === 'Completed' ? (
+    status === 'SUBMITTED' ? (
       <Badge variant="success">ประเมินแล้ว</Badge>
+    ) : status === 'DRAFT' ? (
+      <Badge variant="warning">รอส่งคะแนน</Badge>
     ) : (
-      <Badge variant="warning">รอประเมิน</Badge>
+      <Badge variant="default">ยังไม่เริ่ม</Badge>
     );
 
   return (
@@ -61,6 +63,12 @@ export default function JudgeProjectTeams() {
           )
         }
       />
+
+      {project?.evaluationDeadline && !isBeforeEvaluationDeadline(project) && (
+        <Card className="bg-red-50 border-red-200">
+          <p className="text-sm text-red-700">หมดเขตการประเมินแล้ว สามารถดูคะแนนเดิมได้แต่ไม่สามารถแก้ไขหรือส่งคะแนนเพิ่ม</p>
+        </Card>
+      )}
 
       {teams.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -91,11 +99,15 @@ export default function JudgeProjectTeams() {
               </div>
 
               <Button
-                variant={team.evaluateStatus === 'Completed' ? 'secondary' : 'primary'}
+                variant={team.evaluateStatus === 'SUBMITTED' ? 'secondary' : 'primary'}
                 className="w-full mt-4"
                 onClick={() => navigate(`/judge/project/${projectId}/evaluate/${team.id}`)}
               >
-                {team.evaluateStatus === 'Completed' ? 'ดู/แก้ไขคะแนน' : 'เริ่มการประเมิน'}
+                {team.evaluateStatus === 'SUBMITTED'
+                  ? 'ดู/แก้ไขคะแนน'
+                  : team.evaluateStatus === 'DRAFT'
+                    ? 'ทำต่อ/แก้ไขคะแนน'
+                    : 'เริ่มการประเมิน'}
               </Button>
             </Card>
           ))}

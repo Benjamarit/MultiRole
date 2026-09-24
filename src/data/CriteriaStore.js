@@ -1,10 +1,15 @@
 const CRITERIA_KEY = 'ce_project_criteria';
 
 const defaultCriteria = [
-  { id: 1, name: 'Innovation (นวัตกรรม)', type: 'STAR', weight: 30, maxScore: 5 },
-  { id: 2, name: 'Technical Score', type: 'NUMERIC', weight: 50, maxScore: 100 },
-  { id: 3, name: 'Presentation', type: 'STAR', weight: 20, maxScore: 5 },
+  { id: 1, name: 'Innovation (นวัตกรรม)', description: '', type: 'STAR', weight: 30, maxScore: 5 },
+  { id: 2, name: 'Technical Score', description: '', type: 'NUMERIC', weight: 50, maxScore: 100 },
+  { id: 3, name: 'Presentation', description: '', type: 'STAR', weight: 20, maxScore: 5 },
 ];
+
+const normalizeCriterion = (criterion) => ({
+  ...criterion,
+  description: criterion.description || '',
+});
 
 function readAll() {
   try {
@@ -21,7 +26,7 @@ function writeAll(projectCriteria) {
 
 export function getCriteriaByProject(projectId) {
   const entry = readAll().find((item) => item.projectId === Number(projectId));
-  return entry?.criteria || [];
+  return (entry?.criteria || []).map(normalizeCriterion);
 }
 
 export function saveCriterion(projectId, criterion) {
@@ -31,8 +36,8 @@ export function saveCriterion(projectId, criterion) {
   const criteria = projectEntry?.criteria || [];
   const existingCriterion = criteria.find((item) => item.id === criterion.id);
   const updatedCriterion = existingCriterion
-    ? { ...existingCriterion, ...criterion }
-    : { ...criterion, id: criterion.id || Date.now() };
+    ? normalizeCriterion({ ...existingCriterion, ...criterion })
+    : normalizeCriterion({ ...criterion, id: criterion.id || Date.now() });
   const updatedCriteria = existingCriterion
     ? criteria.map((item) => (item.id === criterion.id ? updatedCriterion : item))
     : [...criteria, updatedCriterion];

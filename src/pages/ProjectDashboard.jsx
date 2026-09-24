@@ -5,7 +5,7 @@ import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
-import { getProjectById, updateProjectStatus } from '../data/ProjectStore';
+import { getProjectById, isBeforeEvaluationDeadline, updateProjectDetails, updateProjectStatus } from '../data/ProjectStore';
 
 const statusVariant = (status) => {
   switch (status) {
@@ -31,6 +31,13 @@ export default function ProjectDashboard() {
     const nextStatus = project.status === 'Active' ? 'Draft' : 'Active';
     updateProjectStatus(id, nextStatus);
     setProject((prev) => ({ ...prev, status: nextStatus }));
+  };
+
+  const handleDeadlineChange = (event) => {
+    const updatedProject = updateProjectDetails(id, {
+      evaluationDeadline: event.target.value || null,
+    });
+    setProject(updatedProject);
   };
 
   return (
@@ -61,6 +68,28 @@ export default function ProjectDashboard() {
           <p className="text-sm text-amber-700">
             โครงการนี้ยังเป็นสถานะ Draft — กรรมการที่ถูกเชิญจะยังกดเข้าหน้าประเมินไม่ได้จนกว่าจะกด "เปิดรับคะแนน"
             แนะนำให้ตั้งค่าทีมและเกณฑ์ประเมินให้ครบก่อนเปิดรับคะแนนจริง
+          </p>
+        </Card>
+      )}
+
+      {project && (
+        <Card>
+          <label htmlFor="project-evaluation-deadline" className="block text-sm font-medium text-gray-700 mb-1">
+            กำหนดส่งคะแนน (Evaluation Deadline)
+          </label>
+          <input
+            id="project-evaluation-deadline"
+            type="datetime-local"
+            value={project.evaluationDeadline ? project.evaluationDeadline.slice(0, 16) : ''}
+            onChange={handleDeadlineChange}
+            className="w-full max-w-md px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-200"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            {project.evaluationDeadline
+              ? isBeforeEvaluationDeadline(project)
+                ? `กรรมการสามารถแก้ไขและส่งคะแนนได้ถึง ${new Date(project.evaluationDeadline).toLocaleString('th-TH')}`
+                : 'หมดเขตรับคะแนนแล้ว'
+              : 'หากไม่กำหนด ระบบจะเปิดให้แก้ไขและส่งคะแนนได้ตามปกติ'}
           </p>
         </Card>
       )}

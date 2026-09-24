@@ -26,7 +26,7 @@ function App() {
           style: {
             background: '#363636',
             color: '#fff',
-            fontSize: '14px',
+            fontSize: '16px',
           },
           success: {
             style: { background: '#10b981', color: 'white' }, //Success

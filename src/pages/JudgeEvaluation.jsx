@@ -10,6 +10,7 @@ import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
+import { getProjectById, isBeforeEvaluationDeadline } from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
 
 function scoreLabel(criterion, value) {
@@ -30,6 +31,7 @@ export default function JudgeEvaluation() {
   const { projectId, teamId } = useParams();
   const { user } = useAuth();
   const criteria = getCriteriaByProject(projectId);
+  const project = getProjectById(projectId);
   const team = getTeamsByProject(projectId).find((item) => item.id === Number(teamId));
   const judgeId = user?.email || 'anonymous-judge';
   const savedEvaluation = getEvaluation(projectId, teamId, judgeId);
@@ -41,9 +43,11 @@ export default function JudgeEvaluation() {
     () => savedEvaluation?.criteriaComments || {}
   );
   const [comment, setComment] = useState(() => savedEvaluation?.comment || '');
-  const [isLocked, setIsLocked] = useState(() => savedEvaluation?.status === 'SUBMITTED');
+  const [evaluationStatus, setEvaluationStatus] = useState(() => savedEvaluation?.status || 'DRAFT');
+  const [submittedAt, setSubmittedAt] = useState(() => savedEvaluation?.submittedAt || null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(() => savedEvaluation?.updatedAt || null);
+  const canEdit = isBeforeEvaluationDeadline(project);
 
   const allAnswered = useMemo(
     () => criteria.every((c) => scores[c.id] !== undefined && scores[c.id] !== null),
@@ -60,15 +64,18 @@ export default function JudgeEvaluation() {
   }, [criteria, scores]);
 
   const handleScoreChange = (criterionId, value) => {
+    if (!canEdit) return;
     setScores((prev) => ({ ...prev, [criterionId]: value }));
   };
 
   const handleCriterionCommentChange = (criterionId, value) => {
+    if (!canEdit) return;
     setCriteriaComments((prev) => ({ ...prev, [criterionId]: value }));
   };
 
   const handleSaveDraft = () => {
-    saveEvaluation({
+    if (!canEdit) return;
+    const saved = saveEvaluation({
       projectId,
       teamId,
       judgeId,
@@ -79,8 +86,10 @@ export default function JudgeEvaluation() {
       totalScore: Number(estimatedTotal),
       status: 'DRAFT',
     });
-    setDraftSavedAt(new Date());
-    toast.success('บันทึกแบบร่างเรียบร้อยแล้ว'); // เพิ่มแจ้งเตือนเมื่อบันทึกร่าง
+    setEvaluationStatus(saved.status);
+    setSubmittedAt(saved.submittedAt);
+    setLastUpdatedAt(saved.updatedAt);
+    toast.success('บันทึกแบบร่างเรียบร้อยแล้ว');
   };
 
   const handleSubmitClick = () => {
@@ -89,7 +98,8 @@ export default function JudgeEvaluation() {
   };
 
   const confirmSubmit = () => {
-    saveEvaluation({
+    if (!canEdit) return;
+    const saved = saveEvaluation({
       projectId,
       teamId,
       judgeId,
@@ -99,11 +109,12 @@ export default function JudgeEvaluation() {
       comment,
       totalScore: Number(estimatedTotal),
       status: 'SUBMITTED',
-      submittedAt: new Date().toISOString(),
     });
-    setIsLocked(true);
+    setEvaluationStatus(saved.status);
+    setSubmittedAt(saved.submittedAt);
+    setLastUpdatedAt(saved.updatedAt);
     setIsConfirmOpen(false);
-    toast.success('ส่งคะแนนเรียบร้อยแล้ว ระบบได้ล็อกข้อมูลของคุณ'); // เพิ่มแจ้งเตือนเมื่อส่งคะแนน
+    toast.success('ส่งคะแนนเรียบร้อยแล้ว');
   };
 
   return (
@@ -116,7 +127,7 @@ export default function JudgeEvaluation() {
         title={`ประเมิน: ${teamName}`}
         description={`โครงการ #${projectId} — ให้คะแนนตามเกณฑ์ที่กำหนดไว้ด้านล่าง`}
         action={
-          isLocked ? (
+          evaluationStatus === 'SUBMITTED' ? (
             <Badge variant="success">ส่งคะแนนแล้ว</Badge>
           ) : (
             <Badge variant="warning">Draft</Badge>
@@ -162,7 +173,7 @@ export default function JudgeEvaluation() {
               <div>
                 <p className="font-semibold text-gray-900">{criterion.name}</p>
                 <p className="text-xs text-gray-500">
-                  Weight {criterion.weight}%
+                  {criterion.type} · Weight {criterion.weight}%
                   {criterion.type !== 'PASS_FAIL' && criterion.type !== 'PERCENTAGE' && ` · เต็ม ${criterion.maxScore}`}
                 </p>
               </div>
@@ -172,11 +183,17 @@ export default function JudgeEvaluation() {
                 </span>
               )}
             </div>
+            {criterion.description && (
+              <div className="mb-4 rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
+                <p className="text-xs font-medium text-gray-500 mb-1">คำอธิบายเกณฑ์</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{criterion.description}</p>
+              </div>
+            )}
             <CriterionScoreInput
               criterion={criterion}
               value={scores[criterion.id] ?? null}
               onChange={(value) => handleScoreChange(criterion.id, value)}
-              disabled={isLocked}
+              disabled={!canEdit}
             />
 
             <div className="mt-3">
@@ -189,7 +206,7 @@ export default function JudgeEvaluation() {
               <textarea
                 id={`criterion-comment-${criterion.id}`}
                 rows={2}
-                disabled={isLocked}
+                disabled={!canEdit}
                 value={criteriaComments[criterion.id] || ''}
                 onChange={(e) => handleCriterionCommentChange(criterion.id, e.target.value)}
                 placeholder={`เหตุผลของคะแนนที่ให้ ${criterion.name}`}
@@ -206,7 +223,7 @@ export default function JudgeEvaluation() {
           <textarea
             id="evaluation-comment"
             rows={4}
-            disabled={isLocked}
+            disabled={!canEdit}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="แสดงความคิดเห็นเกี่ยวกับทีมนี้"
@@ -217,34 +234,32 @@ export default function JudgeEvaluation() {
 
       <div className="flex items-center justify-between pt-2">
         <div className="text-xs text-gray-400">
-          {draftSavedAt && !isLocked && `บันทึกร่างล่าสุด ${draftSavedAt.toLocaleTimeString('th-TH')}`}
-          {!allAnswered && !isLocked && (
+          {lastUpdatedAt && `บันทึกล่าสุด ${new Date(lastUpdatedAt).toLocaleString('th-TH')}`}
+          {submittedAt && evaluationStatus === 'SUBMITTED' && (
+            <p className="text-green-600">ส่งคะแนนเมื่อ {new Date(submittedAt).toLocaleString('th-TH')}</p>
+          )}
+          {!canEdit && (
+            <p className="text-red-600">หมดเขตการประเมินแล้ว ไม่สามารถแก้ไขหรือส่งคะแนนได้</p>
+          )}
+          {canEdit && !allAnswered && (
             <p className="text-amber-600">กรอกคะแนนให้ครบทุกหัวข้อก่อนส่งคะแนนจริง</p>
           )}
         </div>
 
         <div className="flex gap-2">
-          {isLocked ? (
-            <Button variant="secondary" onClick={() => setIsLocked(false)}>
-              แก้ไขคะแนน
-            </Button>
-          ) : (
-            <>
-              <Button variant="secondary" onClick={handleSaveDraft}>
-                บันทึกร่าง
-              </Button>
-              <Button onClick={handleSubmitClick} disabled={!allAnswered}>
-                ส่งคะแนน
-              </Button>
-            </>
-          )}
+          <Button variant="secondary" onClick={handleSaveDraft} disabled={!canEdit}>
+            บันทึกแบบร่าง
+          </Button>
+          <Button onClick={handleSubmitClick} disabled={!canEdit || !allAnswered}>
+            ส่งคะแนน
+          </Button>
         </div>
       </div>
 
       <ConfirmDialog
         isOpen={isConfirmOpen}
         title="ยืนยันการส่งคะแนน"
-        message={`คุณแน่ใจหรือไม่ว่าต้องการส่งคะแนนของ "${teamName}"? หลังส่งแล้วคะแนนจะถูกล็อก ต้องกด "แก้ไขคะแนน" ก่อนจึงจะแก้ไขได้อีกครั้ง`}
+        message={`ยืนยันการส่งคะแนนของ "${teamName}" หรือไม่? คะแนนจะถูกนับเป็นคะแนนทางการ และยังแก้ไข/ส่งใหม่ได้ก่อน Deadline`}
         onConfirm={confirmSubmit}
         onCancel={() => setIsConfirmOpen(false)}
         confirmText="ส่งคะแนน"
