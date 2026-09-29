@@ -69,7 +69,7 @@ export default function ProjectLeaderboard() {
                 <th className="px-6 py-4 font-medium text-center w-20">อันดับ</th>
                 <th className="px-6 py-4 font-medium">ชื่อทีม</th>
                 <th className="px-6 py-4 font-medium text-center">กรรมการประเมินแล้ว</th>
-                <th className="px-6 py-4 font-medium text-center">คะแนนเฉลี่ย</th>
+                <th className="px-6 py-4 font-medium text-center">คะแนนเฉลี่ยปัจจุบัน</th>
                 <th className="px-6 py-4 font-medium">สถานะ</th>
               </tr>
             </thead>

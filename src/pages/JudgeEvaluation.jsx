@@ -64,17 +64,17 @@ export default function JudgeEvaluation() {
   }, [criteria, scores]);
 
   const handleScoreChange = (criterionId, value) => {
-    if (!canEdit) return;
+    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
     setScores((prev) => ({ ...prev, [criterionId]: value }));
   };
 
   const handleCriterionCommentChange = (criterionId, value) => {
-    if (!canEdit) return;
+    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
     setCriteriaComments((prev) => ({ ...prev, [criterionId]: value }));
   };
 
   const handleSaveDraft = () => {
-    if (!canEdit) return;
+    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
     const saved = saveEvaluation({
       projectId,
       teamId,
@@ -86,6 +86,10 @@ export default function JudgeEvaluation() {
       totalScore: Number(estimatedTotal),
       status: 'DRAFT',
     });
+    if (!saved) {
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
+      return;
+    }
     setEvaluationStatus(saved.status);
     setSubmittedAt(saved.submittedAt);
     setLastUpdatedAt(saved.updatedAt);
@@ -93,12 +97,12 @@ export default function JudgeEvaluation() {
   };
 
   const handleSubmitClick = () => {
-    if (!allAnswered) return;
+    if (!isBeforeEvaluationDeadline(getProjectById(projectId)) || !allAnswered) return;
     setIsConfirmOpen(true);
   };
 
   const confirmSubmit = () => {
-    if (!canEdit) return;
+    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
     const saved = saveEvaluation({
       projectId,
       teamId,
@@ -110,6 +114,11 @@ export default function JudgeEvaluation() {
       totalScore: Number(estimatedTotal),
       status: 'SUBMITTED',
     });
+    if (!saved) {
+      setIsConfirmOpen(false);
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
+      return;
+    }
     setEvaluationStatus(saved.status);
     setSubmittedAt(saved.submittedAt);
     setLastUpdatedAt(saved.updatedAt);

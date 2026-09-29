@@ -203,7 +203,7 @@ export default function EvaluationMonitoring() {
               <tr className="text-gray-600 text-sm border-b border-gray-200">
                 <th className="px-6 py-3 font-medium">ชื่อทีม</th>
                 <th className="px-6 py-3 font-medium text-center">กรรมการที่ตรวจแล้ว</th>
-                <th className="px-6 py-3 font-medium text-center">คะแนนรวมชั่วคราว</th>
+                <th className="px-6 py-3 font-medium text-center">คะแนนเฉลี่ยปัจจุบัน</th>
                 <th className="px-6 py-3 font-medium">สถานะ</th>
                 <th className="px-6 py-3 font-medium text-right">จัดการ</th>
               </tr>

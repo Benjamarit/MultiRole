@@ -1,3 +1,5 @@
+import { getProjectById, isBeforeEvaluationDeadline } from './ProjectStore';
+
 const EVALUATIONS_KEY = 'ce_project_evaluations';
 
 function readAll() {
@@ -42,6 +44,8 @@ export function getEvaluationsByProject(projectId) {
 }
 
 export function saveEvaluation(evaluation) {
+  if (!isBeforeEvaluationDeadline(getProjectById(evaluation.projectId))) return null;
+
   const evaluations = readAll();
   const existingIndex = evaluations.findIndex(
     (item) =>
