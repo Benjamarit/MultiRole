@@ -43,6 +43,11 @@ export function getEvaluationsByProject(projectId) {
     .map(normalizeEvaluation);
 }
 
+export function deleteProjectEvaluations(projectId) {
+  const numericProjectId = Number(projectId);
+  writeAll(readAll().filter((evaluation) => Number(evaluation.projectId) !== numericProjectId));
+}
+
 export function saveEvaluation(evaluation) {
   if (!isBeforeEvaluationDeadline(getProjectById(evaluation.projectId))) return null;
 

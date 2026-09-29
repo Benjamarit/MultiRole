@@ -60,3 +60,8 @@ export function deleteTeam(projectId, teamId) {
   );
   writeAll(updatedEntries);
 }
+
+export function deleteProjectTeams(projectId) {
+  const numericProjectId = Number(projectId);
+  writeAll(readAll().filter((entry) => Number(entry.projectId) !== numericProjectId));
+}

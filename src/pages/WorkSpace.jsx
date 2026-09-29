@@ -5,10 +5,13 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Badge from '../components/Badge';
+import ConfirmDialog from '../components/ConfirmDialog';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { getMyProjects, getJudgingProjects, getJudgeAssignments } from '../data/ProjectStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { getEvaluation } from '../data/EvaluationStore';
+import { getMyProjects, getJudgingProjects, getJudgeAssignments, deleteProject } from '../data/ProjectStore';
+import { deleteProjectTeams, getTeamsByProject } from '../data/TeamStore';
+import { deleteProjectCriteria } from '../data/CriteriaStore';
+import { deleteProjectEvaluations, getEvaluation } from '../data/EvaluationStore';
 
 const statusVariant = (status) => {
   switch (status) {
@@ -49,6 +52,25 @@ export default function Workspace() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all | pending | completed
   const [sortBy, setSortBy] = useState('pending-first'); // pending-first | name
+  const [projectToDelete, setProjectToDelete] = useState(null);
+
+  const confirmDeleteProject = () => {
+    if (!projectToDelete) return;
+    try {
+      deleteProjectEvaluations(projectToDelete.id);
+      deleteProjectTeams(projectToDelete.id);
+      deleteProjectCriteria(projectToDelete.id);
+      const deleted = deleteProject(projectToDelete.id);
+      if (!deleted) {
+        toast.error('ไม่พบโครงการที่ต้องการลบ');
+        return;
+      }
+      toast.success(`ลบโครงการ "${projectToDelete.name}" เรียบร้อยแล้ว`);
+      setProjectToDelete(null);
+    } catch {
+      toast.error('ลบโครงการไม่สำเร็จ กรุณาลองอีกครั้ง');
+    }
+  };
 
   const filteredJudgingProjects = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -109,9 +131,14 @@ export default function Workspace() {
                   </div>
                   <Badge variant={statusVariant(project.status)}>{project.status}</Badge>
                 </div>
-                <Button className="w-full" onClick={() => navigate(`/project/${project.id}/dashboard`)}>
-                  จัดการโครงการ
-                </Button>
+                <div className="flex gap-2">
+                  <Button className="flex-1" onClick={() => navigate(`/project/${project.id}/dashboard`)}>
+                    จัดการโครงการ
+                  </Button>
+                  <Button variant="danger" onClick={() => setProjectToDelete(project)}>
+                    ลบ
+                  </Button>
+                </div>
               </Card>
             ))}
           </div>
@@ -123,6 +150,15 @@ export default function Workspace() {
           </Card>
         )}
       </section>
+
+      <ConfirmDialog
+        isOpen={projectToDelete !== null}
+        title="ยืนยันการลบโครงการ"
+        message={`ต้องการลบโครงการ "${projectToDelete?.name}" หรือไม่? ทีม เกณฑ์ประเมิน และคะแนนทั้งหมดของโครงการนี้จะถูกลบถาวร`}
+        onConfirm={confirmDeleteProject}
+        onCancel={() => setProjectToDelete(null)}
+        confirmText="ลบโครงการ"
+      />
 
       {/* โครงการที่ฉันเป็นกรรมการ (ถูกเชิญเข้ามาโดย Project Admin ของโครงการนั้น) */}
       <section className="space-y-4">

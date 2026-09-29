@@ -55,3 +55,8 @@ export function deleteCriterion(projectId, criterionId) {
   );
   writeAll(updatedEntries);
 }
+
+export function deleteProjectCriteria(projectId) {
+  const numericProjectId = Number(projectId);
+  writeAll(readAll().filter((entry) => Number(entry.projectId) !== numericProjectId));
+}

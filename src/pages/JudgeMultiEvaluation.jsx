@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
@@ -10,7 +10,7 @@ import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
-import { getJudgeAssignments } from '../data/ProjectStore';
+import { getJudgeAssignments, getProjectById, isBeforeEvaluationDeadline } from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
 
 function normalizedScore(criterion, value) {
@@ -26,6 +26,24 @@ export default function JudgeMultiEvaluation() {
 
   // โหลดข้อมูลพื้นฐาน
   const criteria = getCriteriaByProject(projectId);
+  const project = getProjectById(projectId);
+  const [canEdit, setCanEdit] = useState(() => isBeforeEvaluationDeadline(project));
+  useEffect(() => {
+    if (!canEdit || !project?.evaluationDeadline) return undefined;
+    const deadline = new Date(project.evaluationDeadline).getTime();
+    if (!Number.isFinite(deadline)) return undefined;
+    let timeoutId;
+    const checkDeadline = () => {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        setCanEdit(false);
+        return;
+      }
+      timeoutId = window.setTimeout(checkDeadline, Math.min(remaining, 2_147_483_647));
+    };
+    checkDeadline();
+    return () => window.clearTimeout(timeoutId);
+  }, [canEdit, project?.evaluationDeadline]);
   const allTeams = getTeamsByProject(projectId);
   const assignments = getJudgeAssignments(projectId);
   
@@ -54,16 +72,6 @@ export default function JudgeMultiEvaluation() {
     return initialComments;
   });
 
-  // Comment แยกรายเกณฑ์ต่อทีม: { [teamId]: { [criterionId]: text } }
-  const [criteriaComments, setCriteriaComments] = useState(() => {
-    const initial = {};
-    eligibleTeams.forEach(team => {
-      const evalData = getEvaluation(projectId, team.id, judgeId);
-      initial[team.id] = evalData?.criteriaComments || {};
-    });
-    return initial;
-  });
-
   const [statuses, setStatuses] = useState(() => {
     const initialStatuses = {};
     eligibleTeams.forEach(team => {
@@ -73,23 +81,13 @@ export default function JudgeMultiEvaluation() {
     return initialStatuses;
   });
 
-  const [confirmTarget, setConfirmTarget] = useState(null); // null=ปิด | 'all' | teamId
+  const [unlockedTeams, setUnlockedTeams] = useState({});
+  const [confirmTeamId, setConfirmTeamId] = useState(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
-  // แบ่งหน้าทีมที่แสดงในตาราง (แยกจาก eligibleTeams ที่ใช้บันทึก/ส่งคะแนนทั้งหมดเสมอ)
-  const [pageSize, setPageSize] = useState(5); // 5 | 10 | Infinity (ทั้งหมด)
-  const [pageIndex, setPageIndex] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(eligibleTeams.length / pageSize));
-  const currentPageIndex = Math.min(pageIndex, pageCount - 1);
-  const pagedTeams = useMemo(() => {
-    if (!Number.isFinite(pageSize)) return eligibleTeams;
-    const start = currentPageIndex * pageSize;
-    return eligibleTeams.slice(start, start + pageSize);
-  }, [eligibleTeams, pageSize, currentPageIndex]);
-
-  const handlePageSizeChange = (value) => {
-    setPageSize(value === 'all' ? Infinity : Number(value));
-    setPageIndex(0);
-  };
+  const isTeamEditable = (teamId) =>
+    isBeforeEvaluationDeadline(getProjectById(projectId)) &&
+    (statuses[teamId] !== 'SUBMITTED' || unlockedTeams[teamId]);
 
   // คำนวณคะแนนรวมของแต่ละทีม
   const teamTotals = useMemo(() => {
@@ -106,21 +104,14 @@ export default function JudgeMultiEvaluation() {
     return totals;
   }, [criteria, eligibleTeams, matrixScores]);
 
-  // เช็กว่าทีมนี้กรอกครบทุกเกณฑ์แล้วหรือยัง (ใช้ตัดสินว่าส่งทีมนี้ได้เลยหรือยัง)
-  const isTeamAnswered = useCallback(
-    (teamId) =>
-      criteria.every(c => matrixScores[teamId]?.[c.id] !== undefined && matrixScores[teamId]?.[c.id] !== null),
-    [criteria, matrixScores]
-  );
-
-  // ทีมที่ยังไม่ได้ส่งและกรอกครบแล้ว พร้อมส่งได้ทันที
-  const readyToSubmitTeamIds = useMemo(
-    () => eligibleTeams.filter(t => statuses[t.id] !== 'SUBMITTED' && isTeamAnswered(t.id)).map(t => t.id),
-    [eligibleTeams, statuses, isTeamAnswered]
-  );
+  const isTeamAnswered = (teamId) =>
+    criteria.every((criterion) =>
+      matrixScores[teamId]?.[criterion.id] !== undefined &&
+      matrixScores[teamId]?.[criterion.id] !== null
+    );
 
   const handleScoreChange = (teamId, criterionId, value) => {
-    if (statuses[teamId] === 'SUBMITTED') return; // ล็อกไว้ถ้าทีมนี้กดส่งแล้ว
+    if (!isTeamEditable(teamId)) return;
     
     setMatrixScores(prev => ({
       ...prev,
@@ -132,77 +123,75 @@ export default function JudgeMultiEvaluation() {
   };
 
   const handleCommentChange = (teamId, value) => {
-    if (statuses[teamId] === 'SUBMITTED') return;
+    if (!isTeamEditable(teamId)) return;
     setComments(prev => ({ ...prev, [teamId]: value }));
   };
 
-  const handleCriterionCommentChange = (teamId, criterionId, value) => {
-    if (statuses[teamId] === 'SUBMITTED') return;
-    setCriteriaComments(prev => ({
-      ...prev,
-      [teamId]: { ...prev[teamId], [criterionId]: value },
-    }));
-  };
-
-  // ปลดล็อกทีมที่ส่งคะแนนไปแล้วให้แก้ไขได้อีกครั้ง (เหมือนปุ่ม "แก้ไขคะแนน" ในหน้าประเมินทีมเดียว)
-  // เป็นการปลดล็อกฝั่ง UI เท่านั้น ข้อมูลใน storage จะยังเป็น SUBMITTED จนกว่าจะกดบันทึกร่าง/ส่งคะแนนซ้ำ
   const handleUnlockTeam = (teamId) => {
-    setStatuses(prev => ({ ...prev, [teamId]: 'DRAFT' }));
-  };
-
-  const handleSaveDraft = () => {
-    eligibleTeams.forEach(team => {
-      if (statuses[team.id] === 'SUBMITTED') return; // ไม่เซฟทับตัวที่ส่งแล้ว
-      saveEvaluation({
-        projectId,
-        teamId: team.id,
-        judgeId,
-        judgeName: user?.name || 'กรรมการ',
-        scores: matrixScores[team.id],
-        criteriaComments: criteriaComments[team.id] || {},
-        comment: comments[team.id] || '',
-        totalScore: Number(teamTotals[team.id]),
-        status: 'DRAFT',
-      });
-    });
-    toast.success('บันทึกแบบร่างทุกทีมเรียบร้อยแล้ว');
-  };
-
-  // แกนกลางของการส่งคะแนน — รับ array ของ teamId ที่จะส่ง ใช้ร่วมกันทั้งส่งทีเดียวหลายทีมและส่งทีละทีม
-  const submitTeams = (teamIds) => {
-    const now = new Date().toISOString();
-    const newStatuses = { ...statuses };
-
-    teamIds.forEach(teamId => {
-      if (statuses[teamId] === 'SUBMITTED') return;
-      saveEvaluation({
-        projectId,
-        teamId,
-        judgeId,
-        judgeName: user?.name || 'กรรมการ',
-        scores: matrixScores[teamId],
-        criteriaComments: criteriaComments[teamId] || {},
-        comment: comments[teamId] || '',
-        totalScore: Number(teamTotals[teamId]),
-        status: 'SUBMITTED',
-        submittedAt: now,
-      });
-      newStatuses[teamId] = 'SUBMITTED';
-    });
-
-    setStatuses(newStatuses);
-  };
-
-  const handleConfirmSubmit = () => {
-    if (confirmTarget === 'all') {
-      submitTeams(readyToSubmitTeamIds);
-      toast.success(`ส่งคะแนนสำเร็จ ${readyToSubmitTeamIds.length} ทีม (ทีมที่ยังกรอกไม่ครบถูกข้ามไว้)`);
-    } else if (confirmTarget) {
-      const team = eligibleTeams.find(t => t.id === confirmTarget);
-      submitTeams([confirmTarget]);
-      toast.success(`ส่งคะแนนทีม "${team?.name}" สำเร็จแล้ว`);
+    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) {
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถปลดล็อกแก้ไขได้');
+      return;
     }
-    setConfirmTarget(null);
+    if (statuses[teamId] !== 'SUBMITTED') return;
+    setUnlockedTeams((prev) => ({ ...prev, [teamId]: true }));
+  };
+
+  const handleSaveDraft = (teamId) => {
+    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) {
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
+      return;
+    }
+    if (!isTeamEditable(teamId)) return;
+    const saved = saveEvaluation({
+      projectId,
+      teamId,
+      judgeId,
+      judgeName: user?.name || 'กรรมการ',
+      scores: matrixScores[teamId],
+      comment: comments[teamId] || '',
+      totalScore: Number(teamTotals[teamId]),
+      status: 'DRAFT',
+    });
+    if (!saved) {
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
+      return;
+    }
+    setStatuses((prev) => ({ ...prev, [teamId]: 'DRAFT' }));
+    setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
+    toast.success('บันทึกแบบร่างเรียบร้อยแล้ว');
+  };
+
+  const confirmSubmit = () => {
+    const teamId = confirmTeamId;
+    if (!teamId) return;
+    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) {
+      setIsConfirmOpen(false);
+      setConfirmTeamId(null);
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
+      return;
+    }
+    if (!isTeamEditable(teamId) || !isTeamAnswered(teamId)) return;
+    const saved = saveEvaluation({
+      projectId,
+      teamId,
+      judgeId,
+      judgeName: user?.name || 'กรรมการ',
+      scores: matrixScores[teamId],
+      comment: comments[teamId] || '',
+      totalScore: Number(teamTotals[teamId]),
+      status: 'SUBMITTED',
+    });
+    if (!saved) {
+      setIsConfirmOpen(false);
+      setConfirmTeamId(null);
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
+      return;
+    }
+    setStatuses((prev) => ({ ...prev, [teamId]: 'SUBMITTED' }));
+    setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
+    setIsConfirmOpen(false);
+    setConfirmTeamId(null);
+    toast.success('ส่งคะแนนทีมเรียบร้อยแล้ว');
   };
 
   return (
@@ -213,69 +202,19 @@ export default function JudgeMultiEvaluation() {
 
       <PageHeader
         title="ประเมินเปรียบเทียบ (Multi-Team Evaluation)"
-        description={`ให้คะแนนทุกทีมพร้อมกันในหน้าเดียว โครงการ #${projectId} — ส่งคะแนนได้ทีละทีมทันทีที่กรอกครบ ไม่ต้องรอทีมอื่น`}
-        action={
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={handleSaveDraft}>บันทึกแบบร่างทั้งหมด</Button>
-            <Button
-              onClick={() => setConfirmTarget('all')}
-              disabled={readyToSubmitTeamIds.length === 0}
-            >
-              ส่งคะแนนที่กรอกครบแล้ว {readyToSubmitTeamIds.length > 0 ? `(${readyToSubmitTeamIds.length})` : ''}
-            </Button>
-          </div>
-        }
+        description={`ให้คะแนนทุกทีมพร้อมกันในหน้าเดียว โครงการ #${projectId}`}
       />
+
+      {!canEdit && (
+        <Card className="bg-red-50 border-red-200">
+          <p className="text-sm text-red-700">หมดเขตการประเมินแล้ว ไม่สามารถแก้ไขหรือส่งคะแนนได้</p>
+        </Card>
+      )}
 
       {eligibleTeams.length === 0 ? (
         <Card><p className="text-center text-gray-500 py-10">ไม่มีทีมที่คุณสามารถประเมินได้ในขณะนี้</p></Card>
       ) : (
-        <>
-          {eligibleTeams.length > 5 && (
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <label htmlFor="page-size" className="text-gray-600">
-                แสดงต่อหน้า:
-              </label>
-              <select
-                id="page-size"
-                value={Number.isFinite(pageSize) ? pageSize : 'all'}
-                onChange={(e) => handlePageSizeChange(e.target.value)}
-                className="rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              >
-                <option value={5}>5 ทีม</option>
-                <option value={10}>10 ทีม</option>
-                <option value="all">ทั้งหมด ({eligibleTeams.length} ทีม)</option>
-              </select>
-
-              {Number.isFinite(pageSize) && pageCount > 1 && (
-                <div className="flex items-center gap-2 sm:ml-auto">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
-                    disabled={currentPageIndex === 0}
-                  >
-                    &larr; ก่อนหน้า
-                  </Button>
-                  <span className="text-gray-500">
-                    ทีม {currentPageIndex * pageSize + 1}-
-                    {Math.min((currentPageIndex + 1) * pageSize, eligibleTeams.length)} จาก{' '}
-                    {eligibleTeams.length} (หน้า {currentPageIndex + 1}/{pageCount})
-                  </span>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setPageIndex((p) => Math.min(pageCount - 1, p + 1))}
-                    disabled={currentPageIndex >= pageCount - 1}
-                  >
-                    ถัดไป &rarr;
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          <Card noPadding className="overflow-hidden">
+        <Card noPadding className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -283,56 +222,61 @@ export default function JudgeMultiEvaluation() {
                   <th className="px-6 py-4 font-bold text-gray-800 sticky left-0 bg-gray-100 shadow-[1px_0_0_0_#e5e7eb] z-10 w-64">
                     เกณฑ์ประเมิน / ชื่อทีม
                   </th>
-                  {pagedTeams.map(team => (
+                  {eligibleTeams.map(team => (
                     <th key={team.id} className="px-6 py-4 font-bold text-gray-800 text-center border-l min-w-[280px]">
                       {team.name}
-                      <div className="mt-1 flex items-center justify-center gap-2">
-                        {statuses[team.id] === 'SUBMITTED' ? (
-                          <>
-                            <Badge variant="success">ส่งแล้ว</Badge>
-                            <button
-                              type="button"
-                              onClick={() => handleUnlockTeam(team.id)}
-                              className="text-xs font-normal text-blue-600 hover:underline"
-                            >
-                              แก้ไขคะแนน
-                            </button>
-                          </>
+                      <div className="mt-1">
+                        {statuses[team.id] === 'SUBMITTED'
+                          ? <Badge variant="success">ส่งแล้ว</Badge>
+                          : statuses[team.id] === 'DRAFT'
+                            ? <Badge variant="warning">ร่าง</Badge>
+                            : <Badge variant="default">ยังไม่เริ่ม</Badge>}
+                      </div>
+                      <div className="mt-3 flex flex-wrap justify-center gap-2">
+                        {statuses[team.id] === 'SUBMITTED' && !unlockedTeams[team.id] ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleUnlockTeam(team.id)}
+                            disabled={!canEdit}
+                          >
+                            ปลดล็อกแก้ไข
+                          </Button>
                         ) : (
                           <>
-                            <Badge variant="warning">ร่าง</Badge>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmTarget(team.id)}
-                              disabled={!isTeamAnswered(team.id)}
-                              className="text-xs font-normal text-blue-600 hover:underline disabled:text-gray-300 disabled:cursor-not-allowed disabled:no-underline"
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleSaveDraft(team.id)}
+                              disabled={!isTeamEditable(team.id)}
                             >
-                              ส่งคะแนนทีมนี้
-                            </button>
+                              บันทึกร่าง
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                if (!isTeamEditable(team.id) || !isTeamAnswered(team.id)) return;
+                                setConfirmTeamId(team.id);
+                                setIsConfirmOpen(true);
+                              }}
+                              disabled={!isTeamEditable(team.id) || !isTeamAnswered(team.id)}
+                            >
+                              {statuses[team.id] === 'SUBMITTED' ? 'ส่งอีกครั้ง' : 'ส่งคะแนน'}
+                            </Button>
                           </>
                         )}
                       </div>
-                      {team.link && (
-                        <a
-                          href={team.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1 inline-block text-xs font-normal text-blue-600 hover:underline"
-                        >
-                          ดูผลงาน &rarr;
-                        </a>
-                      )}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {/* แถวแสดงคะแนนรวม (ช่วยให้ตัดสินใจง่ายขึ้น) */}
+                {/* แถวแสดงคะแนนรวม */}
                 <tr className="bg-blue-50/50 border-b border-gray-200">
                   <td className="px-6 py-3 font-semibold text-blue-800 sticky left-0 bg-blue-50 shadow-[1px_0_0_0_#e5e7eb] z-10">
                     คะแนนรวมโดยประมาณ
                   </td>
-                  {pagedTeams.map(team => (
+                  {eligibleTeams.map(team => (
                     <td key={team.id} className="px-6 py-3 text-center border-l border-gray-200 font-mono text-xl font-bold text-blue-700">
                       {teamTotals[team.id]}
                     </td>
@@ -344,23 +288,22 @@ export default function JudgeMultiEvaluation() {
                   <tr key={criterion.id} className="border-b border-gray-200 hover:bg-gray-50/50">
                     <td className="px-6 py-4 sticky left-0 bg-white hover:bg-gray-50 shadow-[1px_0_0_0_#e5e7eb] z-10 align-top">
                       <p className="font-semibold text-gray-900">{criterion.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">Weight: {criterion.weight}%</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {criterion.type} · Weight: {criterion.weight}%
+                      </p>
+                      {criterion.description && (
+                        <p className="text-sm text-gray-600 whitespace-pre-wrap mt-2">
+                          {criterion.description}
+                        </p>
+                      )}
                     </td>
-                    {pagedTeams.map(team => (
+                    {eligibleTeams.map(team => (
                       <td key={team.id} className="px-6 py-4 border-l border-gray-200 align-top">
                         <CriterionScoreInput
                           criterion={criterion}
                           value={matrixScores[team.id]?.[criterion.id] ?? null}
                           onChange={(val) => handleScoreChange(team.id, criterion.id, val)}
-                          disabled={statuses[team.id] === 'SUBMITTED'}
-                        />
-                        <textarea
-                          rows={2}
-                          className="mt-2 w-full px-2 py-1.5 border border-gray-200 rounded-md text-xs focus:ring-blue-500 disabled:bg-gray-100"
-                          placeholder="หมายเหตุสำหรับเกณฑ์นี้ (ถ้ามี)"
-                          value={criteriaComments[team.id]?.[criterion.id] || ''}
-                          onChange={(e) => handleCriterionCommentChange(team.id, criterion.id, e.target.value)}
-                          disabled={statuses[team.id] === 'SUBMITTED'}
+                          disabled={!isTeamEditable(team.id)}
                         />
                       </td>
                     ))}
@@ -372,7 +315,7 @@ export default function JudgeMultiEvaluation() {
                   <td className="px-6 py-4 sticky left-0 bg-white shadow-[1px_0_0_0_#e5e7eb] z-10 align-top">
                     <p className="font-semibold text-gray-900">ข้อเสนอแนะเพิ่มเติม</p>
                   </td>
-                  {pagedTeams.map(team => (
+                  {eligibleTeams.map(team => (
                     <td key={team.id} className="px-6 py-4 border-l border-gray-200 align-top">
                       <textarea
                         rows={3}
@@ -380,7 +323,7 @@ export default function JudgeMultiEvaluation() {
                         placeholder="คำแนะนำ..."
                         value={comments[team.id]}
                         onChange={(e) => handleCommentChange(team.id, e.target.value)}
-                        disabled={statuses[team.id] === 'SUBMITTED'}
+                        disabled={!isTeamEditable(team.id)}
                       />
                     </td>
                   ))}
@@ -388,21 +331,19 @@ export default function JudgeMultiEvaluation() {
               </tbody>
             </table>
           </div>
-          </Card>
-        </>
+        </Card>
       )}
 
       <ConfirmDialog
-        isOpen={confirmTarget !== null}
-        title={confirmTarget === 'all' ? 'ยืนยันการส่งคะแนนที่กรอกครบแล้ว' : 'ยืนยันการส่งคะแนน'}
-        message={
-          confirmTarget === 'all'
-            ? `จะส่งคะแนน ${readyToSubmitTeamIds.length} ทีมที่กรอกครบแล้ว (ทีมที่ยังกรอกไม่ครบจะถูกข้ามไว้ ส่งทีหลังได้) หลังส่งแล้วแต่ละทีมจะถูกล็อก ต้องกด "แก้ไขคะแนน" ก่อนจึงจะแก้ไขได้อีกครั้ง คุณมั่นใจหรือไม่?`
-            : `คุณกำลังจะส่งคะแนนของทีม "${eligibleTeams.find(t => t.id === confirmTarget)?.name}" หลังส่งแล้วคะแนนจะถูกล็อก ต้องกด "แก้ไขคะแนน" ก่อนจึงจะแก้ไขได้อีกครั้ง คุณมั่นใจหรือไม่?`
-        }
-        onConfirm={handleConfirmSubmit}
-        onCancel={() => setConfirmTarget(null)}
-        confirmText={confirmTarget === 'all' ? 'ส่งคะแนนที่กรอกครบแล้ว' : 'ส่งคะแนนทีมนี้'}
+        isOpen={isConfirmOpen}
+        title="ยืนยันการส่งคะแนน"
+        message={`ยืนยันการส่งคะแนน${eligibleTeams.find((team) => team.id === confirmTeamId)?.name ? `ของทีม ${eligibleTeams.find((team) => team.id === confirmTeamId).name}` : ''}หรือไม่? สามารถแก้ไขและส่งใหม่ได้ก่อน Deadline`}
+        onConfirm={confirmSubmit}
+        onCancel={() => {
+          setIsConfirmOpen(false);
+          setConfirmTeamId(null);
+        }}
+        confirmText="ส่งคะแนน"
       />
     </div>
   );

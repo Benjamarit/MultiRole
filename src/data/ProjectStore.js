@@ -48,6 +48,15 @@ export function getAllProjects() {
   return readAll();
 }
 
+export function deleteProject(projectId) {
+  const numericProjectId = Number(projectId);
+  const projects = readAll();
+  const updatedProjects = projects.filter((project) => Number(project.id) !== numericProjectId);
+  if (updatedProjects.length === projects.length) return false;
+  writeAll(updatedProjects);
+  return true;
+}
+
 // โครงการที่ user คนนี้เป็นเจ้าของ (สร้างเอง = เป็น Project Admin ของโครงการนั้น)
 export function getMyProjects(email) {
   return readAll().filter((p) => p.ownerEmail === email);
