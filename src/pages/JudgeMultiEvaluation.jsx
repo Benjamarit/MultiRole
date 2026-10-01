@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
+import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
@@ -196,9 +197,9 @@ export default function JudgeMultiEvaluation() {
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto space-y-6">
-      <Link to={`/judge/project/${projectId}/teams`} className="text-sm text-blue-600 hover:underline inline-block">
-        &larr; กลับไปหน้ารายชื่อทีม
-      </Link>
+      <BackButton to={`/judge/project/${projectId}/teams`}>
+        กลับไปหน้ารายชื่อทีม
+      </BackButton>
 
       <PageHeader
         title="ประเมินเปรียบเทียบ (Multi-Team Evaluation)"

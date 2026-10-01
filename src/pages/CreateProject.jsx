@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
+import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
@@ -56,9 +57,7 @@ export default function CreateProject() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
-      <Link to="/workspace" className="text-sm text-blue-600 hover:underline inline-block">
-        &larr; กลับไปหน้า Workspace
-      </Link>
+      <BackButton to="/workspace">กลับไปหน้า Workspace</BackButton>
 
       <PageHeader
         title="สร้างโครงการใหม่"

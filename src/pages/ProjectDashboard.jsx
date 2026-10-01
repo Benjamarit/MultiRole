@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Users, Scale, ClipboardList, BarChart3, Trophy } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
+import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
@@ -42,9 +43,9 @@ export default function ProjectDashboard() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <Link to="/workspace" className="text-sm text-blue-600 hover:underline mb-2 inline-block">
-        &larr; กลับไปหน้า Workspace
-      </Link>
+      <BackButton to="/workspace" className="mb-2">
+        กลับไปหน้า Workspace
+      </BackButton>
 
       <PageHeader
         title={project ? project.name : `Dashboard โครงการ #${id}`}

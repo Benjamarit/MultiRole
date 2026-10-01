@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
+import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
@@ -77,9 +78,9 @@ export default function ProjectTeams() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <Link to={`/project/${id}/dashboard`} className="text-sm text-blue-600 hover:underline inline-block">
-        &larr; กลับไปหน้า Dashboard โครงการ
-      </Link>
+      <BackButton to={`/project/${id}/dashboard`}>
+        กลับไปหน้า Dashboard โครงการ
+      </BackButton>
 
       <PageHeader
         title="จัดการทีม (Teams)"

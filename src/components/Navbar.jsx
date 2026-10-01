@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Menu } from 'lucide-react';
-import Button from './Button';
+import { LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const roleLabels = {
@@ -39,7 +38,7 @@ export default function Navbar({ onMenuClick }) {
         </div>
 
         {/* ขวา: ข้อมูล User และปุ่ม Logout */}
-        <div className="flex items-center justify-end gap-4 w-full md:w-auto">
+        <div className="ml-auto flex w-full items-center justify-end gap-4 md:w-auto">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-semibold text-gray-900">{displayName}</p>
             <p className="text-xs text-gray-500">{roleLabel}</p>
@@ -52,9 +51,14 @@ export default function Navbar({ onMenuClick }) {
           
           <div className="w-px h-6 bg-gray-200 mx-2 hidden sm:block"></div>
           
-          <Button variant="textGray" size="sm" onClick={handleLogout}>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex items-center justify-center gap-1.5 border-0 bg-transparent p-0 text-xs font-medium text-gray-600 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 sm:text-sm"
+          >
+            <LogOut size={16} aria-hidden="true" />
             LOGOUT
-          </Button>
+          </button>
         </div>
       </div>
     </header>

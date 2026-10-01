@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
+import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
@@ -326,13 +327,9 @@ export default function CriteriaManagement() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <Link
-        to={`/project/${id}/dashboard`}
-        className="text-sm text-blue-600 hover:underline mb-2 inline-block"
-      >
-        &larr; กลับไปหน้า Dashboard โครงการ
-      </Link>
-
+      <BackButton to={`/project/${id}/dashboard`} className="mb-2">
+        กลับไปหน้า Dashboard โครงการ
+      </BackButton>
       <PageHeader
         title="จัดการเกณฑ์ประเมิน (Criteria Management)"
         description="กำหนดหัวข้อ รูปแบบการให้คะแนน และน้ำหนัก (Weight) สำหรับโครงการนี้"

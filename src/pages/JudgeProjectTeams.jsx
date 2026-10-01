@@ -1,5 +1,6 @@
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
+import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
@@ -43,9 +44,7 @@ export default function JudgeProjectTeams() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <Link to="/workspace" className="text-sm text-blue-600 hover:underline inline-block">
-        &larr; กลับไปหน้า Workspace
-      </Link>
+      <BackButton to="/workspace">กลับไปหน้า Workspace</BackButton>
 
       <PageHeader
         title={project ? project.name : `โครงการ #${projectId}`}
