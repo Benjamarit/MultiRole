@@ -7,14 +7,14 @@ export default function Button({
   className = '', 
   ...props 
 }) {
-  const baseStyle = "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  const baseStyle = "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:ring-2 focus-visible:ring-precision-blue focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
   
   const variants = {
-    primary: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 shadow-sm",
-    secondary: "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-blue-500 shadow-sm",
-    danger: "bg-white text-red-600 border border-red-200 hover:bg-red-50 focus:ring-red-500",
-    text: "text-blue-600 hover:text-blue-800 bg-transparent hover:bg-blue-50",
-    textGray: "text-gray-600 hover:text-gray-900 bg-transparent hover:bg-gray-100"
+    primary: "bg-precision-blue text-white hover:bg-blue-700",
+    secondary: "border border-border bg-surface text-primary-text hover:bg-slate-50",
+    danger: "border border-red-200 bg-surface text-red-700 hover:bg-red-50",
+    text: "bg-transparent text-precision-blue hover:bg-blue-50 hover:text-blue-800",
+    textGray: "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-primary-text"
   };
 
   const sizes = {

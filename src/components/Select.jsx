@@ -1,18 +1,36 @@
-export default function Select({ label, error, options = [], className = '', ...props }) {
+import { useId } from 'react';
+
+export default function Select({
+  label,
+  error,
+  options = [],
+  className = '',
+  id,
+  'aria-describedby': describedBy,
+  ...props
+}) {
+  const generatedId = useId();
+  const selectId = id || generatedId;
+  const errorId = `${selectId}-error`;
+  const errorDescription = error && errorId;
+
   return (
     <div className={`w-full ${className}`}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        <label htmlFor={selectId} className="mb-1.5 block text-sm font-medium text-primary-text">
           {label}
         </label>
       )}
       <select
-        className={`w-full px-3 py-2 bg-white border rounded-md text-sm transition-shadow focus:outline-none focus:ring-2 
-          ${error 
-            ? 'border-red-300 focus:border-red-500 focus:ring-red-200' 
-            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200 hover:border-gray-400'
-          }`}
         {...props}
+        id={selectId}
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={[describedBy, errorDescription].filter(Boolean).join(' ') || undefined}
+        className={`w-full rounded-md border bg-surface px-3 py-2 text-sm text-primary-text transition-colors focus-visible:border-precision-blue focus-visible:ring-2 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100
+          ${error 
+            ? 'border-red-300 focus-visible:border-red-500 focus-visible:ring-red-100'
+            : 'border-border hover:border-slate-400'
+          }`}
       >
         <option value="" disabled>-- กรุณาเลือก --</option>
         {options.map((opt) => (
@@ -21,7 +39,7 @@ export default function Select({ label, error, options = [], className = '', ...
           </option>
         ))}
       </select>
-      {error && <p className="mt-1.5 text-sm text-red-600">{error}</p>}
+      {error && <p id={errorId} className="mt-1.5 text-sm text-red-700">{error}</p>}
     </div>
   );
 }

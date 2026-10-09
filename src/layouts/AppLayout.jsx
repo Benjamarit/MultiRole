@@ -9,7 +9,7 @@ export default function AppLayout() {
   const isSidebarOpen = sidebarOpenPath === location.pathname;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="flex min-h-screen bg-page-background text-primary-text">
       {/* เมนูด้านข้าง */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpenPath(null)} />
 
@@ -19,7 +19,7 @@ export default function AppLayout() {
         <Navbar onMenuClick={() => setSidebarOpenPath(location.pathname)} />
 
         {/* พื้นที่เนื้อหาที่เปลี่ยนไปตาม Route */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-6">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8">
           <Outlet />
         </main>
       </div>

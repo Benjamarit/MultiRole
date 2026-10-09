@@ -24,15 +24,15 @@ function App() {
         toastOptions={{
           duration: 3000,
           style: {
-            background: '#363636',
+            background: '#172554',
             color: '#fff',
-            fontSize: '16px',
+            fontSize: '14px',
           },
           success: {
-            style: { background: '#10b981', color: 'white' }, //Success
+            style: { background: '#047857', color: 'white' },
           },
           error: {
-            style: { background: '#ef4444', color: 'white' }, //Error
+            style: { background: '#B91C1C', color: 'white' },
           },
         }} 
       />

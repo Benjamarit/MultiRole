@@ -28,22 +28,22 @@ export default function JudgeAssignModal({ isOpen, availableUsers, onAssign, onC
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-navy/45 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="judge-assign-title"
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-        <h2 id="judge-assign-title" className="text-lg font-semibold text-gray-900">
+      <div className="w-full max-w-md rounded-md border border-border bg-surface p-6">
+        <h2 id="judge-assign-title" className="text-lg font-semibold text-primary-text">
           เพิ่มกรรมการเข้าโครงการ
         </h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm leading-6 text-slate-600">
           ค้นหาจากอีเมลของผู้ใช้ที่สมัครสมาชิกในระบบ
         </p>
 
         <div className="mt-5">
-          <label htmlFor="judge-email" className="mb-1 block text-sm font-medium text-gray-700">
+          <label htmlFor="judge-email" className="mb-1 block text-sm font-medium text-primary-text">
             อีเมลกรรมการ
           </label>
           {availableUsers.length > 0 ? (
@@ -52,7 +52,7 @@ export default function JudgeAssignModal({ isOpen, availableUsers, onAssign, onC
                 id="judge-email"
                 type="email"
                 list="available-judge-emails"
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary-text focus-visible:border-precision-blue focus-visible:ring-2 focus-visible:ring-blue-100"
                 placeholder="judge@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

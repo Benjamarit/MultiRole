@@ -14,14 +14,14 @@ export default function ConfirmDialog({
 
   return (
     // Overlay พื้นหลังสีดำโปร่งใส
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-navy/45 px-4 transition-opacity">
       
       {/* กล่อง Modal */}
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 transform transition-all">
-        <h3 className="text-lg font-bold text-gray-900 mb-2">
+      <div className="w-full max-w-md rounded-md border border-border bg-surface p-6">
+        <h3 className="mb-2 text-lg font-semibold text-primary-text">
           {title}
         </h3>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="mb-6 text-sm leading-6 text-slate-600">
           {message}
         </p>
         

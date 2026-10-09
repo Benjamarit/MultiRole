@@ -18,17 +18,17 @@ export default function Sidebar({ isOpen, onClose }) {
   const navContent = (
     <>
       {/* โลโก้ หรือ ชื่อระบบ */}
-      <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-white/15 p-6">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-white">CE System</h2>
-          <p className="text-xs text-gray-400 mt-1">
+          <h2 className="text-xl font-semibold tracking-tight text-white">CE System</h2>
+          <p className="mt-1 text-xs text-white/65">
             {isSystemAdmin ? 'Admin Portal' : 'Workspace'}
           </p>
         </div>
         {/* ปุ่มปิด แสดงเฉพาะบนมือถือ */}
         <button
           onClick={onClose}
-          className="md:hidden text-gray-400 hover:text-white focus:outline-none"
+          className="rounded-sm text-white/65 hover:text-white focus-visible:ring-2 focus-visible:ring-white md:hidden"
           aria-label="ปิดเมนู"
         >
           <X className="w-6 h-6" aria-hidden="true" />
@@ -36,7 +36,7 @@ export default function Sidebar({ isOpen, onClose }) {
       </div>
 
       {/* รายการเมนู */}
-      <nav className="flex-1 px-4 py-6 space-y-2">
+      <nav className="flex-1 space-y-1.5 px-4 py-6">
         {menus.map((item) => {
           const Icon = item.icon;
 
@@ -45,10 +45,10 @@ export default function Sidebar({ isOpen, onClose }) {
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-md transition-colors text-sm font-medium ${
+                `flex items-center gap-3 rounded-md px-4 py-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-white ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                    ? 'bg-precision-blue text-white'
+                    : 'text-white/75 hover:bg-white/10 hover:text-white'
                 }`
               }
             >
@@ -64,13 +64,13 @@ export default function Sidebar({ isOpen, onClose }) {
   return (
     <>
       {/* Desktop: ค้างโชว์ตลอด ไม่ผูกกับ isOpen */}
-      <aside className="w-64 bg-gray-900 text-white flex-col hidden md:flex h-screen sticky top-0">
+      <aside className="sticky top-0 hidden h-screen w-64 flex-col bg-ink-navy text-white md:flex">
         {navContent}
       </aside>
 
       {/* Mobile: Drawer เลื่อนเข้า-ออกจากซ้าย ผูกกับ isOpen */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 text-white flex flex-col h-screen md:hidden transform transition-transform duration-200 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-40 flex h-screen w-64 flex-col bg-ink-navy text-white transition-transform duration-200 ease-in-out md:hidden ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-hidden={!isOpen}
@@ -81,7 +81,7 @@ export default function Sidebar({ isOpen, onClose }) {
       {/* Backdrop: กดข้างนอกเพื่อปิด แสดงเฉพาะตอนเปิดบนมือถือ */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          className="fixed inset-0 z-30 bg-ink-navy/35 md:hidden"
           onClick={onClose}
           aria-hidden="true"
         />

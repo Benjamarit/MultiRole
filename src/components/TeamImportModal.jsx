@@ -136,18 +136,18 @@ export default function TeamImportModal({ isOpen, onImport, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-navy/45 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="team-import-title"
     >
-      <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-lg max-h-[85vh] overflow-y-auto">
+      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-md border border-border bg-surface p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 id="team-import-title" className="text-lg font-semibold text-gray-900">
+            <h2 id="team-import-title" className="text-lg font-semibold text-primary-text">
               นำเข้าทีมจาก Excel
             </h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm leading-6 text-slate-600">
               ไฟล์ต้องมีคอลัมน์ตามลำดับ: ชื่อทีม (บังคับ), รายละเอียดผลงาน, ลิงก์ผลงาน
               โดยแถวแรกเป็นหัวตาราง
             </p>
@@ -165,7 +165,7 @@ export default function TeamImportModal({ isOpen, onImport, onClose }) {
         <div className="mt-5">
           <label
             htmlFor="team-import-file"
-            className="mb-1 block text-sm font-medium text-gray-700"
+            className="mb-1 block text-sm font-medium text-primary-text"
           >
             เลือกไฟล์ Excel (.xlsx)
           </label>

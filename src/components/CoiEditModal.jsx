@@ -27,17 +27,17 @@ export default function CoiEditModal({ isOpen, judge, teams, onSave, onClose }) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-navy/45 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="coi-edit-title"
       onKeyDown={(e) => e.key === 'Escape' && onClose()}
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-        <h2 id="coi-edit-title" className="text-lg font-semibold text-gray-900">
+      <div className="w-full max-w-md rounded-md border border-border bg-surface p-6">
+        <h2 id="coi-edit-title" className="text-lg font-semibold text-primary-text">
           ตั้งค่า Conflict of Interest
         </h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm leading-6 text-slate-600">
           เลือกทีมที่ <span className="font-medium">{judge.name}</span> ต้องงดให้คะแนน
           เนื่องจากมีผลประโยชน์ทับซ้อน ระบบจะไม่แสดงทีมเหล่านี้ในหน้าประเมินของกรรมการคนนี้
         </p>
@@ -46,7 +46,7 @@ export default function CoiEditModal({ isOpen, judge, teams, onSave, onClose }) 
           {teams.map((team) => (
             <label
               key={team.id}
-              className="flex items-center gap-3 rounded-md border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+              className="flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2 text-sm hover:bg-slate-50"
             >
               <input
                 type="checkbox"

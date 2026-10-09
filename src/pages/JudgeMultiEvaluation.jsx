@@ -226,6 +226,18 @@ export default function JudgeMultiEvaluation() {
                   {eligibleTeams.map(team => (
                     <th key={team.id} className="px-6 py-4 font-bold text-gray-800 text-center border-l min-w-[280px]">
                       {team.name}
+                      {team.link && (
+                        <div className="mt-1">
+                          <a
+                            href={team.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block text-xs font-normal text-blue-600 hover:underline break-all"
+                          >
+                            ดูผลงาน &rarr;
+                          </a>
+                        </div>
+                      )}
                       <div className="mt-1">
                         {statuses[team.id] === 'SUBMITTED'
                           ? <Badge variant="success">ส่งแล้ว</Badge>

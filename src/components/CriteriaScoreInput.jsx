@@ -21,7 +21,7 @@ export default function CriterionScoreInput({ criterion, value, onChange, disabl
               onClick={() => onChange(star)}
               aria-label={`${star} ดาว`}
               aria-pressed={value >= star}
-              className="disabled:cursor-not-allowed"
+              className="rounded-sm focus-visible:ring-2 focus-visible:ring-precision-blue disabled:cursor-not-allowed"
             >
               <Star
                 className={`w-6 h-6 ${
@@ -48,7 +48,7 @@ export default function CriterionScoreInput({ criterion, value, onChange, disabl
             onChange(num);
           }}
           placeholder={`0-${criterion.maxScore}`}
-          className="w-32 px-3 py-2 border border-gray-300 rounded-md text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-200"
+          className="w-32 rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary-text focus-visible:border-precision-blue focus-visible:ring-2 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         />
       );
 

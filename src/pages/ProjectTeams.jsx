@@ -19,7 +19,7 @@ export default function ProjectTeams() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingTeam, setEditingTeam] = useState(null); // null = โหมดเพิ่มใหม่
+  const [editingTeam, setEditingTeam] = useState(null); 
 
   const [isImportOpen, setIsImportOpen] = useState(false);
 
@@ -158,15 +158,17 @@ export default function ProjectTeams() {
         </Card>
       )}
 
-      <TeamFormModal
-        isOpen={isFormOpen}
-        initialTeam={editingTeam}
-        onSave={handleSaveTeam}
-        onClose={() => {
-          setIsFormOpen(false);
-          setEditingTeam(null);
-        }}
-      />
+      {isFormOpen && (
+        <TeamFormModal
+          isOpen={isFormOpen}
+          initialTeam={editingTeam}
+          onSave={handleSaveTeam}
+          onClose={() => {
+            setIsFormOpen(false);
+            setEditingTeam(null);
+          }}
+        />
+      )}
 
       <TeamImportModal
         isOpen={isImportOpen}

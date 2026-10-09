@@ -61,20 +61,20 @@ export default function TeamFormModal({ isOpen, initialTeam, onSave, onClose }) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink-navy/45 px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="team-form-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-        <h2 id="team-form-title" className="text-lg font-semibold text-gray-900">
+      <div className="w-full max-w-md rounded-md border border-border bg-surface p-6">
+        <h2 id="team-form-title" className="text-lg font-semibold text-primary-text">
           {isEditMode ? 'แก้ไขข้อมูลทีม' : 'เพิ่มทีมใหม่'}
         </h2>
 
         <div className="mt-5 space-y-4">
           <div>
-            <label htmlFor="team-name" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="team-name" className="mb-1 block text-sm font-medium text-primary-text">
               ชื่อทีม
             </label>
             <Input
@@ -88,13 +88,13 @@ export default function TeamFormModal({ isOpen, initialTeam, onSave, onClose }) 
           </div>
 
           <div>
-            <label htmlFor="team-description" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="team-description" className="mb-1 block text-sm font-medium text-primary-text">
               รายละเอียดผลงาน (ไม่บังคับ)
             </label>
             <textarea
               id="team-description"
               rows={4}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-primary-text focus-visible:border-precision-blue focus-visible:ring-2 focus-visible:ring-blue-100"
               placeholder="อธิบายแนวคิด เทคโนโลยีที่ใช้ หรือจุดเด่นของผลงาน..."
               value={form.description}
               onChange={handleChange('description')}
@@ -102,7 +102,7 @@ export default function TeamFormModal({ isOpen, initialTeam, onSave, onClose }) 
           </div>
 
           <div>
-            <label htmlFor="team-link" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="team-link" className="mb-1 block text-sm font-medium text-primary-text">
               ลิงก์ผลงาน (ไม่บังคับ)
             </label>
             <Input
@@ -113,7 +113,7 @@ export default function TeamFormModal({ isOpen, initialTeam, onSave, onClose }) 
               onChange={handleChange('link')}
               error={errors.link}
             />
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs leading-5 text-slate-500">
               เช่น ลิงก์ GitHub, วิดีโอสาธิต, หรือเว็บไซต์ผลงาน — กรรมการจะกดเข้าไปดูได้จากหน้าประเมิน
             </p>
           </div>
