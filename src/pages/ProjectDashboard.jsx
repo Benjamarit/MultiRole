@@ -6,6 +6,8 @@ import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
+import toast from 'react-hot-toast';
+import { getTotalCriteriaWeight } from '../data/CriteriaStore';
 import { getProjectById, isBeforeEvaluationDeadline, updateProjectDetails, updateProjectStatus } from '../data/ProjectStore';
 
 const statusVariant = (status) => {
@@ -19,6 +21,8 @@ const statusVariant = (status) => {
 export default function ProjectDashboard() {
   const { id } = useParams();
   const [project, setProject] = useState(() => getProjectById(id));
+  const totalCriteriaWeight = getTotalCriteriaWeight(id);
+  const hasCompleteWeights = totalCriteriaWeight === 100;
 
   const projectMenus = [
     { title: 'จัดการทีม (Teams)', path: `/project/${id}/teams`, icon: Users, desc: 'เพิ่ม/ลบ ทีมผู้เข้าแข่งขัน' },
@@ -30,7 +34,10 @@ export default function ProjectDashboard() {
 
   const handleToggleStatus = () => {
     const nextStatus = project.status === 'Active' ? 'Draft' : 'Active';
-    updateProjectStatus(id, nextStatus);
+    if (!updateProjectStatus(id, nextStatus)) {
+      toast.error('ต้องกำหนดเกณฑ์ประเมินและ Weight รวมให้ครบ 100% ก่อนเปิดรับคะแนน');
+      return;
+    }
     setProject((prev) => ({ ...prev, status: nextStatus }));
   };
 
@@ -69,6 +76,14 @@ export default function ProjectDashboard() {
           <p className="text-sm text-amber-700">
             โครงการนี้ยังเป็นสถานะ Draft — กรรมการที่ถูกเชิญจะยังกดเข้าหน้าประเมินไม่ได้จนกว่าจะกด "เปิดรับคะแนน"
             แนะนำให้ตั้งค่าทีมและเกณฑ์ประเมินให้ครบก่อนเปิดรับคะแนนจริง
+          </p>
+        </Card>
+      )}
+
+      {project && !hasCompleteWeights && (
+        <Card className="bg-amber-50 border-amber-200">
+          <p className="text-sm text-amber-700">
+            Weight รวมปัจจุบัน {totalCriteriaWeight}% ต้องกำหนดเกณฑ์ประเมินให้ครบ 100% ก่อนเปิดรับคะแนนหรือเริ่มประเมิน
           </p>
         </Card>
       )}

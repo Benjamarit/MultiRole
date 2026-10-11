@@ -1,4 +1,4 @@
-import { getProjectById, isBeforeEvaluationDeadline } from './ProjectStore';
+import { getProjectById, isBeforeEvaluationDeadline, isProjectReadyForEvaluation } from './ProjectStore';
 
 const EVALUATIONS_KEY = 'ce_project_evaluations';
 
@@ -49,7 +49,12 @@ export function deleteProjectEvaluations(projectId) {
 }
 
 export function saveEvaluation(evaluation) {
-  if (!isBeforeEvaluationDeadline(getProjectById(evaluation.projectId))) return null;
+  if (
+    !isProjectReadyForEvaluation(evaluation.projectId) ||
+    !isBeforeEvaluationDeadline(getProjectById(evaluation.projectId))
+  ) {
+    return null;
+  }
 
   const evaluations = readAll();
   const existingIndex = evaluations.findIndex(

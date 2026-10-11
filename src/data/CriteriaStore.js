@@ -29,6 +29,22 @@ export function getCriteriaByProject(projectId) {
   return (entry?.criteria || []).map(normalizeCriterion);
 }
 
+export function getTotalCriteriaWeight(projectId) {
+  return getCriteriaByProject(projectId).reduce(
+    (total, criterion) => total + Number(criterion.weight || 0),
+    0
+  );
+}
+
+export function hasCompleteCriteriaWeights(projectId) {
+  const criteria = getCriteriaByProject(projectId);
+  const totalWeight = criteria.reduce(
+    (total, criterion) => total + Number(criterion.weight || 0),
+    0
+  );
+  return criteria.length > 0 && totalWeight === 100;
+}
+
 export function saveCriterion(projectId, criterion) {
   const numericProjectId = Number(projectId);
   const allProjectCriteria = readAll();

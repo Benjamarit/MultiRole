@@ -41,13 +41,18 @@ export default function Workspace() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const myProjects = getMyProjects(user?.email);
+  const [deletedProjectIds, setDeletedProjectIds] = useState(() => new Set());
+  const myProjects = getMyProjects(user?.email).filter(
+    (project) => !deletedProjectIds.has(project.id)
+  );
   const judgingProjects = useMemo(() => {
-    return getJudgingProjects(user?.email).map((project) => ({
-      ...project,
-      progress: getJudgeProgress(project, user?.email),
-    }));
-  }, [user?.email]);
+    return getJudgingProjects(user?.email)
+      .filter((project) => !deletedProjectIds.has(project.id))
+      .map((project) => ({
+        ...project,
+        progress: getJudgeProgress(project, user?.email),
+      }));
+  }, [user?.email, deletedProjectIds]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all | pending | completed
@@ -65,6 +70,7 @@ export default function Workspace() {
         toast.error('ไม่พบโครงการที่ต้องการลบ');
         return;
       }
+      setDeletedProjectIds((prev) => new Set(prev).add(projectToDelete.id));
       toast.success(`ลบโครงการ "${projectToDelete.name}" เรียบร้อยแล้ว`);
       setProjectToDelete(null);
     } catch {

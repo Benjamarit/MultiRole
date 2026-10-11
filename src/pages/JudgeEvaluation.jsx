@@ -11,7 +11,7 @@ import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
-import { getProjectById, isBeforeEvaluationDeadline } from '../data/ProjectStore';
+import { getProjectById, isBeforeEvaluationDeadline, isProjectReadyForEvaluation } from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
 
 function scoreLabel(criterion, value) {
@@ -49,6 +49,7 @@ export default function JudgeEvaluation() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(() => savedEvaluation?.updatedAt || null);
   const canEdit = isBeforeEvaluationDeadline(project);
+  const canEvaluate = isProjectReadyForEvaluation(projectId);
 
   const allAnswered = useMemo(
     () => criteria.every((c) => scores[c.id] !== undefined && scores[c.id] !== null),
@@ -88,7 +89,7 @@ export default function JudgeEvaluation() {
       status: 'DRAFT',
     });
     if (!saved) {
-      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
+      toast.error('โครงการยังไม่พร้อมประเมินหรือหมดเขตรับคะแนน ไม่สามารถบันทึกได้');
       return;
     }
     setEvaluationStatus(saved.status);
@@ -117,7 +118,7 @@ export default function JudgeEvaluation() {
     });
     if (!saved) {
       setIsConfirmOpen(false);
-      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
+      toast.error('โครงการยังไม่พร้อมประเมินหรือหมดเขตรับคะแนน ไม่สามารถส่งคะแนนได้');
       return;
     }
     setEvaluationStatus(saved.status);
@@ -126,6 +127,21 @@ export default function JudgeEvaluation() {
     setIsConfirmOpen(false);
     toast.success('ส่งคะแนนเรียบร้อยแล้ว');
   };
+
+  if (!canEvaluate) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto space-y-6">
+        <BackButton to={`/judge/project/${projectId}/teams`}>
+          กลับไปหน้ารายชื่อทีมที่ต้องประเมิน
+        </BackButton>
+        <Card className="bg-amber-50 border-amber-200">
+          <p className="text-sm text-amber-700">
+            ยังไม่สามารถประเมินได้ โครงการต้องเปิดรับคะแนนและมี Weight รวมครบ 100%
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">

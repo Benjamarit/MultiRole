@@ -15,7 +15,7 @@ const EMPTY_FORM = { name: '', description: '', link: '' };
  *   onClose={() => ...}
  * />
  */
-export default function TeamFormModal({ isOpen, initialTeam, onSave, onClose }) {
+export default function TeamFormModal({ isOpen, initialTeam, existingTeams = [], onSave, onClose }) {
   const isEditMode = Boolean(initialTeam);
   const [form, setForm] = useState(() =>
     initialTeam
@@ -37,6 +37,15 @@ export default function TeamFormModal({ isOpen, initialTeam, onSave, onClose }) 
   const validate = () => {
     const next = {};
     if (!form.name.trim()) next.name = 'กรุณากรอกชื่อทีม';
+    else if (
+      existingTeams.some(
+        (team) =>
+          team.id !== initialTeam?.id &&
+          team.name.trim().toLowerCase() === form.name.trim().toLowerCase()
+      )
+    ) {
+      next.name = 'ชื่อทีมนี้มีอยู่แล้ว กรุณาใช้ชื่อทีมอื่น';
+    }
     if (form.link.trim() && !/^https?:\/\/.+/i.test(form.link.trim())) {
       next.link = 'ลิงก์ต้องขึ้นต้นด้วย http:// หรือ https://';
     }
@@ -75,13 +84,14 @@ export default function TeamFormModal({ isOpen, initialTeam, onSave, onClose }) 
         <div className="mt-5 space-y-4">
           <div>
             <label htmlFor="team-name" className="mb-1 block text-sm font-medium text-primary-text">
-              ชื่อทีม
+              ชื่อทีม (บังคับ)
             </label>
             <Input
               id="team-name"
               placeholder="เช่น Team Alpha"
               value={form.name}
               onChange={handleChange('name')}
+              required
               autoFocus
             />
             {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}

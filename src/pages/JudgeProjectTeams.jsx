@@ -4,7 +4,7 @@ import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
-import { getProjectById, getJudgeAssignments, isBeforeEvaluationDeadline } from '../data/ProjectStore';
+import { getProjectById, getJudgeAssignments, isBeforeEvaluationDeadline, isProjectReadyForEvaluation } from '../data/ProjectStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation } from '../data/EvaluationStore';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,7 @@ export default function JudgeProjectTeams() {
   const { user } = useAuth();
 
   const project = getProjectById(projectId);
+  const canEvaluate = isProjectReadyForEvaluation(projectId);
   const allTeams = getTeamsByProject(projectId);
 
   // หาทีมที่กรรมการคนนี้ติด COI ไว้ในโครงการนี้ (ตั้งค่าไว้จากหน้า ProjectJudges)
@@ -55,7 +56,7 @@ export default function JudgeProjectTeams() {
         }
         action={
           // แสดงปุ่มเข้าสู่โหมดประเมินเปรียบเทียบ (Matrix) หากมีทีมที่ต้องประเมินมากกว่า 1 ทีม
-          teams.length > 1 && (
+          canEvaluate && teams.length > 1 && (
             <Button onClick={() => navigate(`/judge/project/${projectId}/evaluate-multi`)}>
               โหมดประเมินเปรียบเทียบ (Matrix)
             </Button>
@@ -63,13 +64,21 @@ export default function JudgeProjectTeams() {
         }
       />
 
+      {!canEvaluate && (
+        <Card className="bg-amber-50 border-amber-200">
+          <p className="text-sm text-amber-700">
+            ยังไม่สามารถเริ่มประเมินได้ โครงการต้องเปิดรับคะแนนและมี Weight รวมครบ 100%
+          </p>
+        </Card>
+      )}
+
       {project?.evaluationDeadline && !isBeforeEvaluationDeadline(project) && (
         <Card className="bg-red-50 border-red-200">
           <p className="text-sm text-red-700">หมดเขตการประเมินแล้ว สามารถดูคะแนนเดิมได้แต่ไม่สามารถแก้ไขหรือส่งคะแนนเพิ่ม</p>
         </Card>
       )}
 
-      {teams.length > 0 ? (
+      {!canEvaluate ? null : teams.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {teams.map((team) => (
             <Card key={team.id} className="hover:shadow-md transition-shadow flex flex-col justify-between h-full">

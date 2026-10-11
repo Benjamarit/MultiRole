@@ -109,9 +109,9 @@ export default function CriteriaManagement() {
       return;
     }
 
-    // Validation น้ำหนักต้องเป็นหลักสิบ
-    if (weightValue % 10 !== 0 || weightValue <= 0) {
-      toast.error('กรุณาระบุน้ำหนักคะแนนเป็นหลักสิบ (เช่น 10, 20, 30)');
+    // น้ำหนักต้องเป็นจำนวนเต็มบวก
+    if (!Number.isInteger(weightValue) || weightValue <= 0) {
+      toast.error('กรุณาระบุน้ำหนักเป็นจำนวนเต็มมากกว่า 0');
       return;
     }
 
@@ -258,9 +258,9 @@ export default function CriteriaManagement() {
       return;
     }
 
-    // Validation น้ำหนักต้องเป็นหลักสิบ
-    if (weightValue % 10 !== 0 || weightValue <= 0) {
-      toast.error('กรุณาระบุน้ำหนักคะแนนเป็นหลักสิบ (เช่น 10, 20, 30)');
+    // น้ำหนักต้องเป็นจำนวนเต็มบวก
+    if (!Number.isInteger(weightValue) || weightValue <= 0) {
+      toast.error('กรุณาระบุน้ำหนักเป็นจำนวนเต็มมากกว่า 0');
       return;
     }
 
@@ -485,9 +485,9 @@ export default function CriteriaManagement() {
                       {isEditing ? (
                         <input
                           type="number"
-                          min="10"
+                          min="1"
                           max={maxAllowedForThisRow}
-                          step="10"
+                          step="1"
                           className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-center focus:outline-none focus:border-blue-500"
                           value={editRowData.weight}
                           onChange={(e) =>
@@ -619,10 +619,10 @@ export default function CriteriaManagement() {
             <Input
               label="น้ำหนัก (Weight %)"
               type="number"
-              min="10"
+              min="1"
               max={remainingWeight}
-              step="10"
-              placeholder="10, 20, 30..."
+              step="1"
+              placeholder="เช่น 15, 25, 30"
               value={formData.weight}
               onChange={(e) =>
                 setFormData({ ...formData, weight: e.target.value })

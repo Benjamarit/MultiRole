@@ -6,7 +6,8 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import { useAuth } from '../context/AuthContext';
-import { addProject } from '../data/ProjectStore';
+import { addProject, isProjectNameTaken } from '../data/ProjectStore';
+import toast from 'react-hot-toast';
 
 const PROJECT_TYPES = ['Technology', 'Software', 'Business', 'Design', 'Other'];
 
@@ -24,6 +25,9 @@ export default function CreateProject() {
   const validate = () => {
     const next = {};
     if (!form.name.trim()) next.name = 'กรุณากรอกชื่อโครงการ';
+    else if (isProjectNameTaken(form.name)) {
+      next.name = 'มีโครงการชื่อนี้อยู่แล้ว กรุณาใช้ชื่ออื่น';
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -40,7 +44,7 @@ export default function CreateProject() {
 
       await new Promise((resolve) => setTimeout(resolve, 500)); // จำลองการบันทึก
 
-      addProject({
+      const project = addProject({
         name: form.name,
         type: form.type,
         description: form.description,
@@ -48,6 +52,12 @@ export default function CreateProject() {
         ownerName: user?.name,
         evaluationDeadline: form.evaluationDeadline || null,
       });
+
+      if (!project) {
+        setErrors({ name: 'มีโครงการชื่อนี้อยู่แล้ว กรุณาใช้ชื่ออื่น' });
+        toast.error('มีโครงการชื่อนี้อยู่แล้ว ไม่สามารถสร้างโครงการซ้ำได้');
+        return;
+      }
 
       navigate('/workspace');
     } finally {

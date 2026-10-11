@@ -56,10 +56,22 @@ export default function ProjectTeams() {
   };
 
   const handleImportTeams = (newTeams) => {
-    const savedTeams = newTeams.map((teamData) => saveTeam(id, teamData));
+    const existingNames = new Set(teams.map((team) => team.name.trim().toLowerCase()));
+    const uniqueTeams = newTeams.filter((teamData) => {
+      const normalizedName = teamData.name.trim().toLowerCase();
+      if (existingNames.has(normalizedName)) return false;
+      existingNames.add(normalizedName);
+      return true;
+    });
+    const savedTeams = uniqueTeams.map((teamData) => saveTeam(id, teamData));
     setTeams((prev) => [...savedTeams, ...prev]);
     setIsImportOpen(false);
-    toast.success(`นำเข้าทีมสำเร็จ ${savedTeams.length} ทีม`);
+    if (savedTeams.length > 0) {
+      toast.success(`นำเข้าทีมสำเร็จ ${savedTeams.length} ทีม`);
+    }
+    if (savedTeams.length < newTeams.length) {
+      toast.error(`ข้าม ${newTeams.length - savedTeams.length} ทีม เนื่องจากชื่อซ้ำกับข้อมูลเดิมหรือซ้ำกันในไฟล์`);
+    }
   };
 
   const handleDeleteClick = (team) => {
@@ -162,6 +174,7 @@ export default function ProjectTeams() {
         <TeamFormModal
           isOpen={isFormOpen}
           initialTeam={editingTeam}
+          existingTeams={teams}
           onSave={handleSaveTeam}
           onClose={() => {
             setIsFormOpen(false);
