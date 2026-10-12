@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
 import BackButton from '../components/BackButton';
 import Card from '../components/Card';
@@ -10,6 +11,7 @@ import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluationsByProject } from '../data/EvaluationStore';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getRegisteredUsers } from '../context/authStore';
+import { addNotification } from '../data/NotificationStore';
 
 function formatTime(date) {
   return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -47,6 +49,7 @@ export default function EvaluationMonitoring() {
     ).length;
     return {
       id: assignment.id,
+      email: judge?.email || assignment.email || assignment.id,
       name: judge?.name || `กรรมการ ${assignment.email || assignment.id}`,
       assigned: eligibleTeams.length,
       completed,
@@ -93,9 +96,16 @@ export default function EvaluationMonitoring() {
     setIsRefreshing(false);
   };
 
-  // TODO: ตอนต่อ API จริง ให้ยิง POST /notifications แทนการเก็บ state ฝั่ง client เฉยๆ
-  const handleNotify = (judgeId) => {
+  const handleNotify = (judgeId, judgeEmail, judgeName) => {
+    addNotification({
+      userId: judgeEmail,
+      projectId: id,
+      title: 'แจ้งเตือนการประเมิน',
+      message: `เรียนคุณ ${judgeName}, โปรดอย่าลืมให้คะแนนผลงานในโครงการ "${project?.name || `โครงการ #${id}`}" เนื่องจากใกล้ถึงกำหนดเวลาแล้วครับ`,
+      type: 'REMINDER',
+    });
     setNotifiedJudgeIds((prev) => [...prev, judgeId]);
+    toast.success(`ส่งการแจ้งเตือนถึง ${judgeName} เรียบร้อยแล้ว`);
   };
 
   return (
@@ -180,7 +190,7 @@ export default function EvaluationMonitoring() {
                         variant="text"
                         size="sm"
                         disabled={percent === 100 || alreadyNotified}
-                        onClick={() => handleNotify(judge.id)}
+                        onClick={() => handleNotify(judge.id, judge.email, judge.name)}
                       >
                         {alreadyNotified ? 'ส่งแล้ว' : 'แจ้งเตือน'}
                       </Button>
