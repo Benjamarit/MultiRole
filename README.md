@@ -20,8 +20,8 @@ If you are developing a production application, we recommend using TypeScript wi
 
 ## Competition workflow data
 
-This repository is a frontend-only prototype. Groups, team assignments, evaluations, and account data are stored in browser `localStorage`; UI authorization checks are not a security boundary. A production backend must enforce project ownership, same-competition relationships, score validation, judge assignment, and evaluation deadlines server-side.
+This repository is a frontend-only prototype. Groups, team assignments, evaluations, and account data are stored in browser `localStorage`; UI authorization checks are not a security boundary. Team groups are organizational only. Evaluation access is based on explicit judge-team assignments, and changing assignments does not create or delete evaluations.
 
-For backend persistence, use competition-owned group rows and a nullable team-to-group foreign key, plus a relational judge-team assignment table with foreign keys and a unique `(judge_id, team_id)` constraint. Before removing the legacy COI table, inspect its foreign keys and existing rows, then migrate or back up only that data and drop only its table; retain teams, members, evaluations, scores, criteria, and competitions. No backend schema or database migration is included in this repository.
+The current frontend has no backend API or backend schema. A production integration must enforce project ownership, same-competition relationships, score validation, explicit judge-team assignments, and evaluation deadlines server-side. Persist groups against their competition and team, and persist judge-team relationships with foreign keys and a uniqueness constraint so duplicates are rejected without restricting one team to multiple judges. No backend schema or database migration is included in this repository.
 
 Scoring remains a weighted average of normalized criterion scores. The leaderboard averages submitted judges' weighted totals; with the project's shared criteria and weights, this is equivalent to averaging each criterion across submitted judges and then applying the weights. Drafts are excluded.

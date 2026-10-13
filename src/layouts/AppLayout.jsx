@@ -1,28 +1,13 @@
-import { useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
+import { Outlet } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 
 export default function AppLayout() {
-  const [sidebarOpenPath, setSidebarOpenPath] = useState(null);
-  const location = useLocation();
-  const isSidebarOpen = sidebarOpenPath === location.pathname;
-
   return (
-    <div className="flex min-h-screen bg-page-background text-primary-text">
-      {/* เมนูด้านข้าง */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpenPath(null)} />
-
-      {/* พื้นที่หลักด้านขวา */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* แถบด้านบน */}
-        <Navbar onMenuClick={() => setSidebarOpenPath(location.pathname)} />
-
-        {/* พื้นที่เนื้อหาที่เปลี่ยนไปตาม Route */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8">
-          <Outlet />
-        </main>
-      </div>
+    <div className="min-h-screen min-w-0 bg-page-background text-primary-text">
+      <Navbar />
+      <main className="min-w-0 overflow-x-hidden">
+        <Outlet />
+      </main>
     </div>
   );
 }

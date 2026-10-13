@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Users, Scale, ClipboardList, BarChart3, Trophy, UsersRound } from 'lucide-react';
+import { Users, Scale, ClipboardList, BarChart3, Trophy } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import BackButton from '../components/BackButton';
 import Card from '../components/Card';
@@ -21,8 +21,7 @@ export default function ProjectDashboard() {
   const [project, setProject] = useState(() => getProjectById(id));
 
   const projectMenus = [
-    { title: 'จัดการทีม (Teams)', path: `/project/${id}/teams`, icon: Users, desc: 'เพิ่ม/ลบ ทีมผู้เข้าแข่งขัน' },
-    { title: 'จัดการกลุ่มทีม (Groups)', path: `/project/${id}/groups`, icon: UsersRound, desc: 'จัดกลุ่มทีมเพื่อการจัดการ' },
+    { title: 'จัดการทีมและกลุ่ม', path: `/project/${id}/teams`, icon: Users, desc: 'เพิ่มทีม จัดกลุ่ม และดูสมาชิก' },
     { title: 'จัดการกรรมการ (Judges)', path: `/project/${id}/judges`, icon: Scale, desc: 'เชิญกรรมการเข้าร่วมโครงการ' },
     { title: 'มอบหมายทีมให้กรรมการ', path: `/project/${id}/assignments`, icon: Scale, desc: 'กำหนดทีมที่กรรมการมีสิทธิ์ประเมิน' },
     { title: 'เกณฑ์ประเมิน (Criteria)', path: `/project/${id}/criteria`, icon: ClipboardList, desc: 'ตั้งค่า Dynamic Scoring' },

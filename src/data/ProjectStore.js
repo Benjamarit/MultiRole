@@ -54,7 +54,7 @@ function readAll() {
   );
   const hasLegacyData = projects.some((project) =>
     (project.judgeAssignments || []).some((assignment) =>
-      'coiTeamIds' in assignment || 'assignedTeamIds' in assignment
+      Object.keys(assignment).some((key) => key !== 'id' && key !== 'email')
     )
   );
   if (hasLegacyData) {
@@ -65,12 +65,7 @@ function readAll() {
 }
 
 function normalizeProject(project) {
-  const judgeAssignments = (project.judgeAssignments || []).map((assignment) => {
-    const cleanAssignment = { ...assignment };
-    delete cleanAssignment.coiTeamIds;
-    delete cleanAssignment.assignedTeamIds;
-    return cleanAssignment;
-  });
+  const judgeAssignments = (project.judgeAssignments || []).map(({ id, email }) => ({ id, email }));
   return {
     ...project,
     judgeAssignments,

@@ -11,7 +11,7 @@ import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
-import { getJudgeAssignments, getProjectById, isBeforeEvaluationDeadline } from '../data/ProjectStore';
+import { getAssignedTeamIds, getProjectById, isBeforeEvaluationDeadline } from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
 
 function normalizedScore(criterion, value) {
@@ -48,12 +48,8 @@ export default function JudgeMultiEvaluation() {
   }, [canEdit, project?.evaluationDeadline]);
 
   const allTeams = getTeamsByProject(projectId);
-  const assignments = getJudgeAssignments(projectId);
-  
-  // หาทีมที่ตัวเองติด COI เพื่อนำไปกรองออก
-  const myAssignment = assignments.find((a) => (a.email || a.id) === judgeId);
-  const coiTeamIds = myAssignment?.coiTeamIds || [];
-  const eligibleTeams = allTeams.filter(t => !coiTeamIds.includes(t.id));
+  const assignedTeamIds = getAssignedTeamIds(projectId, judgeId);
+  const eligibleTeams = allTeams.filter((team) => assignedTeamIds.includes(Number(team.id)));
 
   // --- เพิ่ม State สำหรับจัดเก็บทีมที่ถูกเลือกแสดงในตาราง (ค่าเริ่มต้นให้เลือกทั้งหมด) ---
   const [selectedTeamIds, setSelectedTeamIds] = useState(() => eligibleTeams.map(t => t.id));
