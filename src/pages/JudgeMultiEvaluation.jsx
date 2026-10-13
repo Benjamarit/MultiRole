@@ -11,14 +11,14 @@ import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
-import { getJudgeAssignments, getProjectById, isBeforeEvaluationDeadline } from '../data/ProjectStore';
+import {
+  getAssignedTeamIds,
+  getJudgeAssignments,
+  getProjectById,
+  isBeforeEvaluationDeadline,
+} from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
-
-function normalizedScore(criterion, value) {
-  if (value === null || value === undefined) return 0;
-  if (criterion.type === 'PASS_FAIL') return value === 1 ? 100 : 0;
-  return (value / criterion.maxScore) * 100;
-}
+import { calculateWeightedScore } from '../data/Scoring';
 
 export default function JudgeMultiEvaluation() {
   const { projectId } = useParams();
@@ -49,11 +49,9 @@ export default function JudgeMultiEvaluation() {
 
   const allTeams = getTeamsByProject(projectId);
   const assignments = getJudgeAssignments(projectId);
-  
-  // หาทีมที่ตัวเองติด COI เพื่อนำไปกรองออก
   const myAssignment = assignments.find((a) => (a.email || a.id) === judgeId);
-  const coiTeamIds = myAssignment?.coiTeamIds || [];
-  const eligibleTeams = allTeams.filter(t => !coiTeamIds.includes(t.id));
+  const assignedTeamIds = myAssignment ? getAssignedTeamIds(projectId, myAssignment.id) : [];
+  const eligibleTeams = allTeams.filter((team) => assignedTeamIds.includes(Number(team.id)));
 
   // --- เพิ่ม State สำหรับจัดเก็บทีมที่ถูกเลือกแสดงในตาราง (ค่าเริ่มต้นให้เลือกทั้งหมด) ---
   const [selectedTeamIds, setSelectedTeamIds] = useState(() => eligibleTeams.map(t => t.id));
@@ -100,14 +98,8 @@ export default function JudgeMultiEvaluation() {
   // คำนวณคะแนนรวมของแต่ละทีม
   const teamTotals = useMemo(() => {
     const totals = {};
-    const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0) || 1;
-    
     eligibleTeams.forEach(team => {
-      const teamScores = matrixScores[team.id] || {};
-      const weighted = criteria.reduce((sum, c) => {
-        return sum + normalizedScore(c, teamScores[c.id]) * (c.weight / totalWeight);
-      }, 0);
-      totals[team.id] = weighted.toFixed(1);
+      totals[team.id] = calculateWeightedScore(criteria, matrixScores[team.id] || {}).toFixed(1);
     });
     return totals;
   }, [criteria, eligibleTeams, matrixScores]);
@@ -150,23 +142,27 @@ export default function JudgeMultiEvaluation() {
       return;
     }
     if (!isTeamEditable(teamId)) return;
-    const saved = saveEvaluation({
-      projectId,
-      teamId,
-      judgeId,
-      judgeName: user?.name || 'กรรมการ',
-      scores: matrixScores[teamId],
-      comment: comments[teamId] || '',
-      totalScore: Number(teamTotals[teamId]),
-      status: 'DRAFT',
-    });
-    if (!saved) {
-      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
-      return;
+    try {
+      const saved = saveEvaluation({
+        projectId,
+        teamId,
+        judgeId,
+        judgeName: user?.name || 'กรรมการ',
+        scores: matrixScores[teamId],
+        comment: comments[teamId] || '',
+        totalScore: Number(teamTotals[teamId]),
+        status: 'DRAFT',
+      });
+      if (!saved) {
+        toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
+        return;
+      }
+      setStatuses((prev) => ({ ...prev, [teamId]: 'DRAFT' }));
+      setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
+      toast.success('บันทึกแบบร่างเรียบร้อยแล้ว');
+    } catch (error) {
+      toast.error(error.message);
     }
-    setStatuses((prev) => ({ ...prev, [teamId]: 'DRAFT' }));
-    setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
-    toast.success('บันทึกแบบร่างเรียบร้อยแล้ว');
   };
 
   const confirmSubmit = () => {
@@ -179,27 +175,33 @@ export default function JudgeMultiEvaluation() {
       return;
     }
     if (!isTeamEditable(teamId) || !isTeamAnswered(teamId)) return;
-    const saved = saveEvaluation({
-      projectId,
-      teamId,
-      judgeId,
-      judgeName: user?.name || 'กรรมการ',
-      scores: matrixScores[teamId],
-      comment: comments[teamId] || '',
-      totalScore: Number(teamTotals[teamId]),
-      status: 'SUBMITTED',
-    });
-    if (!saved) {
+    try {
+      const saved = saveEvaluation({
+        projectId,
+        teamId,
+        judgeId,
+        judgeName: user?.name || 'กรรมการ',
+        scores: matrixScores[teamId],
+        comment: comments[teamId] || '',
+        totalScore: Number(teamTotals[teamId]),
+        status: 'SUBMITTED',
+      });
+      if (!saved) {
+        setIsConfirmOpen(false);
+        setConfirmTeamId(null);
+        toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
+        return;
+      }
+      setStatuses((prev) => ({ ...prev, [teamId]: 'SUBMITTED' }));
+      setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
       setIsConfirmOpen(false);
       setConfirmTeamId(null);
-      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
-      return;
+      toast.success('ส่งคะแนนทีมเรียบร้อยแล้ว');
+    } catch (error) {
+      setIsConfirmOpen(false);
+      setConfirmTeamId(null);
+      toast.error(error.message);
     }
-    setStatuses((prev) => ({ ...prev, [teamId]: 'SUBMITTED' }));
-    setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
-    setIsConfirmOpen(false);
-    setConfirmTeamId(null);
-    toast.success('ส่งคะแนนทีมเรียบร้อยแล้ว');
   };
 
   return (

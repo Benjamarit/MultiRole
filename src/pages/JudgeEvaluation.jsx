@@ -11,8 +11,13 @@ import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
-import { getProjectById, isBeforeEvaluationDeadline } from '../data/ProjectStore';
+import {
+  getProjectById,
+  isBeforeEvaluationDeadline,
+  isJudgeAssignedToTeam,
+} from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
+import { calculateWeightedScore } from '../data/Scoring';
 
 function scoreLabel(criterion, value) {
   if (value === null || value === undefined) return null;
@@ -20,12 +25,6 @@ function scoreLabel(criterion, value) {
   if (criterion.type === 'STAR') return `${value} / ${criterion.maxScore} ดาว`;
   if (criterion.type === 'PERCENTAGE') return `${value}%`;
   return `${value} / ${criterion.maxScore}`;
-}
-
-function normalizedScore(criterion, value) {
-  if (value === null || value === undefined) return 0;
-  if (criterion.type === 'PASS_FAIL') return value === 1 ? 100 : 0;
-  return (value / criterion.maxScore) * 100;
 }
 
 export default function JudgeEvaluation() {
@@ -36,6 +35,7 @@ export default function JudgeEvaluation() {
   const team = getTeamsByProject(projectId).find((item) => item.id === Number(teamId));
   const judgeId = user?.email || 'anonymous-judge';
   const savedEvaluation = getEvaluation(projectId, teamId, judgeId);
+  const isAssigned = isJudgeAssignedToTeam(projectId, judgeId, teamId);
 
   const teamName = team?.name || `ทีม #${teamId}`;
 
@@ -48,7 +48,7 @@ export default function JudgeEvaluation() {
   const [submittedAt, setSubmittedAt] = useState(() => savedEvaluation?.submittedAt || null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(() => savedEvaluation?.updatedAt || null);
-  const canEdit = isBeforeEvaluationDeadline(project);
+  const canEdit = isAssigned && isBeforeEvaluationDeadline(project);
 
   const allAnswered = useMemo(
     () => criteria.every((c) => scores[c.id] !== undefined && scores[c.id] !== null),
@@ -56,12 +56,7 @@ export default function JudgeEvaluation() {
   );
 
   const estimatedTotal = useMemo(() => {
-    const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0) || 1;
-    const weighted = criteria.reduce(
-      (sum, c) => sum + normalizedScore(c, scores[c.id]) * (c.weight / totalWeight),
-      0
-    );
-    return weighted.toFixed(1);
+    return calculateWeightedScore(criteria, scores).toFixed(1);
   }, [criteria, scores]);
 
   const handleScoreChange = (criterionId, value) => {
@@ -76,25 +71,29 @@ export default function JudgeEvaluation() {
 
   const handleSaveDraft = () => {
     if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
-    const saved = saveEvaluation({
-      projectId,
-      teamId,
-      judgeId,
-      judgeName: user?.name || 'กรรมการ',
-      scores,
-      criteriaComments,
-      comment,
-      totalScore: Number(estimatedTotal),
-      status: 'DRAFT',
-    });
-    if (!saved) {
-      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
-      return;
+    try {
+      const saved = saveEvaluation({
+        projectId,
+        teamId,
+        judgeId,
+        judgeName: user?.name || 'กรรมการ',
+        scores,
+        criteriaComments,
+        comment,
+        totalScore: Number(estimatedTotal),
+        status: 'DRAFT',
+      });
+      if (!saved) {
+        toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
+        return;
+      }
+      setEvaluationStatus(saved.status);
+      setSubmittedAt(saved.submittedAt);
+      setLastUpdatedAt(saved.updatedAt);
+      toast.success('บันทึกแบบร่างเรียบร้อยแล้ว');
+    } catch (error) {
+      toast.error(error.message);
     }
-    setEvaluationStatus(saved.status);
-    setSubmittedAt(saved.submittedAt);
-    setLastUpdatedAt(saved.updatedAt);
-    toast.success('บันทึกแบบร่างเรียบร้อยแล้ว');
   };
 
   const handleSubmitClick = () => {
@@ -104,28 +103,42 @@ export default function JudgeEvaluation() {
 
   const confirmSubmit = () => {
     if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
-    const saved = saveEvaluation({
-      projectId,
-      teamId,
-      judgeId,
-      judgeName: user?.name || 'กรรมการ',
-      scores,
-      criteriaComments,
-      comment,
-      totalScore: Number(estimatedTotal),
-      status: 'SUBMITTED',
-    });
-    if (!saved) {
+    try {
+      const saved = saveEvaluation({
+        projectId,
+        teamId,
+        judgeId,
+        judgeName: user?.name || 'กรรมการ',
+        scores,
+        criteriaComments,
+        comment,
+        totalScore: Number(estimatedTotal),
+        status: 'SUBMITTED',
+      });
+      if (!saved) {
+        setIsConfirmOpen(false);
+        toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
+        return;
+      }
+      setEvaluationStatus(saved.status);
+      setSubmittedAt(saved.submittedAt);
+      setLastUpdatedAt(saved.updatedAt);
       setIsConfirmOpen(false);
-      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
-      return;
+      toast.success('ส่งคะแนนเรียบร้อยแล้ว');
+    } catch (error) {
+      setIsConfirmOpen(false);
+      toast.error(error.message);
     }
-    setEvaluationStatus(saved.status);
-    setSubmittedAt(saved.submittedAt);
-    setLastUpdatedAt(saved.updatedAt);
-    setIsConfirmOpen(false);
-    toast.success('ส่งคะแนนเรียบร้อยแล้ว');
   };
+
+  if (!team || !isAssigned) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto space-y-6">
+        <BackButton to={`/judge/project/${projectId}/teams`}>กลับไปหน้ารายชื่อทีมที่ต้องประเมิน</BackButton>
+        <Card><p className="text-center text-slate-600">ทีมนี้ไม่ได้รับมอบหมายให้คุณประเมิน</p></Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">

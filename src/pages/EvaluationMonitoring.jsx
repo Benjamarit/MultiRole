@@ -6,7 +6,7 @@ import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
-import { getProjectById } from '../data/ProjectStore';
+import { getAssignedTeamIds, getProjectById, isJudgeAssignedToTeam } from '../data/ProjectStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluationsByProject } from '../data/EvaluationStore';
 import { getCriteriaByProject } from '../data/CriteriaStore';
@@ -36,15 +36,21 @@ export default function EvaluationMonitoring() {
   const registeredUsers = getRegisteredUsers();
   const teams = getTeamsByProject(id);
   const criteria = getCriteriaByProject(id);
-  const evaluations = getEvaluationsByProject(id).filter((evaluation) => evaluation.status === 'SUBMITTED');
   const assignments = project?.judgeAssignments || [];
-  const totalJudges = assignments.length || project?.judgeEmails?.length || 0;
+  const evaluations = getEvaluationsByProject(id).filter((evaluation) =>
+    evaluation.status === 'SUBMITTED' &&
+    assignments.some((assignment) =>
+      String(assignment.email || assignment.id) === String(evaluation.judgeId) &&
+      isJudgeAssignedToTeam(id, assignment.id, evaluation.teamId)
+    )
+  );
   
   const judgeProgress = assignments.map((assignment) => {
     const judge = registeredUsers.find(
       (user) => user.email === (assignment.email || assignment.id)
     );
-    const eligibleTeams = teams.filter((team) => !(assignment.coiTeamIds || []).includes(team.id));
+    const assignedTeamIds = getAssignedTeamIds(id, assignment.id);
+    const eligibleTeams = teams.filter((team) => assignedTeamIds.includes(Number(team.id)));
     const completed = evaluations.filter(
       (evaluation) => evaluation.judgeId === String(judge?.email || assignment.id)
     ).length;
@@ -59,9 +65,9 @@ export default function EvaluationMonitoring() {
   
   const teamProgress = teams.map((team) => {
     const teamEvaluations = evaluations.filter((evaluation) => evaluation.teamId === team.id);
-    const eligibleJudgeCount = assignments.filter(
-      (assignment) => !(assignment.coiTeamIds || []).includes(team.id)
-    ).length || totalJudges;
+    const eligibleJudgeCount = assignments.filter((assignment) =>
+      isJudgeAssignedToTeam(id, assignment.id, team.id)
+    ).length;
     const currentScore = teamEvaluations.length
       ? teamEvaluations.reduce((sum, evaluation) => sum + evaluation.totalScore, 0) / teamEvaluations.length
       : 0;
@@ -145,7 +151,7 @@ export default function EvaluationMonitoring() {
         </Card>
         <Card>
           <p className="text-sm font-medium text-gray-500 mb-1">กรรมการที่ประเมินเสร็จแล้ว</p>
-            <h3 className="text-3xl font-bold text-green-600">{completedJudges} <span className="text-lg text-gray-500 font-normal">/ {totalJudges} คน</span></h3>
+            <h3 className="text-3xl font-bold text-green-600">{completedJudges} <span className="text-lg text-gray-500 font-normal">/ {assignments.length} คน</span></h3>
         </Card>
         <Card>
           <p className="text-sm font-medium text-gray-500 mb-1">ทีมที่ได้รับคะแนนครบแล้ว</p>

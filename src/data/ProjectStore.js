@@ -1,3 +1,12 @@
+import { getTeamsByProject } from './TeamStore';
+import {
+  getJudgeIdsForTeam,
+  getTeamIdsForJudge,
+  importLegacyJudgeTeamAssignments,
+  removeJudgeTeamAssignments,
+  replaceJudgeTeamAssignments,
+} from './JudgeTeamAssignmentStore';
+
 const PROJECTS_KEY = 'ce_projects';
 
 // demo — ผูกกับอีเมลของ user ที่เคยใช้ทดสอบมาก่อน
@@ -14,8 +23,8 @@ function seedProjects() {
       teamsCount: 10,
       judgeEmails: ['wichai@example.com', 'suda@example.com'],
       judgeAssignments: [
-        { id: 'wichai@example.com', email: 'wichai@example.com', coiTeamIds: [1] },
-        { id: 'suda@example.com', email: 'suda@example.com', coiTeamIds: [] },
+        { id: 'wichai@example.com', email: 'wichai@example.com' },
+        { id: 'suda@example.com', email: 'suda@example.com' },
       ],
       evaluationDeadline: null,
     },
@@ -25,17 +34,46 @@ function seedProjects() {
 }
 
 function readAll() {
+  let projects;
   try {
     const stored = localStorage.getItem(PROJECTS_KEY);
-    return stored ? JSON.parse(stored).map(normalizeProject) : seedProjects();
+    if (!stored) return seedProjects();
+    projects = JSON.parse(stored);
   } catch {
     return seedProjects();
   }
+  const normalizedProjects = projects.map(normalizeProject);
+  const legacyAssignments = projects.flatMap((project) =>
+    (project.judgeAssignments || []).flatMap((assignment) =>
+      (assignment.assignedTeamIds || []).map((teamId) => ({
+        projectId: project.id,
+        judgeId: assignment.id,
+        teamId,
+      }))
+    )
+  );
+  const hasLegacyData = projects.some((project) =>
+    (project.judgeAssignments || []).some((assignment) =>
+      'coiTeamIds' in assignment || 'assignedTeamIds' in assignment
+    )
+  );
+  if (hasLegacyData) {
+    importLegacyJudgeTeamAssignments(legacyAssignments);
+    writeAll(normalizedProjects);
+  }
+  return normalizedProjects;
 }
 
 function normalizeProject(project) {
+  const judgeAssignments = (project.judgeAssignments || []).map((assignment) => {
+    const cleanAssignment = { ...assignment };
+    delete cleanAssignment.coiTeamIds;
+    delete cleanAssignment.assignedTeamIds;
+    return cleanAssignment;
+  });
   return {
     ...project,
+    judgeAssignments,
     evaluationDeadline: project.evaluationDeadline || null,
   };
 }
@@ -101,7 +139,7 @@ export function inviteJudgeToProject(projectId, judgeEmail) {
       judgeEmails: judgeEmails.includes(judgeEmail) ? judgeEmails : [...judgeEmails, judgeEmail],
       judgeAssignments: assignments.some((assignment) => (assignment.email || assignment.id) === judgeEmail)
         ? assignments
-        : [...assignments, { id: judgeEmail, email: judgeEmail, coiTeamIds: [] }],
+        : [...assignments, { id: judgeEmail, email: judgeEmail }],
     };
   });
   writeAll(updated);
@@ -111,19 +149,51 @@ export function getJudgeAssignments(projectId) {
   return getProjectById(projectId)?.judgeAssignments || [];
 }
 
-export function updateJudgeCoi(projectId, judgeId, coiTeamIds) {
-  const projects = readAll();
-  const updated = projects.map((project) =>
-    project.id === Number(projectId)
-      ? {
-          ...project,
-          judgeAssignments: (project.judgeAssignments || []).map((assignment) =>
-            assignment.id === judgeId ? { ...assignment, coiTeamIds } : assignment
-          ),
-        }
-      : project
+export function getAssignedTeamIds(projectId, judgeId) {
+  const assignment = getJudgeAssignments(projectId).find(
+    (item) => String(item.id) === String(judgeId) || String(item.email) === String(judgeId)
   );
-  writeAll(updated);
+  return assignment ? getTeamIdsForJudge(projectId, assignment.id) : [];
+}
+
+export function getJudgeIdsAssignedToTeam(projectId, teamId) {
+  const assignmentIds = getJudgeIdsForTeam(projectId, teamId);
+  return getJudgeAssignments(projectId)
+    .filter((assignment) => assignmentIds.includes(String(assignment.id)));
+}
+
+export function isJudgeAssignedToTeam(projectId, judgeId, teamId) {
+  const judgeAssignment = getJudgeAssignments(projectId).find(
+    (assignment) =>
+      String(assignment.id) === String(judgeId) ||
+      String(assignment.email) === String(judgeId)
+  );
+  const teamExists = getTeamsByProject(projectId).some(
+    (team) => Number(team.id) === Number(teamId)
+  );
+  return Boolean(
+    teamExists &&
+    judgeAssignment &&
+    getTeamIdsForJudge(projectId, judgeAssignment.id).includes(Number(teamId))
+  );
+}
+
+export function setJudgeAssignedTeams(projectId, judgeId, teamIds) {
+  const projects = readAll();
+  const project = projects.find((item) => Number(item.id) === Number(projectId));
+  if (!project) throw new Error('ไม่พบโครงการที่ต้องการกำหนดทีม');
+  const assignment = (project.judgeAssignments || []).find(
+    (item) => String(item.id) === String(judgeId) || String(item.email) === String(judgeId)
+  );
+  if (!assignment) throw new Error('กรรมการไม่ได้อยู่ในโครงการนี้');
+
+  const requestedIds = [...new Set(teamIds.map(Number))];
+  const teams = getTeamsByProject(projectId);
+  if (requestedIds.some((teamId) => !teams.some((team) => Number(team.id) === teamId))) {
+    throw new Error('พบทีมที่ไม่ได้อยู่ในโครงการนี้');
+  }
+
+  replaceJudgeTeamAssignments(projectId, assignment.id, requestedIds);
 }
 
 export function removeJudgeAssignment(projectId, judgeId, judgeEmail) {
@@ -137,6 +207,7 @@ export function removeJudgeAssignment(projectId, judgeId, judgeEmail) {
         }
       : project
   );
+  removeJudgeTeamAssignments(projectId, judgeId);
   writeAll(updated);
 }
 
@@ -151,6 +222,11 @@ export function updateProjectStatus(projectId, status) {
 
 export function getProjectById(projectId) {
   return readAll().find((p) => p.id === Number(projectId));
+}
+
+export function isProjectAdmin(projectId, email) {
+  const project = getProjectById(projectId);
+  return Boolean(email && project?.ownerEmail === email);
 }
 
 export function updateProjectDetails(projectId, details) {

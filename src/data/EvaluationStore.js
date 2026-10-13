@@ -1,4 +1,11 @@
-import { getProjectById, isBeforeEvaluationDeadline } from './ProjectStore';
+import {
+  getProjectById,
+  isBeforeEvaluationDeadline,
+  isJudgeAssignedToTeam,
+} from './ProjectStore';
+import { getTeamsByProject } from './TeamStore';
+import { getCriteriaByProject } from './CriteriaStore';
+import { calculateWeightedScore, isValidCriterionScore } from './Scoring';
 
 const EVALUATIONS_KEY = 'ce_project_evaluations';
 
@@ -49,7 +56,44 @@ export function deleteProjectEvaluations(projectId) {
 }
 
 export function saveEvaluation(evaluation) {
-  if (!isBeforeEvaluationDeadline(getProjectById(evaluation.projectId))) return null;
+  const project = getProjectById(evaluation.projectId);
+  if (!project) throw new Error('ไม่พบโครงการที่ต้องการบันทึกผลประเมิน');
+  if (!getTeamsByProject(evaluation.projectId).some(
+    (team) => Number(team.id) === Number(evaluation.teamId)
+  )) {
+    throw new Error('ทีมนี้ไม่ได้อยู่ในโครงการที่เลือก');
+  }
+  if (!isJudgeAssignedToTeam(evaluation.projectId, evaluation.judgeId, evaluation.teamId)) {
+    throw new Error('คุณไม่ได้รับมอบหมายให้ประเมินทีมนี้');
+  }
+  if (!isBeforeEvaluationDeadline(project)) return null;
+  if (!['DRAFT', 'SUBMITTED'].includes(evaluation.status)) {
+    throw new Error('สถานะผลประเมินไม่ถูกต้อง');
+  }
+
+  const criteria = getCriteriaByProject(evaluation.projectId);
+  const scores = evaluation.scores || {};
+  const criterionById = new Map(criteria.map((criterion) => [String(criterion.id), criterion]));
+  for (const [criterionId, value] of Object.entries(scores)) {
+    const criterion = criterionById.get(String(criterionId));
+    if (!criterion) throw new Error('พบคะแนนของเกณฑ์ที่ไม่ได้อยู่ในโครงการนี้');
+    if (!isValidCriterionScore(criterion, value)) {
+      throw new Error(`คะแนนของเกณฑ์ "${criterion.name}" อยู่นอกช่วงที่กำหนด`);
+    }
+  }
+  for (const criterionId of Object.keys(evaluation.criteriaComments || {})) {
+    if (!criterionById.has(String(criterionId))) {
+      throw new Error('พบความคิดเห็นของเกณฑ์ที่ไม่ได้อยู่ในโครงการนี้');
+    }
+  }
+  if (evaluation.status === 'SUBMITTED' && (
+    criteria.length === 0 ||
+    criteria.some((criterion) =>
+      scores[criterion.id] === undefined || scores[criterion.id] === null
+    )
+  )) {
+    throw new Error('กรุณาให้คะแนนครบทุกเกณฑ์ก่อนส่งผลประเมิน');
+  }
 
   const evaluations = readAll();
   const existingIndex = evaluations.findIndex(
@@ -60,6 +104,7 @@ export function saveEvaluation(evaluation) {
   );
   const savedEvaluation = normalizeEvaluation({
     ...evaluation,
+    totalScore: calculateWeightedScore(criteria, scores),
     submittedAt: evaluation.status === 'SUBMITTED' ? evaluation.submittedAt || new Date().toISOString() : null,
     updatedAt: new Date().toISOString(),
   });

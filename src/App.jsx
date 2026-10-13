@@ -9,6 +9,8 @@ import AppLayout from './layouts/AppLayout.jsx';
 import ProjectDashboard from './pages/ProjectDashboard.jsx';
 import ProjectTeams from './pages/ProjectTeams.jsx';
 import ProjectJudges from './pages/ProjectJudge.jsx';
+import ProjectGroups from './pages/ProjectGroups.jsx';
+import JudgeTeamAssignments from './pages/JudgeTeamAssignments.jsx';
 import CriteriaManagement from './pages/CriteriaManagement.jsx';
 import EvaluationMonitoring from './pages/EvaluationMonitoring.jsx';
 import JudgeProjectTeams from './pages/JudgeProjectTeams.jsx';
@@ -47,7 +49,9 @@ function App() {
           <Route path="/admin/users" element={<UserManagement />} />
           <Route path="/project/:id/dashboard" element={<ProjectDashboard />} />
           <Route path="/project/:id/teams" element={<ProjectTeams />} />
+          <Route path="/project/:id/groups" element={<ProjectGroups />} />
           <Route path="/project/:id/judges" element={<ProjectJudges />} />
+          <Route path="/project/:id/assignments" element={<JudgeTeamAssignments />} />
           <Route path="/project/:id/criteria" element={<CriteriaManagement />} />
           <Route path="/project/:id/evaluations" element={<EvaluationMonitoring />} />
           <Route path="/judge/project/:projectId/teams" element={<JudgeProjectTeams />} />

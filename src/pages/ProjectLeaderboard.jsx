@@ -5,23 +5,32 @@ import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
-import { getProjectById } from '../data/ProjectStore';
+import { getProjectById, isJudgeAssignedToTeam } from '../data/ProjectStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluationsByProject } from '../data/EvaluationStore';
+
+const EMPTY_ASSIGNMENTS = [];
 
 export default function ProjectLeaderboard() {
   const { id } = useParams();
   
   const project = getProjectById(id);
   const teams = getTeamsByProject(id);
-  const evaluations = getEvaluationsByProject(id).filter((e) => e.status === 'SUBMITTED');
+  const assignments = project?.judgeAssignments || EMPTY_ASSIGNMENTS;
+  const evaluations = getEvaluationsByProject(id).filter((evaluation) =>
+    evaluation.status === 'SUBMITTED' &&
+    assignments.some((assignment) =>
+      String(assignment.email || assignment.id) === String(evaluation.judgeId) &&
+      isJudgeAssignedToTeam(id, assignment.id, evaluation.teamId)
+    )
+  );
   const leaderboard = useMemo(() => {
-    const assignments = project?.judgeAssignments || [];
     const data = teams.map((team) => {
       const teamEvals = evaluations.filter((e) => e.teamId === team.id);
       
-      // หาจำนวนกรรมการที่ต้องประเมินทีมนี้ (รวมทั้งหมด ลบด้วยคนที่ติด COI)
-      const expectedEvals = assignments.filter((a) => !(a.coiTeamIds || []).includes(team.id)).length;
+      const expectedEvals = assignments.filter((assignment) =>
+        isJudgeAssignedToTeam(id, assignment.id, team.id)
+      ).length;
       
       const totalScore = teamEvals.reduce((sum, e) => sum + e.totalScore, 0);
       const averageScore = teamEvals.length > 0 ? totalScore / teamEvals.length : 0;
@@ -39,7 +48,7 @@ export default function ProjectLeaderboard() {
     return data
       .sort((a, b) => b.averageScore - a.averageScore)
       .map((team, index) => ({ ...team, rank: index + 1 }));
-  }, [teams, evaluations, project?.judgeAssignments]);
+  }, [id, teams, evaluations, assignments]);
 
   const handleExportCSV = () => {
     // TODO: สร้างฟังก์ชัน Export ไฟล์ CSV/Excel ในอนาคต

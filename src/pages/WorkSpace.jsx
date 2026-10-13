@@ -8,7 +8,13 @@ import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { getMyProjects, getJudgingProjects, getJudgeAssignments, deleteProject } from '../data/ProjectStore';
+import {
+  deleteProject,
+  getAssignedTeamIds,
+  getJudgeAssignments,
+  getJudgingProjects,
+  getMyProjects,
+} from '../data/ProjectStore';
 import { deleteProjectTeams, getTeamsByProject } from '../data/TeamStore';
 import { deleteProjectCriteria } from '../data/CriteriaStore';
 import { deleteProjectEvaluations, getEvaluation } from '../data/EvaluationStore';
@@ -21,14 +27,14 @@ const statusVariant = (status) => {
   }
 };
 
-// นับว่ากรรมการคนนี้ต้องประเมินกี่ทีมในโครงการนี้ (หัก COI ออก) และประเมินไปแล้วกี่ทีม
+// Count the teams explicitly assigned to this judge and their submitted evaluations.
 function getJudgeProgress(project, judgeEmail) {
   const assignments = getJudgeAssignments(project.id);
   const myAssignment = assignments.find((a) => (a.email || a.id) === judgeEmail);
-  const coiTeamIds = myAssignment?.coiTeamIds || [];
+  const assignedTeamIds = myAssignment ? getAssignedTeamIds(project.id, myAssignment.id) : [];
 
   const eligibleTeams = getTeamsByProject(project.id).filter(
-    (team) => !coiTeamIds.includes(team.id)
+    (team) => assignedTeamIds.includes(Number(team.id))
   );
   const completed = eligibleTeams.filter(
     (team) => getEvaluation(project.id, team.id, judgeEmail)?.status === 'SUBMITTED'

@@ -4,7 +4,12 @@ import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
-import { getProjectById, getJudgeAssignments, isBeforeEvaluationDeadline } from '../data/ProjectStore';
+import {
+  getProjectById,
+  getJudgeAssignments,
+  getAssignedTeamIds,
+  isBeforeEvaluationDeadline,
+} from '../data/ProjectStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation } from '../data/EvaluationStore';
 import { useAuth } from '../context/AuthContext';
@@ -17,14 +22,12 @@ export default function JudgeProjectTeams() {
   const project = getProjectById(projectId);
   const allTeams = getTeamsByProject(projectId);
 
-  // หาทีมที่กรรมการคนนี้ติด COI ไว้ในโครงการนี้ (ตั้งค่าไว้จากหน้า ProjectJudges)
   const assignments = getJudgeAssignments(projectId);
   const myAssignment = assignments.find((a) => (a.email || a.id) === user?.email);
-  const coiTeamIds = myAssignment?.coiTeamIds || [];
+  const assignedTeamIds = myAssignment ? getAssignedTeamIds(projectId, myAssignment.id) : [];
 
-  // ทีมที่กรรมการคนนี้ต้องประเมิน (ตัดทีมที่ติด COI ออก) พร้อมสถานะประเมินของแต่ละทีม
   const teams = allTeams
-    .filter((team) => !coiTeamIds.includes(team.id))
+    .filter((team) => assignedTeamIds.includes(Number(team.id)))
     .map((team) => {
       const evaluation = getEvaluation(projectId, team.id, user?.email);
       return {
@@ -48,11 +51,7 @@ export default function JudgeProjectTeams() {
 
       <PageHeader
         title={project ? project.name : `โครงการ #${projectId}`}
-        description={
-          coiTeamIds.length > 0
-            ? `เลือกทีมที่ต้องการประเมินคะแนน (${coiTeamIds.length} ทีมถูกซ่อนไว้เนื่องจากติด COI)`
-            : 'เลือกทีมที่ต้องการประเมินคะแนน'
-        }
+        description="เลือกทีมที่ได้รับมอบหมายเพื่อประเมินคะแนน"
         action={
           // แสดงปุ่มเข้าสู่โหมดประเมินเปรียบเทียบ (Matrix) หากมีทีมที่ต้องประเมินมากกว่า 1 ทีม
           teams.length > 1 && (
@@ -116,7 +115,7 @@ export default function JudgeProjectTeams() {
           <p className="text-center text-gray-500 py-4">
             {allTeams.length === 0
               ? 'โครงการนี้ยังไม่มีทีมผู้เข้าแข่งขัน'
-              : 'ไม่มีทีมที่ต้องประเมินในขณะนี้ (อาจติด COI ทุกทีม)'}
+              : 'ยังไม่มีทีมที่ได้รับมอบหมายให้คุณประเมิน'}
           </p>
         </Card>
       )}

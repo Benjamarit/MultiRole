@@ -5,30 +5,30 @@ import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Input from '../components/Input';
-import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import JudgeAssignModal from '../components/JudgeAssignModal';
-import CoiEditModal from '../components/CoiEditModal';
-import { getTeamsByProject } from '../data/TeamStore';
+import { useAuth } from '../context/AuthContext';
 import {
+  getProjectById,
   getJudgeAssignments,
+  getAssignedTeamIds,
   inviteJudgeToProject,
+  isProjectAdmin,
   removeJudgeAssignment,
-  updateJudgeCoi,
 } from '../data/ProjectStore';
 import { getRegisteredUsers } from '../context/authStore';
 
 export default function ProjectJudges() {
   const { id } = useParams();
-  const projectTeams = getTeamsByProject(id);
+  const { user } = useAuth();
+  const project = getProjectById(id);
+  const authorized = isProjectAdmin(id, user?.email);
   const registeredUsers = getRegisteredUsers();
 
   const [assignedJudges, setAssignedJudges] = useState(() => getJudgeAssignments(id));
   const [searchTerm, setSearchTerm] = useState('');
 
   const [isAssignOpen, setIsAssignOpen] = useState(false);
-  const [isCoiOpen, setIsCoiOpen] = useState(false);
-  const [coiTarget, setCoiTarget] = useState(null);
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [judgeToRemove, setJudgeToRemove] = useState(null);
@@ -41,10 +41,10 @@ export default function ProjectJudges() {
           (candidate) => candidate.email === (assignment.email || assignment.id)
         );
         if (!user) return null;
-        return { ...user, id: assignment.id, coiTeamIds: assignment.coiTeamIds || [] };
+        return { ...user, id: assignment.id, assignedTeamIds: getAssignedTeamIds(id, assignment.id) };
       })
       .filter(Boolean);
-  }, [assignedJudges, registeredUsers]);
+  }, [assignedJudges, id, registeredUsers]);
 
   const filteredJudges = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -61,22 +61,8 @@ export default function ProjectJudges() {
 
   const handleAssignJudge = (judgeEmail) => {
     inviteJudgeToProject(id, judgeEmail);
-    setAssignedJudges((prev) => [...prev, { id: judgeEmail, email: judgeEmail, coiTeamIds: [] }]);
+    setAssignedJudges((prev) => [...prev, { id: judgeEmail, email: judgeEmail }]);
     setIsAssignOpen(false);
-  };
-
-  const handleOpenCoi = (judge) => {
-    setCoiTarget(judge);
-    setIsCoiOpen(true);
-  };
-
-  const handleSaveCoi = (judgeId, coiTeamIds) => {
-    updateJudgeCoi(id, judgeId, coiTeamIds);
-    setAssignedJudges((prev) =>
-      prev.map((a) => (a.id === judgeId ? { ...a, coiTeamIds } : a))
-    );
-    setIsCoiOpen(false);
-    setCoiTarget(null);
   };
 
   const handleRemoveClick = (judge) => {
@@ -93,10 +79,12 @@ export default function ProjectJudges() {
     }
   };
 
-  const teamNamesFor = (coiTeamIds) =>
-    coiTeamIds
-      .map((tid) => projectTeams.find((t) => t.id === tid)?.name)
-      .filter(Boolean);
+  if (!project) {
+    return <div className="p-6"><Card>ไม่พบโครงการนี้</Card></div>;
+  }
+  if (!authorized) {
+    return <div className="p-6"><Card>เฉพาะ Project Admin ของโครงการนี้เท่านั้นที่จัดการกรรมการได้</Card></div>;
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -106,7 +94,7 @@ export default function ProjectJudges() {
 
       <PageHeader
         title="จัดการกรรมการ (Judges)"
-        description={`กรรมการที่ได้รับมอบหมายในโครงการ #${id} และการตั้งค่า Conflict of Interest (COI)`}
+        description={`กรรมการที่ได้รับเชิญในโครงการ #${id}`}
         action={<Button onClick={() => setIsAssignOpen(true)}>+ เพิ่มกรรมการ</Button>}
       />
 
@@ -133,7 +121,7 @@ export default function ProjectJudges() {
               <tr className="bg-gray-50 text-gray-600 text-sm border-b border-gray-200">
                 <th className="px-6 py-4 font-medium">ชื่อ-นามสกุล</th>
                 <th className="px-6 py-4 font-medium">อีเมล</th>
-                <th className="px-6 py-4 font-medium">งดให้คะแนนทีม (COI)</th>
+                <th className="px-6 py-4 font-medium text-center">ทีมที่ได้รับมอบหมาย</th>
                 <th className="px-6 py-4 font-medium text-right">จัดการ</th>
               </tr>
             </thead>
@@ -143,22 +131,10 @@ export default function ProjectJudges() {
                   <tr key={judge.id} className="hover:bg-gray-50 transition-colors text-sm">
                     <td className="px-6 py-4 font-medium text-gray-900">{judge.name}</td>
                     <td className="px-6 py-4 text-gray-500">{judge.email}</td>
-                    <td className="px-6 py-4">
-                      {judge.coiTeamIds.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {teamNamesFor(judge.coiTeamIds).map((name) => (
-                            <Badge key={name} variant="warning">{name}</Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">ไม่มี</span>
-                      )}
+                    <td className="px-6 py-4 text-center text-gray-600">
+                      {judge.assignedTeamIds.length}
                     </td>
-                    <td className="px-6 py-4 text-right space-x-1">
-                      <Button variant="text" size="sm" onClick={() => handleOpenCoi(judge)}>
-                        ตั้งค่า COI
-                      </Button>
-                      <span className="w-px h-4 bg-gray-200"></span>
+                    <td className="px-6 py-4 text-right">
                       <Button variant="danger" size="sm" onClick={() => handleRemoveClick(judge)}>
                         นำออก
                       </Button>
@@ -182,18 +158,6 @@ export default function ProjectJudges() {
         availableUsers={availableJudges}
         onAssign={handleAssignJudge}
         onClose={() => setIsAssignOpen(false)}
-      />
-
-      <CoiEditModal
-        key={coiTarget?.id ?? 'none'}
-        isOpen={isCoiOpen}
-        judge={coiTarget}
-        teams={projectTeams}
-        onSave={handleSaveCoi}
-        onClose={() => {
-          setIsCoiOpen(false);
-          setCoiTarget(null);
-        }}
       />
 
       <ConfirmDialog
