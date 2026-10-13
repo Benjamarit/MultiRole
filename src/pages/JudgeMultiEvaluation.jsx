@@ -11,7 +11,7 @@ import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
-import { getJudgeAssignments, getProjectById, isBeforeEvaluationDeadline, isProjectReadyForEvaluation } from '../data/ProjectStore';
+import { getJudgeAssignments, getProjectById, isBeforeEvaluationDeadline } from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
 
 function normalizedScore(criterion, value) {
@@ -28,8 +28,8 @@ export default function JudgeMultiEvaluation() {
   // โหลดข้อมูลพื้นฐาน
   const criteria = getCriteriaByProject(projectId);
   const project = getProjectById(projectId);
-  const canEvaluate = isProjectReadyForEvaluation(projectId);
   const [canEdit, setCanEdit] = useState(() => isBeforeEvaluationDeadline(project));
+  
   useEffect(() => {
     if (!canEdit || !project?.evaluationDeadline) return undefined;
     const deadline = new Date(project.evaluationDeadline).getTime();
@@ -46,6 +46,7 @@ export default function JudgeMultiEvaluation() {
     checkDeadline();
     return () => window.clearTimeout(timeoutId);
   }, [canEdit, project?.evaluationDeadline]);
+
   const allTeams = getTeamsByProject(projectId);
   const assignments = getJudgeAssignments(projectId);
   
@@ -54,8 +55,13 @@ export default function JudgeMultiEvaluation() {
   const coiTeamIds = myAssignment?.coiTeamIds || [];
   const eligibleTeams = allTeams.filter(t => !coiTeamIds.includes(t.id));
 
+  // --- เพิ่ม State สำหรับจัดเก็บทีมที่ถูกเลือกแสดงในตาราง (ค่าเริ่มต้นให้เลือกทั้งหมด) ---
+  const [selectedTeamIds, setSelectedTeamIds] = useState(() => eligibleTeams.map(t => t.id));
+  
+  // กรองเฉพาะทีมที่กรรมการเลือกมาแสดงบนตาราง
+  const displayedTeams = eligibleTeams.filter(t => selectedTeamIds.includes(t.id));
+
   // ดึงคะแนนเดิม (ถ้ามี) มาใส่ใน State แบบ Nested Object: { teamId: { criterionId: score } }
-  // และดึง comment/status มาด้วย
   const [matrixScores, setMatrixScores] = useState(() => {
     const initialScores = {};
     eligibleTeams.forEach(team => {
@@ -155,7 +161,7 @@ export default function JudgeMultiEvaluation() {
       status: 'DRAFT',
     });
     if (!saved) {
-      toast.error('โครงการยังไม่พร้อมประเมินหรือหมดเขตรับคะแนน ไม่สามารถบันทึกได้');
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
       return;
     }
     setStatuses((prev) => ({ ...prev, [teamId]: 'DRAFT' }));
@@ -186,7 +192,7 @@ export default function JudgeMultiEvaluation() {
     if (!saved) {
       setIsConfirmOpen(false);
       setConfirmTeamId(null);
-      toast.error('โครงการยังไม่พร้อมประเมินหรือหมดเขตรับคะแนน ไม่สามารถส่งคะแนนได้');
+      toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
       return;
     }
     setStatuses((prev) => ({ ...prev, [teamId]: 'SUBMITTED' }));
@@ -196,21 +202,6 @@ export default function JudgeMultiEvaluation() {
     toast.success('ส่งคะแนนทีมเรียบร้อยแล้ว');
   };
 
-  if (!canEvaluate) {
-    return (
-      <div className="p-6 max-w-[1400px] mx-auto space-y-6">
-        <BackButton to={`/judge/project/${projectId}/teams`}>
-          กลับไปหน้ารายชื่อทีม
-        </BackButton>
-        <Card className="bg-amber-50 border-amber-200">
-          <p className="text-sm text-amber-700">
-            ยังไม่สามารถประเมินได้ โครงการต้องเปิดรับคะแนนและมี Weight รวมครบ 100%
-          </p>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6 max-w-[1400px] mx-auto space-y-6">
       <BackButton to={`/judge/project/${projectId}/teams`}>
@@ -219,7 +210,7 @@ export default function JudgeMultiEvaluation() {
 
       <PageHeader
         title="ประเมินเปรียบเทียบ (Multi-Team Evaluation)"
-        description={`ให้คะแนนทุกทีมพร้อมกันในหน้าเดียว โครงการ #${projectId}`}
+        description={`ให้คะแนนแต่ละทีมพร้อมกันในหน้าเดียว โครงการ #${projectId}`}
       />
 
       {!canEdit && (
@@ -231,142 +222,186 @@ export default function JudgeMultiEvaluation() {
       {eligibleTeams.length === 0 ? (
         <Card><p className="text-center text-gray-500 py-10">ไม่มีทีมที่คุณสามารถประเมินได้ในขณะนี้</p></Card>
       ) : (
-        <Card noPadding className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-100 border-b border-gray-200">
-                  <th className="px-6 py-4 font-bold text-gray-800 sticky left-0 bg-gray-100 shadow-[1px_0_0_0_#e5e7eb] z-10 w-64">
-                    เกณฑ์ประเมิน / ชื่อทีม
-                  </th>
-                  {eligibleTeams.map(team => (
-                    <th key={team.id} className="px-6 py-4 font-bold text-gray-800 text-center border-l min-w-[280px]">
-                      {team.name}
-                      {team.link && (
-                        <div className="mt-1">
-                          <a
-                            href={team.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block text-xs font-normal text-blue-600 hover:underline break-all"
-                          >
-                            ดูผลงาน &rarr;
-                          </a>
-                        </div>
-                      )}
-                      <div className="mt-1">
-                        {statuses[team.id] === 'SUBMITTED'
-                          ? <Badge variant="success">ส่งแล้ว</Badge>
-                          : statuses[team.id] === 'DRAFT'
-                            ? <Badge variant="warning">ร่าง</Badge>
-                            : <Badge variant="default">ยังไม่เริ่ม</Badge>}
-                      </div>
-                      <div className="mt-3 flex flex-wrap justify-center gap-2">
-                        {statuses[team.id] === 'SUBMITTED' && !unlockedTeams[team.id] ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleUnlockTeam(team.id)}
-                            disabled={!canEdit}
-                          >
-                            ปลดล็อกแก้ไข
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => handleSaveDraft(team.id)}
-                              disabled={!isTeamEditable(team.id)}
-                            >
-                              บันทึกร่าง
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                if (!isTeamEditable(team.id) || !isTeamAnswered(team.id)) return;
-                                setConfirmTeamId(team.id);
-                                setIsConfirmOpen(true);
-                              }}
-                              disabled={!isTeamEditable(team.id) || !isTeamAnswered(team.id)}
-                            >
-                              {statuses[team.id] === 'SUBMITTED' ? 'ส่งอีกครั้ง' : 'ส่งคะแนน'}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {/* แถวแสดงคะแนนรวม */}
-                <tr className="bg-blue-50/50 border-b border-gray-200">
-                  <td className="px-6 py-3 font-semibold text-blue-800 sticky left-0 bg-blue-50 shadow-[1px_0_0_0_#e5e7eb] z-10">
-                    คะแนนรวมโดยประมาณ
-                  </td>
-                  {eligibleTeams.map(team => (
-                    <td key={team.id} className="px-6 py-3 text-center border-l border-gray-200 font-mono text-xl font-bold text-blue-700">
-                      {teamTotals[team.id]}
-                    </td>
-                  ))}
-                </tr>
+        <>
+          {/* ส่วนตัวกรองทีมที่ต้องการแสดงผล */}
+          <Card className="bg-gray-50 border-gray-200">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">เลือกทีมที่ต้องการแสดงเปรียบเทียบในตาราง</h3>
+                <div className="flex gap-2">
+                  <Button variant="text" size="sm" onClick={() => setSelectedTeamIds(eligibleTeams.map(t => t.id))}>
+                    เลือกทั้งหมด
+                  </Button>
+                  <Button variant="textGray" size="sm" onClick={() => setSelectedTeamIds([])}>
+                    ล้างทั้งหมด
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {eligibleTeams.map(team => {
+                  const isSelected = selectedTeamIds.includes(team.id);
+                  return (
+                    <button
+                      key={team.id}
+                      onClick={() => {
+                        setSelectedTeamIds(prev =>
+                          isSelected ? prev.filter(id => id !== team.id) : [...prev, team.id]
+                        );
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                        isSelected
+                          ? 'bg-blue-100 border-blue-300 text-blue-800 font-medium'
+                          : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {isSelected ? '✓ ' : '+ '} {team.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </Card>
 
-                {/* แถวเกณฑ์ต่างๆ */}
-                {criteria.map(criterion => (
-                  <tr key={criterion.id} className="border-b border-gray-200 hover:bg-gray-50/50">
-                    <td className="px-6 py-4 sticky left-0 bg-white hover:bg-gray-50 shadow-[1px_0_0_0_#e5e7eb] z-10 align-top">
-                      <p className="font-semibold text-gray-900">{criterion.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {criterion.type} · Weight: {criterion.weight}%
-                      </p>
-                      {criterion.description && (
-                        <p className="text-sm text-gray-600 whitespace-pre-wrap mt-2">
-                          {criterion.description}
-                        </p>
-                      )}
-                    </td>
-                    {eligibleTeams.map(team => (
-                      <td key={team.id} className="px-6 py-4 border-l border-gray-200 align-top">
-                        <CriterionScoreInput
-                          criterion={criterion}
-                          value={matrixScores[team.id]?.[criterion.id] ?? null}
-                          onChange={(val) => handleScoreChange(team.id, criterion.id, val)}
-                          disabled={!isTeamEditable(team.id)}
-                        />
+          {/* ตารางเปรียบเทียบคะแนน */}
+          <Card noPadding className="overflow-hidden">
+            {displayedTeams.length === 0 ? (
+              <div className="p-10 text-center text-gray-500">กรุณาเลือกทีมจากด้านบนอย่างน้อย 1 ทีมเพื่อเริ่มการประเมิน</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 border-b border-gray-200">
+                      <th className="px-6 py-4 font-bold text-gray-800 sticky left-0 bg-gray-100 shadow-[1px_0_0_0_#e5e7eb] z-10 w-64">
+                        เกณฑ์ประเมิน / ชื่อทีม
+                      </th>
+                      {/* เปลี่ยนจากการแมปลูป eligibleTeams เป็น displayedTeams */}
+                      {displayedTeams.map(team => (
+                        <th key={team.id} className="px-6 py-4 font-bold text-gray-800 text-center border-l min-w-[280px]">
+                          {team.name}
+                          {team.link && (
+                            <div className="mt-1">
+                              <a
+                                href={team.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block text-xs font-normal text-blue-600 hover:underline break-all"
+                              >
+                                ดูผลงาน &rarr;
+                              </a>
+                            </div>
+                          )}
+                          <div className="mt-1">
+                            {statuses[team.id] === 'SUBMITTED'
+                              ? <Badge variant="success">ส่งแล้ว</Badge>
+                              : statuses[team.id] === 'DRAFT'
+                                ? <Badge variant="warning">ร่าง</Badge>
+                                : <Badge variant="default">ยังไม่เริ่ม</Badge>}
+                          </div>
+                          <div className="mt-3 flex flex-wrap justify-center gap-2">
+                            {statuses[team.id] === 'SUBMITTED' && !unlockedTeams[team.id] ? (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleUnlockTeam(team.id)}
+                                disabled={!canEdit}
+                              >
+                                ปลดล็อกแก้ไข
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleSaveDraft(team.id)}
+                                  disabled={!isTeamEditable(team.id)}
+                                >
+                                  บันทึกร่าง
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    if (!isTeamEditable(team.id) || !isTeamAnswered(team.id)) return;
+                                    setConfirmTeamId(team.id);
+                                    setIsConfirmOpen(true);
+                                  }}
+                                  disabled={!isTeamEditable(team.id) || !isTeamAnswered(team.id)}
+                                >
+                                  {statuses[team.id] === 'SUBMITTED' ? 'ส่งอีกครั้ง' : 'ส่งคะแนน'}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="bg-blue-50/50 border-b border-gray-200">
+                      <td className="px-6 py-3 font-semibold text-blue-800 sticky left-0 bg-blue-50 shadow-[1px_0_0_0_#e5e7eb] z-10">
+                        คะแนนรวมโดยประมาณ
                       </td>
+                      {displayedTeams.map(team => (
+                        <td key={team.id} className="px-6 py-3 text-center border-l border-gray-200 font-mono text-xl font-bold text-blue-700">
+                          {teamTotals[team.id]}
+                        </td>
+                      ))}
+                    </tr>
+
+                    {criteria.map(criterion => (
+                      <tr key={criterion.id} className="border-b border-gray-200 hover:bg-gray-50/50">
+                        <td className="px-6 py-4 sticky left-0 bg-white hover:bg-gray-50 shadow-[1px_0_0_0_#e5e7eb] z-10 align-top">
+                          <p className="font-semibold text-gray-900">{criterion.name}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {criterion.type} · Weight: {criterion.weight}%
+                          </p>
+                          {criterion.description && (
+                            <p className="text-sm text-gray-600 whitespace-pre-wrap mt-2">
+                              {criterion.description}
+                            </p>
+                          )}
+                        </td>
+                        {displayedTeams.map(team => (
+                          <td key={team.id} className="px-6 py-4 border-l border-gray-200 align-top">
+                            <CriterionScoreInput
+                              criterion={criterion}
+                              value={matrixScores[team.id]?.[criterion.id] ?? null}
+                              onChange={(val) => handleScoreChange(team.id, criterion.id, val)}
+                              disabled={!isTeamEditable(team.id)}
+                            />
+                          </td>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
-                ))}
-                
-                {/* แถวสำหรับ Comment */}
-                <tr className="border-b border-gray-200">
-                  <td className="px-6 py-4 sticky left-0 bg-white shadow-[1px_0_0_0_#e5e7eb] z-10 align-top">
-                    <p className="font-semibold text-gray-900">ข้อเสนอแนะเพิ่มเติม</p>
-                  </td>
-                  {eligibleTeams.map(team => (
-                    <td key={team.id} className="px-6 py-4 border-l border-gray-200 align-top">
-                      <textarea
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 disabled:bg-gray-100"
-                        placeholder="คำแนะนำ..."
-                        value={comments[team.id]}
-                        onChange={(e) => handleCommentChange(team.id, e.target.value)}
-                        disabled={!isTeamEditable(team.id)}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                    
+                    <tr className="border-b border-gray-200">
+                      <td className="px-6 py-4 sticky left-0 bg-white shadow-[1px_0_0_0_#e5e7eb] z-10 align-top">
+                        <p className="font-semibold text-gray-900">ข้อเสนอแนะเพิ่มเติม</p>
+                      </td>
+                      {displayedTeams.map(team => (
+                        <td key={team.id} className="px-6 py-4 border-l border-gray-200 align-top">
+                          <textarea
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 disabled:bg-gray-100"
+                            placeholder="คำแนะนำ..."
+                            value={comments[team.id]}
+                            onChange={(e) => handleCommentChange(team.id, e.target.value)}
+                            disabled={!isTeamEditable(team.id)}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </>
       )}
 
       <ConfirmDialog
         isOpen={isConfirmOpen}
         title="ยืนยันการส่งคะแนน"
-        message={`ยืนยันการส่งคะแนน${eligibleTeams.find((team) => team.id === confirmTeamId)?.name ? `ของทีม ${eligibleTeams.find((team) => team.id === confirmTeamId).name}` : ''}หรือไม่? สามารถแก้ไขและส่งใหม่ได้ก่อน Deadline`}
+        message={`ยืนยันการส่งคะแนน${displayedTeams.find((team) => team.id === confirmTeamId)?.name ? `ของทีม ${displayedTeams.find((team) => team.id === confirmTeamId).name}` : ''}หรือไม่? สามารถแก้ไขและส่งใหม่ได้ก่อน Deadline`}
         onConfirm={confirmSubmit}
         onCancel={() => {
           setIsConfirmOpen(false);
