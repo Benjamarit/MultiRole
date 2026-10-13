@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import toast from 'react-hot-toast'; // 1. เพิ่ม import toast
+import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
 import BackButton from '../components/BackButton';
 import Card from '../components/Card';
@@ -11,7 +11,7 @@ import { getTeamsByProject } from '../data/TeamStore';
 import { getEvaluationsByProject } from '../data/EvaluationStore';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getRegisteredUsers } from '../context/authStore';
-import { addNotification } from '../data/NotificationStore'; // 2. เพิ่ม import addNotification
+import { addNotification } from '../data/NotificationStore';
 
 function formatTime(date) {
   return date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -44,7 +44,6 @@ export default function EvaluationMonitoring() {
       isJudgeAssignedToTeam(id, assignment.id, evaluation.teamId)
     )
   );
-  
   const judgeProgress = assignments.map((assignment) => {
     const judge = registeredUsers.find(
       (user) => user.email === (assignment.email || assignment.id)
@@ -56,13 +55,13 @@ export default function EvaluationMonitoring() {
     ).length;
     return {
       id: assignment.id,
+      email: judge?.email || assignment.email || assignment.id,
       name: judge?.name || `กรรมการ ${assignment.email || assignment.id}`,
       assigned: eligibleTeams.length,
       completed,
       status: completed === 0 ? 'Not Started' : completed >= eligibleTeams.length ? 'Completed' : 'In Progress',
     };
   });
-  
   const teamProgress = teams.map((team) => {
     const teamEvaluations = evaluations.filter((evaluation) => evaluation.teamId === team.id);
     const eligibleJudgeCount = assignments.filter((assignment) =>
@@ -79,7 +78,6 @@ export default function EvaluationMonitoring() {
       status: teamEvaluations.length > 0 && teamEvaluations.length >= eligibleJudgeCount ? 'Completed' : 'Pending',
     };
   });
-  
   const totalAssignments = teamProgress.reduce((sum, team) => sum + team.totalJudges, 0);
   const completedAssignments = evaluations.length;
   const completionPercent = totalAssignments ? Math.round((completedAssignments / totalAssignments) * 100) : 0;
@@ -96,6 +94,7 @@ export default function EvaluationMonitoring() {
     }
   };
 
+  // TODO: ตอนต่อ API จริง ให้ยิง GET ใหม่แทนการหน่วงเวลาจำลองนี้
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await new Promise((resolve) => setTimeout(resolve, 600));
@@ -103,20 +102,16 @@ export default function EvaluationMonitoring() {
     setIsRefreshing(false);
   };
 
-  // 3. เปลี่ยนแปลงฟังก์ชัน handleNotify ตรงนี้
-  const handleNotify = (judgeId, judgeName) => {
-    // เพิ่มข้อมูลลงใน NotificationStore
+  const handleNotify = (judgeId, judgeEmail, judgeName) => {
     addNotification({
-      userId: judgeId, 
+      userId: judgeEmail,
       projectId: id,
       title: 'แจ้งเตือนการประเมิน',
-      // แก้ไขบรรทัดล่างนี้ โดยเปลี่ยนจาก #${id} เป็นชื่อโครงการ
       message: `เรียนคุณ ${judgeName}, โปรดอย่าลืมให้คะแนนผลงานในโครงการ "${project?.name || `โครงการ #${id}`}" เนื่องจากใกล้ถึงกำหนดเวลาแล้วครับ`,
-      type: 'REMINDER'
+      type: 'REMINDER',
     });
-
     setNotifiedJudgeIds((prev) => [...prev, judgeId]);
-    toast.success(`ส่งการแจ้งเตือนถึง ${judgeName} เรียบร้อยแล้ว`); 
+    toast.success(`ส่งการแจ้งเตือนถึง ${judgeName} เรียบร้อยแล้ว`);
   };
 
   return (
@@ -138,6 +133,7 @@ export default function EvaluationMonitoring() {
         }
       />
 
+      {/* สรุปภาพรวม (Overview Stats) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <p className="text-sm font-medium text-gray-500 mb-1">ความคืบหน้ารวม</p>
@@ -159,6 +155,7 @@ export default function EvaluationMonitoring() {
         </Card>
       </div>
 
+      {/* ตารางความคืบหน้าของกรรมการ */}
       <Card noPadding>
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <h2 className="text-lg font-bold text-gray-800">สถานะกรรมการ (Judge Progress)</h2>
@@ -195,12 +192,11 @@ export default function EvaluationMonitoring() {
                     </td>
                     <td className="px-6 py-4">{getStatusBadge(judge.status)}</td>
                     <td className="px-6 py-4 text-right">
-                      {/* 4. อัปเดตปุ่มนี้ให้ส่ง judge.name ไปด้วย */}
                       <Button
                         variant="text"
                         size="sm"
                         disabled={percent === 100 || alreadyNotified}
-                        onClick={() => handleNotify(judge.id, judge.name)}
+                        onClick={() => handleNotify(judge.id, judge.email, judge.name)}
                       >
                         {alreadyNotified ? 'ส่งแล้ว' : 'แจ้งเตือน'}
                       </Button>
@@ -213,6 +209,7 @@ export default function EvaluationMonitoring() {
         </div>
       </Card>
 
+      {/* ตารางความคืบหน้าของทีม */}
       <Card noPadding>
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <h2 className="text-lg font-bold text-gray-800">สถานะทีม (Team Progress)</h2>
@@ -249,6 +246,7 @@ export default function EvaluationMonitoring() {
         </div>
       </Card>
 
+      {/* Modal แสดงคะแนนย่อยรายกรรมการของทีมที่เลือก */}
       {detailTeam && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"

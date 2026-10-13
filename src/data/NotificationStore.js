@@ -44,7 +44,7 @@ export function addNotification({ userId, projectId, title, message, type = 'REM
 // ทำเครื่องหมายว่าอ่านแล้ว (1 รายการ)
 export function markAsRead(notificationId) {
   const notifications = readAll();
-  const updated = notifications.map(n => 
+  const updated = notifications.map(n =>
     n.id === notificationId ? { ...n, isRead: true } : n
   );
   writeAll(updated);
@@ -53,7 +53,7 @@ export function markAsRead(notificationId) {
 // ทำเครื่องหมายว่าอ่านแล้ว (ทั้งหมดของผู้ใช้)
 export function markAllAsRead(email) {
   const notifications = readAll();
-  const updated = notifications.map(n => 
+  const updated = notifications.map(n =>
     n.userId === email ? { ...n, isRead: true } : n
   );
   writeAll(updated);

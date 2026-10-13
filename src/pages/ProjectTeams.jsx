@@ -62,14 +62,31 @@ export default function ProjectTeams() {
   };
 
   const handleImportTeams = (newTeams) => {
+    const existingNames = new Set(teams.map((team) => team.name.trim().toLowerCase()));
+    const uniqueTeams = newTeams.filter((teamData) => {
+      const normalizedName = teamData.name.trim().toLowerCase();
+      if (existingNames.has(normalizedName)) return false;
+      existingNames.add(normalizedName);
+      return true;
+    });
     try {
-      const savedTeams = newTeams.map((teamData) => saveTeam(id, teamData));
+      const savedTeams = uniqueTeams.map((teamData) => saveTeam(id, teamData));
       setTeams((previousTeams) => [...savedTeams, ...previousTeams]);
       setIsImportOpen(false);
-      toast.success(`นำเข้าทีมสำเร็จ ${savedTeams.length} ทีม`);
+      if (savedTeams.length > 0) {
+        toast.success(`นำเข้าทีมสำเร็จ ${savedTeams.length} ทีม`);
+      }
+      if (savedTeams.length < newTeams.length) {
+        toast.error(`ข้าม ${newTeams.length - savedTeams.length} ทีม เนื่องจากชื่อซ้ำกับข้อมูลเดิมหรือซ้ำกันในไฟล์`);
+      }
     } catch (error) {
       toast.error(error.message);
     }
+  };
+
+  const handleDeleteClick = (team) => {
+    setTeamToDelete(team);
+    setIsConfirmOpen(true);
   };
 
   const confirmDelete = () => {
@@ -186,10 +203,9 @@ export default function ProjectTeams() {
                         setEditingTeam(team);
                         setIsFormOpen(true);
                       }}>แก้ไข</Button>
-                      <Button variant="danger" size="sm" onClick={() => {
-                        setTeamToDelete(team);
-                        setIsConfirmOpen(true);
-                      }}>ลบ</Button>
+                      <Button variant="danger" size="sm" onClick={() => handleDeleteClick(team)}>
+                        ลบ
+                      </Button>
                     </div>
                   </Card>
                 );
@@ -212,6 +228,7 @@ export default function ProjectTeams() {
         <TeamFormModal
           isOpen={isFormOpen}
           initialTeam={editingTeam}
+          existingTeams={teams}
           onSave={handleSaveTeam}
           onClose={() => {
             setIsFormOpen(false);

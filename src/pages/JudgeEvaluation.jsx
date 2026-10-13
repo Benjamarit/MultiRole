@@ -15,6 +15,7 @@ import {
   getProjectById,
   isBeforeEvaluationDeadline,
   isJudgeAssignedToTeam,
+  isProjectReadyForEvaluation,
 } from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
 import { calculateWeightedScore } from '../data/Scoring';
@@ -49,6 +50,7 @@ export default function JudgeEvaluation() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState(() => savedEvaluation?.updatedAt || null);
   const canEdit = isAssigned && isBeforeEvaluationDeadline(project);
+  const canEvaluate = isProjectReadyForEvaluation(projectId);
 
   const allAnswered = useMemo(
     () => criteria.every((c) => scores[c.id] !== undefined && scores[c.id] !== null),
@@ -136,6 +138,21 @@ export default function JudgeEvaluation() {
       <div className="p-6 max-w-3xl mx-auto space-y-6">
         <BackButton to={`/judge/project/${projectId}/teams`}>กลับไปหน้ารายชื่อทีมที่ต้องประเมิน</BackButton>
         <Card><p className="text-center text-slate-600">ทีมนี้ไม่ได้รับมอบหมายให้คุณประเมิน</p></Card>
+      </div>
+    );
+  }
+
+  if (!canEvaluate) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto space-y-6">
+        <BackButton to={`/judge/project/${projectId}/teams`}>
+          กลับไปหน้ารายชื่อทีมที่ต้องประเมิน
+        </BackButton>
+        <Card className="bg-amber-50 border-amber-200">
+          <p className="text-sm text-amber-700">
+            ยังไม่สามารถประเมินได้ โครงการต้องเปิดรับคะแนนและมี Weight รวมครบ 100%
+          </p>
+        </Card>
       </div>
     );
   }

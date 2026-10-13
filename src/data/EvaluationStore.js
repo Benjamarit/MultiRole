@@ -1,6 +1,7 @@
 import {
   getProjectById,
   isBeforeEvaluationDeadline,
+  isProjectReadyForEvaluation,
   isJudgeAssignedToTeam,
 } from './ProjectStore';
 import { getTeamsByProject } from './TeamStore';
@@ -66,7 +67,7 @@ export function saveEvaluation(evaluation) {
   if (!isJudgeAssignedToTeam(evaluation.projectId, evaluation.judgeId, evaluation.teamId)) {
     throw new Error('คุณไม่ได้รับมอบหมายให้ประเมินทีมนี้');
   }
-  if (!isBeforeEvaluationDeadline(project)) return null;
+  if (!isProjectReadyForEvaluation(evaluation.projectId) || !isBeforeEvaluationDeadline(project)) return null;
   if (!['DRAFT', 'SUBMITTED'].includes(evaluation.status)) {
     throw new Error('สถานะผลประเมินไม่ถูกต้อง');
   }

@@ -1,4 +1,5 @@
 import { getTeamsByProject } from './TeamStore';
+import { hasCompleteCriteriaWeights } from './CriteriaStore';
 import {
   getJudgeIdsForTeam,
   getTeamIdsForJudge,
@@ -81,6 +82,17 @@ export function getAllProjects() {
   return readAll();
 }
 
+function hasProjectName(projects, name) {
+  const normalizedName = name.trim().toLowerCase();
+  return projects.some(
+    (project) => project.name.trim().toLowerCase() === normalizedName
+  );
+}
+
+export function isProjectNameTaken(name) {
+  return hasProjectName(getAllProjects(), name);
+}
+
 export function deleteProject(projectId) {
   const numericProjectId = Number(projectId);
   const projects = readAll();
@@ -103,6 +115,8 @@ export function getJudgingProjects(email) {
 // TODO: ตอนต่อ API จริง เปลี่ยนเป็น POST /projects แล้วใช้ response แทนการ generate id เอง
 export function addProject({ name, type, description, ownerEmail, ownerName, evaluationDeadline }) {
   const projects = readAll();
+  if (hasProjectName(projects, name)) return null;
+
   const nextId = projects.length > 0 ? Math.max(...projects.map((p) => p.id)) + 1 : 1;
   const newProject = {
     id: nextId,
@@ -209,10 +223,15 @@ export function removeJudgeAssignment(projectId, judgeId, judgeEmail) {
 // TODO: ตอนต่อ API จริง เปลี่ยนเป็น PATCH /projects/:id { status } แทน
 export function updateProjectStatus(projectId, status) {
   const projects = readAll();
+  const project = projects.find((item) => item.id === Number(projectId));
+  if (!project || (status === 'Active' && !hasCompleteCriteriaWeights(projectId))) {
+    return false;
+  }
   const updated = projects.map((project) =>
     project.id === Number(projectId) ? { ...project, status } : project
   );
   writeAll(updated);
+  return true;
 }
 
 export function getProjectById(projectId) {
@@ -222,6 +241,11 @@ export function getProjectById(projectId) {
 export function isProjectAdmin(projectId, email) {
   const project = getProjectById(projectId);
   return Boolean(email && project?.ownerEmail === email);
+}
+
+export function isProjectReadyForEvaluation(projectId) {
+  return getProjectById(projectId)?.status === 'Active' &&
+    hasCompleteCriteriaWeights(projectId);
 }
 
 export function updateProjectDetails(projectId, details) {
