@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-	--color-ink-navy: #172554;
+	--color-ink-navy: #0F172A;
 	--color-precision-blue: #2563EB;
 	--color-page-background: #F8FAFC;
 	--color-surface: #FFFFFF;
 	--color-primary-text: #0F172A;
-	--color-border: #CBD5E1;
-	--font-sans: "Inter", "Noto Sans Thai", ui-sans-serif, system-ui, sans-serif;
+	--color-border: #E2E8F0;
+	--font-sans: "Inter", "Noto Sans Thai", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 :root {
 	color-scheme: light;
-	font-family: "Inter", "Noto Sans Thai", ui-sans-serif, system-ui, sans-serif;
+	font-family: "Inter", "Noto Sans Thai", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 	font-synthesis: none;
 	text-rendering: optimizeLegibility;
 	-webkit-font-smoothing: antialiased;
@@ -27,6 +27,9 @@ body {
 	min-width: 320px;
 	margin: 0;
 	background-color: #F8FAFC;
+	background-image: radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%),
+		radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.04) 0px, transparent 50%);
+	background-attachment: fixed;
 	color: #0F172A;
 	font-size: 1rem;
 	line-height: 1.5;

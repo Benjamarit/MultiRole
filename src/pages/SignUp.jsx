@@ -1,7 +1,20 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, User, Trophy, Users, CheckCircle, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import {
+  Mail,
+  Lock,
+  User,
+  Trophy,
+  Users,
+  CheckCircle,
+  Loader2,
+  ArrowRight,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import toast from 'react-hot-toast';
 
 export default function SignUp() {
@@ -16,41 +29,38 @@ export default function SignUp() {
 
   const navigate = useNavigate();
   const { register } = useAuth();
+  const { t, tDesc } = useLanguage();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     if (!name || !email || !password || !confirmPassword) {
-      setError('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      setError(t('กรุณากรอกข้อมูลให้ครบทุกช่อง', 'Please fill in all required fields'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+      setError(t('รหัสผ่านทั้งสองช่องไม่ตรงกัน', 'Passwords do not match'));
       return;
     }
     if (password.length < 4) {
-      setError('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร');
+      setError(t('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร', 'Password must be at least 4 characters'));
       return;
     }
 
     setIsLoading(true);
     try {
-      /*
-        TODO: ส่วนนี้คือจุดที่จะยิง API ไปหา Spring Boot ในอนาคต
-        const response = await api.post('/auth/register', { name, email, password });
-        const { token, user } = response.data;
-        localStorage.setItem('token', token);
-        login(user);
-      */
-
-      await new Promise((resolve) => setTimeout(resolve, 600)); // จำลองการดีเลย์เหมือนรอ API
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       register({ name, email, password });
-      toast.success('สมัครสมาชิกสำเร็จ ยินดีต้อนรับเข้าสู่ระบบ!');
+      toast.success(
+        t('สมัครสมาชิกสำเร็จ ยินดีต้อนรับเข้าสู่ระบบ!', 'Account created! Welcome aboard.')
+      );
       navigate('/workspace');
     } catch (err) {
-      setError(err.message || 'สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+      setError(
+        err.message || t('สมัครสมาชิกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง', 'Registration failed')
+      );
     } finally {
       setIsLoading(false);
     }
@@ -58,160 +68,183 @@ export default function SignUp() {
 
   return (
     <div className="flex min-h-screen bg-white font-sans">
-      
-      {/* ฝั่งซ้าย: โปสเตอร์ข้อมูล (แสดงเฉพาะจอใหญ่) */}
-      <div className="hidden lg:flex lg:w-1/2 bg-slate-900 relative items-center justify-center overflow-hidden">
-        {/* ลวดลายตารางแบบเป็นทางการ */}
-        <div 
-          className="absolute inset-0 opacity-10" 
-          style={{ 
-            backgroundImage: 'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)', 
-            backgroundSize: '40px 40px' 
+      <div className="relative hidden items-center justify-center overflow-hidden bg-slate-900 lg:flex lg:w-1/2">
+        <div
+          className="absolute inset-0 opacity-10"
+          style={{
+            backgroundImage:
+              'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
           }}
-        ></div>
-        
-        {/* วงกลมประดับพื้นหลัง */}
-        <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-blue-600 rounded-full mix-blend-multiply filter blur-[120px] opacity-20 transform -translate-x-1/2 -translate-y-1/2"></div>
-        <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-indigo-600 rounded-full mix-blend-multiply filter blur-[120px] opacity-20 transform translate-x-1/2 translate-y-1/2"></div>
+        />
+        <div className="absolute left-0 top-0 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-600 opacity-20 mix-blend-multiply blur-[120px]" />
+        <div className="absolute bottom-0 right-0 h-[500px] w-[500px] translate-x-1/2 translate-y-1/2 rounded-full bg-indigo-600 opacity-20 mix-blend-multiply blur-[120px]" />
 
-        <div className="relative z-10 p-12 max-w-lg">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 mb-8 shadow-2xl">
-            <Trophy className="w-10 h-10 text-amber-400" strokeWidth={1.5} />
+        <div className="relative z-10 max-w-lg p-12">
+          <div className="mb-8 inline-flex h-20 w-20 items-center justify-center rounded-2xl border border-white/20 bg-white/10 shadow-2xl backdrop-blur-xs">
+            <Trophy className="h-10 w-10 text-amber-400" strokeWidth={1.5} />
           </div>
-          
-          <h1 className="text-4xl font-bold text-white mb-6 tracking-tight leading-tight">
-            Join the <br/> <span className="text-blue-400">Evaluation Panel</span>
+
+          <h1 className="mb-6 text-4xl font-bold leading-tight tracking-tight text-white">
+            Join the <br />
+            <span className="text-blue-400">Evaluation Panel</span>
           </h1>
-          
-          <p className="text-lg text-slate-300 leading-relaxed mb-10">
-            ลงทะเบียนเพื่อสร้างโครงการประเมินของคุณเอง หรือเตรียมพร้อมรับคำเชิญให้เป็นกรรมการจากโครงการอื่นๆ ในระบบ
+
+          <p className="mb-10 text-base leading-relaxed text-slate-300">
+            {tDesc(
+              'ลงทะเบียนเพื่อสร้างโครงการประเมินของคุณเอง หรือเตรียมพร้อมรับคำเชิญให้เป็นกรรมการจากโครงการอื่นๆ ในระบบ',
+              'Register once to create and manage your own competitions or get invited as a judge across multiple projects.'
+            )}
           </p>
 
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="flex items-center gap-4 text-slate-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500/20 text-blue-400">
-                <Users className="w-5 h-5" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/20 text-blue-400">
+                <Users className="h-5 w-5" />
               </div>
-              <span className="font-medium">รองรับการทำงานร่วมกันของคณะกรรมการหลายท่าน</span>
+              <span className="text-sm font-medium">
+                {t(
+                  'รองรับการทำงานร่วมกันของคณะกรรมการหลายท่าน',
+                  'Multi-judge assignment and progress tracking'
+                )}
+              </span>
             </div>
             <div className="flex items-center gap-4 text-slate-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500/20 text-blue-400">
-                <CheckCircle className="w-5 h-5" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/20 text-blue-400">
+                <CheckCircle className="h-5 w-5" />
               </div>
-              <span className="font-medium">ประมวลผลและจัดอันดับคะแนนอัตโนมัติ แม่นยำ</span>
+              <span className="text-sm font-medium">
+                {t(
+                  'ประมวลผลและจัดอันดับคะแนนถ่วงน้ำหนักอัตโนมัติ',
+                  'Automated weighted scoring and real-time leaderboard'
+                )}
+              </span>
             </div>
           </div>
         </div>
-        
-        {/* Footer ฝั่งซ้าย */}
-        <div className="absolute bottom-8 left-12 text-sm text-slate-500">
-          © {new Date().getFullYear()} CE System. All rights reserved.
+
+        <div className="absolute bottom-8 left-12 text-xs text-slate-500">
+          © {new Date().getFullYear()} MultiRole CE System. All rights reserved.
         </div>
       </div>
 
-      {/* ฝั่งขวา: ฟอร์มสมัครสมาชิก */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 bg-slate-50 lg:bg-white relative overflow-y-auto min-h-screen">
-        <div className="w-full max-w-md space-y-8 my-auto py-8">
-          
-          {/* ส่วนหัวของฟอร์ม */}
+      <div className="relative flex min-h-screen w-full flex-col justify-center overflow-y-auto bg-slate-50 p-6 sm:p-12 lg:w-1/2 lg:bg-white">
+        <div className="absolute right-6 top-6">
+          <LanguageSwitcher />
+        </div>
+
+        <div className="mx-auto my-auto w-full max-w-md space-y-7 py-8">
           <div className="text-center lg:text-left">
-            <div className="inline-flex lg:hidden items-center justify-center w-16 h-16 rounded-xl bg-slate-900 mb-6 shadow-lg">
-              <Trophy className="w-8 h-8 text-amber-400" strokeWidth={1.5} />
+            <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 shadow-lg lg:hidden">
+              <Trophy className="h-7 w-7 text-amber-400" strokeWidth={1.5} />
             </div>
-            <h2 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">
-              สร้างบัญชีใหม่
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900">
+              {t('สร้างบัญชีใหม่', 'Create Account')}
             </h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              กรอกข้อมูลเพื่อลงทะเบียนเข้าสู่ระบบบริหารจัดการการแข่งขัน
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              {t(
+                'กรอกข้อมูลเพื่อลงทะเบียนเข้าสู่ระบบบริหารจัดการการแข่งขัน',
+                'Fill in your details below to get started with MultiRole.'
+              )}
             </p>
           </div>
 
-          {/* ข้อความแจ้งเตือน Error */}
           {error && (
-            <div className="p-4 rounded-lg bg-red-50 border border-red-200 flex items-start gap-3">
-              <div className="flex-1 text-sm text-red-700 font-medium">
-                {error}
-              </div>
+            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+              <div className="flex-1 text-sm font-medium text-red-700">{error}</div>
             </div>
           )}
 
-          {/* ฟอร์มสมัครสมาชิก */}
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-slate-700">ชื่อ-นามสกุล (Full Name)</label>
+              <label className="text-sm font-semibold text-slate-700">
+                {t('ชื่อ-นามสกุล', 'Full Name')}
+              </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
                   <User className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
-                  placeholder="เช่น ดร.สมชาย ใจดี"
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-900 placeholder-slate-400 transition-shadow focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  placeholder={t('เช่น ดร.สมชาย ใจดี', 'e.g. Dr. Somchai Jaidee', { compact: true })}
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-slate-700">อีเมล (Email)</label>
+              <label className="text-sm font-semibold text-slate-700">
+                {t('อีเมล', 'Email')}
+              </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
                   <Mail className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
+                  className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-900 placeholder-slate-400 transition-shadow focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-600"
                   placeholder="name@example.com"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">รหัสผ่าน (Password)</label>
+                <label className="text-sm font-semibold text-slate-700">
+                  {t('รหัสผ่าน', 'Password')}
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
                     <Lock className="h-5 w-5 text-slate-400" />
                   </div>
                   <input
-                    type={showPassword ? "text" : "password"}
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-12 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
-                    placeholder="อย่างน้อย 4 ตัวอักษร"
+                    className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-11 pr-10 text-sm text-slate-900 placeholder-slate-400 transition-shadow focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    placeholder={t('อย่างน้อย 4 ตัว', 'Min 4 chars', { compact: true })}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">ยืนยันรหัสผ่าน</label>
+                <label className="text-sm font-semibold text-slate-700">
+                  {t('ยืนยันรหัสผ่าน', 'Confirm Password')}
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
                     <Lock className="h-5 w-5 text-slate-400" />
                   </div>
                   <input
-                    type={showConfirmPassword ? "text" : "password"}
+                    type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full pl-11 pr-12 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
-                    placeholder="พิมพ์อีกครั้ง"
+                    className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-11 pr-10 text-sm text-slate-900 placeholder-slate-400 transition-shadow focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    placeholder={t('พิมพ์อีกครั้ง', 'Repeat password', { compact: true })}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -220,26 +253,29 @@ export default function SignUp() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 px-4 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed mt-6"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
-                <>ลงทะเบียน (Sign Up) <ArrowRight className="w-4 h-4" /></>
+                <>
+                  {t('ลงทะเบียน', 'Sign Up')} <ArrowRight className="h-4 w-4" />
+                </>
               )}
             </button>
           </form>
 
-          {/* ลิงก์ไปหน้าเข้าสู่ระบบ */}
-          <div className="pt-6 text-center border-t border-slate-200">
+          <div className="border-t border-slate-200 pt-5 text-center">
             <p className="text-sm text-slate-500">
-              มีบัญชีอยู่แล้ว?{' '}
-              <Link to="/login" className="text-blue-600 hover:text-blue-800 font-semibold transition-colors">
-                เข้าสู่ระบบ
+              {t('มีบัญชีอยู่แล้ว?', 'Already have an account?')}{' '}
+              <Link
+                to="/login"
+                className="font-semibold text-blue-600 transition-colors hover:text-blue-800"
+              >
+                {t('เข้าสู่ระบบ', 'Sign In')}
               </Link>
             </p>
           </div>
-          
         </div>
       </div>
     </div>

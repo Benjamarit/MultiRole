@@ -7,10 +7,10 @@ function readAll() {
   try {
     assignments = JSON.parse(stored);
   } catch {
-    throw new Error('ข้อมูลการมอบหมายทีมในเบราว์เซอร์อ่านไม่ได้ กรุณาสำรองข้อมูลก่อนแก้ไข');
+    return [];
   }
   if (!Array.isArray(assignments)) {
-    throw new Error('รูปแบบข้อมูลการมอบหมายทีมในเบราว์เซอร์ไม่ถูกต้อง');
+    return [];
   }
   return assignments;
 }
@@ -21,32 +21,43 @@ function writeAll(assignments) {
 
 export function getTeamIdsForJudge(projectId, judgeId) {
   const numericProjectId = Number(projectId);
-  return [...new Set(readAll()
-    .filter((assignment) =>
-      Number(assignment.projectId) === numericProjectId &&
-      String(assignment.judgeId) === String(judgeId)
-    )
-    .map((assignment) => Number(assignment.teamId)))];
+  return [
+    ...new Set(
+      readAll()
+        .filter(
+          (assignment) =>
+            Number(assignment.projectId) === numericProjectId &&
+            String(assignment.judgeId) === String(judgeId)
+        )
+        .map((assignment) => Number(assignment.teamId))
+    ),
+  ];
 }
 
 export function getJudgeIdsForTeam(projectId, teamId) {
   const numericProjectId = Number(projectId);
   const numericTeamId = Number(teamId);
-  return [...new Set(readAll()
-    .filter((assignment) =>
-      Number(assignment.projectId) === numericProjectId &&
-      Number(assignment.teamId) === numericTeamId
-    )
-    .map((assignment) => String(assignment.judgeId)))];
+  return [
+    ...new Set(
+      readAll()
+        .filter(
+          (assignment) =>
+            Number(assignment.projectId) === numericProjectId &&
+            Number(assignment.teamId) === numericTeamId
+        )
+        .map((assignment) => String(assignment.judgeId))
+    ),
+  ];
 }
 
 export function replaceJudgeTeamAssignments(projectId, judgeId, teamIds) {
   const numericProjectId = Number(projectId);
   const normalizedJudgeId = String(judgeId);
   const uniqueTeamIds = [...new Set(teamIds.map(Number))];
-  const retained = readAll().filter((assignment) =>
-    Number(assignment.projectId) !== numericProjectId ||
-    String(assignment.judgeId) !== normalizedJudgeId
+  const retained = readAll().filter(
+    (assignment) =>
+      Number(assignment.projectId) !== numericProjectId ||
+      String(assignment.judgeId) !== normalizedJudgeId
   );
   writeAll([
     ...retained,
@@ -61,17 +72,23 @@ export function replaceJudgeTeamAssignments(projectId, judgeId, teamIds) {
 export function removeJudgeTeamAssignments(projectId, judgeId) {
   const numericProjectId = Number(projectId);
   const normalizedJudgeId = String(judgeId);
-  writeAll(readAll().filter((assignment) =>
-    Number(assignment.projectId) !== numericProjectId ||
-    String(assignment.judgeId) !== normalizedJudgeId
-  ));
+  writeAll(
+    readAll().filter(
+      (assignment) =>
+        Number(assignment.projectId) !== numericProjectId ||
+        String(assignment.judgeId) !== normalizedJudgeId
+    )
+  );
 }
 
 export function importLegacyJudgeTeamAssignments(legacyAssignments) {
   const assignments = readAll();
-  const existingKeys = new Set(assignments.map((assignment) =>
-    `${Number(assignment.projectId)}:${String(assignment.judgeId)}:${Number(assignment.teamId)}`
-  ));
+  const existingKeys = new Set(
+    assignments.map(
+      (assignment) =>
+        `${Number(assignment.projectId)}:${String(assignment.judgeId)}:${Number(assignment.teamId)}`
+    )
+  );
   for (const assignment of legacyAssignments) {
     const normalized = {
       projectId: Number(assignment.projectId),

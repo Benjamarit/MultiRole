@@ -9,9 +9,12 @@ import {
   LogOut,
   Menu,
   MoreHorizontal,
+  Trophy,
   X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 import { getNotificationsByUser, markAsRead, markAllAsRead } from '../data/NotificationStore';
 import {
   getAssignedTeamIds,
@@ -21,30 +24,51 @@ import {
   isProjectAdmin,
 } from '../data/ProjectStore';
 
-const roleLabels = {
-  SYSTEM_ADMIN: 'System Admin',
-  PROJECT_ADMIN: 'Project Admin',
-  JUDGE: 'Judge',
-  USER: 'Member',
-};
-
 function getProjectIdFromPath(pathname) {
   return pathname.match(/^\/(?:project|judge\/project)\/(\d+)(?:\/|$)/)?.[1] || null;
 }
 
-function getProjectNavigation(projectId, email) {
+function getProjectNavigation(projectId, email, t) {
   if (!projectId || !email) return { type: 'none', items: [] };
   if (isProjectAdmin(projectId, email)) {
     return {
       type: 'admin',
       items: [
-        { label: 'Overview', path: `/project/${projectId}/dashboard`, section: 'Overview' },
-        { label: 'Teams & Groups', path: `/project/${projectId}/teams`, section: 'Competition management' },
-        { label: 'Judges', path: `/project/${projectId}/judges`, section: 'Competition management' },
-        { label: 'Assignments', path: `/project/${projectId}/assignments`, section: 'Competition management' },
-        { label: 'Criteria', path: `/project/${projectId}/criteria`, section: 'Competition management' },
-        { label: 'Evaluation Monitor', path: `/project/${projectId}/evaluations`, section: 'Evaluation' },
-        { label: 'Leaderboard', path: `/project/${projectId}/leaderboard`, section: 'Results' },
+        {
+          label: t('ภาพรวม', 'Overview', { compact: true }),
+          path: `/project/${projectId}/dashboard`,
+          section: 'Overview',
+        },
+        {
+          label: t('ทีมและกลุ่ม', 'Teams & Groups', { compact: true }),
+          path: `/project/${projectId}/teams`,
+          section: 'Competition management',
+        },
+        {
+          label: t('กรรมการ', 'Judges', { compact: true }),
+          path: `/project/${projectId}/judges`,
+          section: 'Competition management',
+        },
+        {
+          label: t('มอบหมายทีม', 'Assignments', { compact: true }),
+          path: `/project/${projectId}/assignments`,
+          section: 'Competition management',
+        },
+        {
+          label: t('เกณฑ์ประเมิน', 'Criteria', { compact: true }),
+          path: `/project/${projectId}/criteria`,
+          section: 'Competition management',
+        },
+        {
+          label: t('ติดตามผล', 'Monitor', { compact: true }),
+          path: `/project/${projectId}/evaluations`,
+          section: 'Evaluation',
+        },
+        {
+          label: t('จัดอันดับ', 'Leaderboard', { compact: true }),
+          path: `/project/${projectId}/leaderboard`,
+          section: 'Results',
+        },
       ],
     };
   }
@@ -58,13 +82,19 @@ function getProjectNavigation(projectId, email) {
   return {
     type: 'judge',
     items: [
-      { label: 'Evaluate Teams', path: `/judge/project/${projectId}/teams`, section: 'Evaluation' },
+      {
+        label: t('ประเมินทีม', 'Evaluate Teams', { compact: true }),
+        path: `/judge/project/${projectId}/teams`,
+        section: 'Evaluation',
+      },
       ...(assignedTeams.length > 1
-        ? [{
-          label: 'Multi-Evaluation',
-          path: `/judge/project/${projectId}/evaluate-multi`,
-          section: 'Evaluation',
-        }]
+        ? [
+            {
+              label: t('ประเมินเปรียบเทียบ', 'Matrix View', { compact: true }),
+              path: `/judge/project/${projectId}/evaluate-multi`,
+              section: 'Evaluation',
+            },
+          ]
         : []),
     ],
   };
@@ -76,15 +106,19 @@ function NavigationLink({ item, onNavigate, mobile = false }) {
       to={item.path}
       end
       onClick={onNavigate}
-      className={({ isActive }) => `flex items-center whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-precision-blue ${
-        mobile
-          ? `w-full rounded-sm border-l-2 border-b-0 px-4 py-3.5 ${isActive
-            ? 'border-l-precision-blue bg-blue-50 text-precision-blue'
-            : 'border-l-transparent text-slate-700 hover:bg-slate-50'}`
-          : isActive
-            ? 'border-precision-blue text-precision-blue'
-            : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-primary-text'
-      }`}
+      className={({ isActive }) =>
+        `flex items-center whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-precision-blue ${
+          mobile
+            ? `w-full rounded-lg border-l-2 border-b-0 px-4 py-3 ${
+                isActive
+                  ? 'border-l-precision-blue bg-blue-50/80 font-semibold text-precision-blue'
+                  : 'border-l-transparent text-slate-700 hover:bg-slate-50'
+              }`
+            : isActive
+              ? 'border-precision-blue font-semibold text-precision-blue'
+              : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-primary-text'
+        }`
+      }
       aria-label={item.label}
     >
       {item.label}
@@ -101,6 +135,8 @@ function ProjectSelector({
   mobile = false,
   triggerRef,
   menuId,
+  userEmail,
+  t,
 }) {
   if (!project) return null;
 
@@ -110,22 +146,24 @@ function ProjectSelector({
         ref={triggerRef}
         type="button"
         onClick={onToggle}
-        className={`group flex min-w-0 items-center gap-3 rounded-md border border-border bg-surface text-left transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue ${
-          mobile ? 'w-full px-3 py-2.5' : 'ml-4 max-w-[min(36vw,22rem)] px-3 py-2'
+        className={`group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/90 bg-slate-50/60 text-left shadow-2xs transition-all hover:border-blue-200 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue ${
+          mobile ? 'w-full px-3 py-2.5' : 'ml-4 max-w-[min(36vw,22rem)] px-3 py-1.5'
         }`}
         aria-label="Current competition"
         aria-haspopup="true"
         aria-expanded={isOpen}
         aria-controls={menuId}
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-blue-50 text-precision-blue">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100/80 text-precision-blue">
           <Building2 className="h-4 w-4" aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-            Competition
+          <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            {t('โครงการปัจจุบัน', 'Competition', { compact: true })}
           </span>
-          <span className="block truncate text-sm font-semibold text-primary-text">{project.name}</span>
+          <span className="block truncate text-sm font-semibold text-primary-text">
+            {project.name}
+          </span>
         </span>
         <ChevronDown
           className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -136,46 +174,58 @@ function ProjectSelector({
       {isOpen && (
         <div
           id={menuId}
-          className={`absolute left-0 top-full z-50 mt-2 overflow-hidden rounded-md border border-border bg-surface shadow-[0_12px_32px_-12px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5 ${
-            mobile ? 'w-full' : 'w-[min(22rem,calc(100vw-2rem))]'
+          className={`absolute left-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-surface shadow-xl ring-1 ring-slate-900/5 ${
+            mobile ? 'w-full' : 'w-[min(24rem,calc(100vw-2rem))]'
           }`}
           role="region"
           aria-label="Choose competition"
         >
-          <div className="border-b border-slate-100 px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Switch competition
+          <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+              {t('สลับโครงการ', 'Switch Competition', { compact: true })}
             </p>
             <p className="mt-0.5 truncate text-xs text-slate-500">
-              {projects.length} {projects.length === 1 ? 'competition available' : 'competitions available'}
+              {t(
+                `ทั้งหมด ${projects.length} โครงการที่คุณมีส่วนร่วม`,
+                `${projects.length} competitions available`
+              )}
             </p>
           </div>
           <ul className="max-h-72 overflow-y-auto p-1.5">
             {projects.map((entry) => {
               const isSelected = Number(entry.id) === Number(project.id);
+              const isOwner = isProjectAdmin(entry.id, userEmail);
               return (
                 <li key={entry.id}>
                   <button
                     type="button"
                     aria-current={isSelected ? 'true' : undefined}
                     onClick={() => onSelect(entry)}
-                    className={`flex w-full items-center gap-3 rounded-sm px-2.5 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-precision-blue ${
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-precision-blue ${
                       isSelected
                         ? 'bg-blue-50 text-precision-blue'
                         : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-sm ${
-                      isSelected ? 'bg-white text-precision-blue' : 'bg-slate-100 text-slate-500'
-                    }`}>
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        isSelected ? 'bg-white text-precision-blue shadow-2xs' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
                       <Building2 className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-sm ${isSelected ? 'font-semibold' : 'font-medium'}`}>
+                      <span
+                        className={`block truncate text-sm ${
+                          isSelected ? 'font-bold' : 'font-medium'
+                        }`}
+                      >
                         {entry.name}
                       </span>
                       <span className="mt-0.5 block text-xs text-slate-500">
-                        {isProjectAdmin(entry.id, entry.ownerEmail) ? 'Competition workspace' : 'Judging workspace'}
+                        {isOwner
+                          ? t('เจ้าของโครงการ', 'Project Admin', { compact: true })
+                          : t('กรรมการประเมิน', 'Judge', { compact: true })}
                       </span>
                     </span>
                     {isSelected && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
@@ -194,17 +244,36 @@ export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const projectId = getProjectIdFromPath(location.pathname);
   const project = projectId ? getProjectById(projectId) : null;
-  const routeNavigation = getProjectNavigation(projectId, user?.email);
-  const navigation = user?.role === 'SYSTEM_ADMIN'
-    ? {
-      type: 'system-admin',
-      items: [{ label: 'User Management', path: '/admin/users', section: 'Administration' }],
-    }
-    : routeNavigation.type === 'none'
-      ? { type: 'workspace', items: [{ label: 'Workspace', path: '/workspace', section: 'Overview' }] }
-      : routeNavigation;
+  const routeNavigation = getProjectNavigation(projectId, user?.email, t);
+
+  const navigation =
+    user?.role === 'SYSTEM_ADMIN'
+      ? {
+          type: 'system-admin',
+          items: [
+            {
+              label: t('จัดการผู้ใช้งาน', 'User Management', { compact: true }),
+              path: '/admin/users',
+              section: 'Administration',
+            },
+          ],
+        }
+      : routeNavigation.type === 'none'
+        ? {
+            type: 'workspace',
+            items: [
+              {
+                label: t('พื้นที่ทำงาน', 'Workspace', { compact: true }),
+                path: '/workspace',
+                section: 'Overview',
+              },
+            ],
+          }
+        : routeNavigation;
+
   const isSystemAdmin = user?.role === 'SYSTEM_ADMIN';
   const projects = (() => {
     if (isSystemAdmin || !user?.email) return [];
@@ -214,19 +283,30 @@ export default function Navbar() {
     });
     return [...unique.values()];
   })();
-  const displayName = user?.name || 'ผู้ใช้งาน';
-  const roleLabel = roleLabels[user?.role] || user?.role || '-';
-  const avatarInitial = displayName.charAt(0);
+
+  const displayName = user?.name || t('ผู้ใช้งาน', 'User');
+  const roleLabel =
+    user?.role === 'SYSTEM_ADMIN'
+      ? t('ผู้ดูแลระบบ', 'System Admin', { compact: true })
+      : routeNavigation.type === 'admin'
+        ? t('เจ้าของโครงการ', 'Project Admin', { compact: true })
+        : routeNavigation.type === 'judge'
+          ? t('กรรมการ', 'Judge', { compact: true })
+          : t('สมาชิก', 'Member', { compact: true });
+
+  const avatarInitial = displayName.charAt(0).toUpperCase();
   const [menuState, setMenuState] = useState({ locationKey: location.key });
-  const [notifications, setNotifications] = useState(() => (
+  const [notifications, setNotifications] = useState(() =>
     user?.email ? getNotificationsByUser(user.email) : []
-  ));
+  );
+
   const activeMenuState = menuState.locationKey === location.key ? menuState : {};
   const isNotifOpen = Boolean(activeMenuState.notifOpen);
   const isProfileOpen = Boolean(activeMenuState.profileOpen);
   const isMoreOpen = Boolean(activeMenuState.moreOpen);
   const isMobileNavOpen = Boolean(activeMenuState.mobileNavOpen);
   const isProjectOpen = Boolean(activeMenuState.projectOpen);
+
   const notifRef = useRef(null);
   const notifButtonRef = useRef(null);
   const profileRef = useRef(null);
@@ -240,36 +320,47 @@ export default function Navbar() {
   const mobileNavRef = useRef(null);
   const mobileToggleRef = useRef(null);
 
-  const updateMenuState = useCallback((changes) => {
-    setMenuState((previous) => ({
-      ...(previous.locationKey === location.key ? previous : {}),
-      ...changes,
-      locationKey: location.key,
-    }));
-  }, [location.key]);
-  const closeMenus = useCallback(() => updateMenuState({
-    notifOpen: false,
-    profileOpen: false,
-    moreOpen: false,
-    mobileNavOpen: false,
-    projectOpen: false,
-  }), [updateMenuState]);
+  const updateMenuState = useCallback(
+    (changes) => {
+      setMenuState((previous) => ({
+        ...(previous.locationKey === location.key ? previous : {}),
+        ...changes,
+        locationKey: location.key,
+      }));
+    },
+    [location.key]
+  );
+
+  const closeMenus = useCallback(
+    () =>
+      updateMenuState({
+        notifOpen: false,
+        profileOpen: false,
+        moreOpen: false,
+        mobileNavOpen: false,
+        projectOpen: false,
+      }),
+    [updateMenuState]
+  );
 
   useEffect(() => {
-    // Clear stale popovers on back/forward navigation as well as link clicks.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMenuState({ locationKey: location.key });
   }, [location.key]);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
-      if (notifRef.current && !notifRef.current.contains(event.target)) updateMenuState({ notifOpen: false });
-      if (profileRef.current && !profileRef.current.contains(event.target)) updateMenuState({ profileOpen: false });
-      if (moreRef.current && !moreRef.current.contains(event.target)) updateMenuState({ moreOpen: false });
+      if (notifRef.current && !notifRef.current.contains(event.target))
+        updateMenuState({ notifOpen: false });
+      if (profileRef.current && !profileRef.current.contains(event.target))
+        updateMenuState({ profileOpen: false });
+      if (moreRef.current && !moreRef.current.contains(event.target))
+        updateMenuState({ moreOpen: false });
       if (
         !projectDesktopRef.current?.contains(event.target) &&
         !projectMobileRef.current?.contains(event.target)
-      ) updateMenuState({ projectOpen: false });
+      )
+        updateMenuState({ projectOpen: false });
     };
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
@@ -284,7 +375,8 @@ export default function Navbar() {
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key !== 'Escape') return;
-      const hadOpenMenu = isNotifOpen || isProfileOpen || isMoreOpen || isMobileNavOpen || isProjectOpen;
+      const hadOpenMenu =
+        isNotifOpen || isProfileOpen || isMoreOpen || isMobileNavOpen || isProjectOpen;
       closeMenus();
       if (isMobileNavOpen) mobileToggleRef.current?.focus();
       else if (isMoreOpen) moreButtonRef.current?.focus();
@@ -293,17 +385,24 @@ export default function Navbar() {
           ? projectDesktopButtonRef.current
           : projectMobileButtonRef.current;
         button?.focus();
-      }
-      else if (isNotifOpen) notifButtonRef.current?.focus();
+      } else if (isNotifOpen) notifButtonRef.current?.focus();
       else if (isProfileOpen) profileButtonRef.current?.focus();
       else if (hadOpenMenu) document.activeElement?.blur();
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [isNotifOpen, isProfileOpen, isMoreOpen, isMobileNavOpen, isProjectOpen, closeMenus, location.key]);
+  }, [
+    isNotifOpen,
+    isProfileOpen,
+    isMoreOpen,
+    isMobileNavOpen,
+    isProjectOpen,
+    closeMenus,
+    location.key,
+  ]);
 
   const unreadCount = notifications.filter((notification) => !notification.isRead).length;
-  const tabletMoreItems = navigation.items.slice(3);
+  const tabletMoreItems = navigation.items.slice(4);
 
   const handleLogout = () => {
     closeMenus();
@@ -329,9 +428,11 @@ export default function Navbar() {
   const navigateToProject = (nextProject) => {
     const isOwner = isProjectAdmin(nextProject.id, user?.email);
     closeMenus();
-    navigate(isOwner
-      ? `/project/${nextProject.id}/dashboard`
-      : `/judge/project/${nextProject.id}/teams`);
+    navigate(
+      isOwner
+        ? `/project/${nextProject.id}/dashboard`
+        : `/judge/project/${nextProject.id}/teams`
+    );
   };
 
   const brandPath = isSystemAdmin ? '/admin/users' : '/workspace';
@@ -340,15 +441,24 @@ export default function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-surface">
+    <header className="sticky top-0 z-30 border-b border-slate-200/90 bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex min-h-16 max-w-[1600px] items-center gap-3 px-4 sm:px-6">
         <Link
           to={brandPath}
-          className="flex shrink-0 items-center gap-2 rounded-sm text-ink-navy focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-precision-blue"
+          className="flex shrink-0 items-center gap-2.5 rounded-lg text-ink-navy focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-precision-blue"
           aria-label="MultiRole home"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-sm bg-ink-navy text-sm font-bold text-white">M</span>
-          <span className="text-lg font-semibold tracking-tight">MultiRole</span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-xs">
+            <Trophy className="h-4.5 w-4.5 text-amber-300" />
+          </span>
+          <div className="leading-tight">
+            <span className="block text-base font-bold tracking-tight text-slate-900">
+              MultiRole
+            </span>
+            <span className="hidden text-[10px] font-medium text-slate-500 sm:block">
+              Evaluation Platform
+            </span>
+          </div>
         </Link>
 
         {project && projects.length > 0 && (
@@ -359,18 +469,24 @@ export default function Navbar() {
               isOpen={isProjectOpen}
               triggerRef={projectDesktopButtonRef}
               menuId="competition-picker-desktop"
-              onToggle={() => updateMenuState({
-                projectOpen: !isProjectOpen,
-                notifOpen: false,
-                profileOpen: false,
-                moreOpen: false,
-              })}
+              userEmail={user?.email}
+              t={t}
+              onToggle={() =>
+                updateMenuState({
+                  projectOpen: !isProjectOpen,
+                  notifOpen: false,
+                  profileOpen: false,
+                  moreOpen: false,
+                })
+              }
               onSelect={navigateToProject}
             />
           </div>
         )}
 
-        <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+          <LanguageSwitcher />
+
           <div className="relative" ref={notifRef}>
             <button
               type="button"
@@ -386,36 +502,46 @@ export default function Navbar() {
                   projectOpen: false,
                 });
               }}
-              className="relative flex h-10 w-10 items-center justify-center rounded-sm text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue"
+              className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200/80 bg-white text-slate-600 shadow-2xs transition-colors hover:bg-slate-50 hover:text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue"
               aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
               aria-haspopup="dialog"
               aria-expanded={isNotifOpen}
             >
-              <Bell className="h-5 w-5" aria-hidden="true" />
+              <Bell className="h-4.5 w-4.5" aria-hidden="true" />
               {unreadCount > 0 && (
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-600" aria-hidden="true" />
+                <span
+                  className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white"
+                  aria-hidden="true"
+                >
+                  {unreadCount}
+                </span>
               )}
             </button>
             {isNotifOpen && (
               <div
-                className="absolute right-0 top-full z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-border bg-surface shadow-[0_12px_32px_-12px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5"
+                className="absolute right-0 top-full z-50 mt-2 w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-surface shadow-xl ring-1 ring-slate-900/5"
                 role="dialog"
                 aria-label="Notifications"
               >
-                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-4 py-3.5">
                   <div>
-                    <h2 className="text-sm font-semibold text-primary-text">การแจ้งเตือน</h2>
+                    <h2 className="text-sm font-bold text-primary-text">
+                      {t('การแจ้งเตือน', 'Notifications', { compact: true })}
+                    </h2>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      {unreadCount ? `ยังไม่ได้อ่าน ${unreadCount} รายการ` : 'อัปเดตจากการแข่งขันของคุณ'}
+                      {unreadCount
+                        ? t(`ยังไม่ได้อ่าน ${unreadCount} รายการ`, `${unreadCount} unread notifications`)
+                        : t('อัปเดตจากการแข่งขันของคุณ', 'Updates from your competitions')}
                     </p>
                   </div>
                   {unreadCount > 0 && (
                     <button
                       type="button"
                       onClick={handleMarkAllRead}
-                      className="flex items-center gap-1 rounded-sm px-2 py-1.5 text-xs font-semibold text-precision-blue hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue"
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-precision-blue hover:bg-blue-50"
                     >
-                      <CheckCheck className="h-3 w-3" aria-hidden="true" /> อ่านทั้งหมด
+                      <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />{' '}
+                      {t('อ่านทั้งหมด', 'Mark all read', { compact: true })}
                     </button>
                   )}
                 </div>
@@ -427,16 +553,30 @@ export default function Navbar() {
                           <button
                             type="button"
                             onClick={() => handleNotificationClick(notification)}
-                            className={`w-full border-l-2 px-4 py-3.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-precision-blue ${!notification.isRead ? 'border-l-precision-blue bg-blue-50/50' : 'border-l-transparent'}`}
+                            className={`w-full border-l-2 px-4 py-3.5 text-left transition-colors hover:bg-slate-50 ${
+                              !notification.isRead
+                                ? 'border-l-precision-blue bg-blue-50/40'
+                                : 'border-l-transparent'
+                            }`}
                           >
                             <span className="flex items-start justify-between gap-3">
-                              <span className={`text-sm ${!notification.isRead ? 'font-semibold text-primary-text' : 'text-slate-700'}`}>
+                              <span
+                                className={`text-sm ${
+                                  !notification.isRead
+                                    ? 'font-semibold text-primary-text'
+                                    : 'text-slate-700'
+                                }`}
+                              >
                                 {notification.title}
                               </span>
-                              {!notification.isRead && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-precision-blue" />}
+                              {!notification.isRead && (
+                                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-precision-blue" />
+                              )}
                             </span>
-                            <span className="mt-1 block line-clamp-2 text-xs text-slate-500">{notification.message}</span>
-                            <span className="mt-1 block text-[10px] text-slate-400">
+                            <span className="mt-1 block line-clamp-2 text-xs text-slate-600">
+                              {notification.message}
+                            </span>
+                            <span className="mt-1.5 block text-[10px] text-slate-400">
                               {new Date(notification.createdAt).toLocaleString('th-TH')}
                             </span>
                           </button>
@@ -444,7 +584,9 @@ export default function Navbar() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="px-4 py-8 text-center text-sm text-slate-500">ไม่มีการแจ้งเตือนใหม่</p>
+                    <p className="px-4 py-8 text-center text-sm text-slate-500">
+                      {t('ไม่มีการแจ้งเตือนใหม่', 'No notifications yet')}
+                    </p>
                   )}
                 </div>
               </div>
@@ -463,40 +605,64 @@ export default function Navbar() {
                 });
               }}
               ref={profileButtonRef}
-              className="flex items-center gap-2 rounded-sm px-1.5 py-1 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue sm:px-2"
+              className="flex items-center gap-2 rounded-xl border border-transparent px-1.5 py-1 text-left transition-colors hover:border-slate-200 hover:bg-slate-50 sm:px-2"
               aria-label="User profile menu"
               aria-haspopup="menu"
               aria-expanded={isProfileOpen}
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-blue-50 font-semibold text-precision-blue">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-50 to-indigo-100 font-bold text-precision-blue ring-1 ring-blue-200/60">
                 {avatarInitial}
               </span>
               <span className="hidden max-w-40 text-left sm:block">
-                <span className="block truncate text-sm font-semibold text-primary-text">{displayName}</span>
-                <span className="block text-xs text-slate-500">{roleLabel}</span>
+                <span className="block truncate text-sm font-semibold text-primary-text">
+                  {displayName}
+                </span>
+                <span className="block truncate text-[11px] text-slate-500">{roleLabel}</span>
               </span>
-              <ChevronDown className="hidden h-4 w-4 text-slate-500 sm:block" aria-hidden="true" />
+              <ChevronDown className="hidden h-4 w-4 text-slate-400 sm:block" aria-hidden="true" />
             </button>
             {isProfileOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 w-[min(17rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-border bg-surface shadow-[0_12px_32px_-12px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5" role="menu">
-                <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-blue-100 font-semibold text-precision-blue">
+              <div
+                className="absolute right-0 top-full z-50 mt-2 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-surface shadow-xl ring-1 ring-slate-900/5"
+                role="menu"
+              >
+                <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-3.5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 font-bold text-precision-blue">
                     {avatarInitial}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-primary-text">{displayName}</span>
-                    <span className="mt-0.5 block text-xs text-slate-500">{roleLabel}</span>
+                    <span className="block truncate text-sm font-bold text-primary-text">
+                      {displayName}
+                    </span>
+                    <span className="block truncate text-xs text-slate-500">{user?.email}</span>
+                    <span className="mt-0.5 inline-block rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                      {roleLabel}
+                    </span>
                   </span>
                 </div>
                 <div className="p-1.5">
+                  {!isSystemAdmin && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        closeMenus();
+                        navigate('/workspace');
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
+                    >
+                      <Building2 className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                      {t('กลับหน้า Workspace รวม', 'All Competitions (Workspace)', { compact: true })}
+                    </button>
+                  )}
                   <button
                     type="button"
                     role="menuitem"
                     onClick={handleLogout}
-                    className="flex w-full items-center gap-2 rounded-sm px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-red-50 hover:text-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
-                    ออกจากระบบ
+                    {t('ออกจากระบบ', 'Sign Out', { compact: true })}
                   </button>
                 </div>
               </div>
@@ -507,14 +673,16 @@ export default function Navbar() {
             ref={mobileToggleRef}
             type="button"
             onClick={() => updateMenuState({ mobileNavOpen: !isMobileNavOpen })}
-            className="flex h-10 w-10 items-center justify-center rounded-sm text-slate-700 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue md:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 md:hidden"
             aria-label={isMobileNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={isMobileNavOpen}
             aria-controls="primary-navigation-mobile"
           >
-            {isMobileNavOpen
-              ? <X className="h-5 w-5" aria-hidden="true" />
-              : <Menu className="h-5 w-5" aria-hidden="true" />}
+            {isMobileNavOpen ? (
+              <X className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>
@@ -528,23 +696,37 @@ export default function Navbar() {
             isOpen={isProjectOpen}
             triggerRef={projectMobileButtonRef}
             menuId="competition-picker-mobile"
-            onToggle={() => updateMenuState({
-              projectOpen: !isProjectOpen,
-              notifOpen: false,
-              profileOpen: false,
-              moreOpen: false,
-            })}
+            userEmail={user?.email}
+            t={t}
+            onToggle={() =>
+              updateMenuState({
+                projectOpen: !isProjectOpen,
+                notifOpen: false,
+                profileOpen: false,
+                moreOpen: false,
+              })
+            }
             onSelect={navigateToProject}
           />
         </div>
       )}
 
-      <div className="hidden border-t border-slate-100 md:block">
-        <nav className="mx-auto flex h-12 max-w-[1600px] items-stretch justify-between gap-2 overflow-visible px-4 sm:px-6" aria-label="Primary navigation">
+      <div className="hidden border-t border-slate-100 bg-slate-50/40 md:block">
+        <nav
+          className="mx-auto flex h-12 max-w-[1600px] items-stretch justify-between gap-2 overflow-visible px-4 sm:px-6"
+          aria-label="Primary navigation"
+        >
           <div className="flex min-w-0 items-stretch">
             {navigation.items.map((item, index) => (
-              <div key={item.path} className={`flex items-stretch ${index > 0 && item.section !== navigation.items[index - 1].section ? 'border-l border-slate-200 pl-2' : ''}`}>
-                <div className={`${index < 3 ? '' : 'hidden lg:flex'} items-stretch`}>
+              <div
+                key={item.path}
+                className={`flex items-stretch ${
+                  index > 0 && item.section !== navigation.items[index - 1].section
+                    ? 'border-l border-slate-200/80 pl-2'
+                    : ''
+                }`}
+              >
+                <div className={`${index < 4 ? '' : 'hidden lg:flex'} items-stretch`}>
                   <NavigationLink item={item} />
                 </div>
               </div>
@@ -553,6 +735,7 @@ export default function Navbar() {
           {tabletMoreItems.length > 0 && (
             <div className="relative flex items-center lg:hidden" ref={moreRef}>
               <button
+                ref={moreButtonRef}
                 type="button"
                 onClick={() => {
                   updateMenuState({
@@ -562,14 +745,19 @@ export default function Navbar() {
                     projectOpen: false,
                   });
                 }}
-                className="flex items-center gap-1 rounded-sm px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue"
+                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
                 aria-haspopup="menu"
                 aria-expanded={isMoreOpen}
               >
-                More <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                {t('เพิ่มเติม', 'More', { compact: true })}{' '}
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
               </button>
               {isMoreOpen && (
-                <div className="absolute right-0 top-full z-50 mt-1 min-w-56 overflow-hidden rounded-md border border-border bg-surface p-1.5 shadow-[0_12px_32px_-12px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5" role="menu" aria-label="More navigation">
+                <div
+                  className="absolute right-0 top-full z-50 mt-1 min-w-56 overflow-hidden rounded-xl border border-slate-200 bg-surface p-1.5 shadow-xl"
+                  role="menu"
+                  aria-label="More navigation"
+                >
                   {tabletMoreItems.map((item) => (
                     <NavLink
                       key={item.path}
@@ -577,9 +765,13 @@ export default function Navbar() {
                       end
                       role="menuitem"
                       onClick={() => updateMenuState({ moreOpen: false })}
-                      className={({ isActive }) => `block rounded-sm px-3 py-2.5 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue ${isActive
-                        ? 'bg-blue-50 text-precision-blue'
-                        : 'text-slate-700 hover:bg-slate-50'}`}
+                      className={({ isActive }) =>
+                        `block rounded-lg px-3 py-2 text-sm font-medium ${
+                          isActive
+                            ? 'bg-blue-50 text-precision-blue'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`
+                      }
                     >
                       {item.label}
                     </NavLink>
@@ -595,29 +787,54 @@ export default function Navbar() {
         <nav
           id="primary-navigation-mobile"
           ref={mobileNavRef}
-          className="absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-border bg-surface shadow-lg md:hidden"
+          className="absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-slate-200 bg-surface shadow-xl md:hidden"
           aria-label="Primary navigation"
         >
           <div className="mx-auto max-w-[1600px] px-4 py-3">
             {isSystemAdmin ? (
-              <NavigationLink item={{ label: 'User Management', path: '/admin/users' }} mobile onNavigate={onNavigation} />
+              <NavigationLink
+                item={{
+                  label: t('จัดการผู้ใช้งาน', 'User Management', { compact: true }),
+                  path: '/admin/users',
+                }}
+                mobile
+                onNavigate={onNavigation}
+              />
             ) : (
               <>
                 <div className="border-b border-slate-100 pb-2">
-                  <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {navigation.type === 'admin' ? 'Competition management' : navigation.type === 'judge' ? 'Evaluation' : 'Overview'}
+                  <p className="px-4 pb-1 pt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                    {navigation.type === 'admin'
+                      ? t('จัดการโครงการ', 'Competition Management', { compact: true })
+                      : navigation.type === 'judge'
+                        ? t('การประเมินผล', 'Evaluation', { compact: true })
+                        : t('เมนูหลัก', 'Overview', { compact: true })}
                   </p>
                   {navigation.items.length ? (
                     navigation.items.map((item) => (
-                      <NavigationLink key={item.path} item={item} mobile onNavigate={onNavigation} />
+                      <NavigationLink
+                        key={item.path}
+                        item={item}
+                        mobile
+                        onNavigate={onNavigation}
+                      />
                     ))
                   ) : (
-                    <NavigationLink item={{ label: 'Workspace', path: '/workspace' }} mobile onNavigate={onNavigation} />
+                    <NavigationLink
+                      item={{
+                        label: t('พื้นที่ทำงาน', 'Workspace', { compact: true }),
+                        path: '/workspace',
+                      }}
+                      mobile
+                      onNavigate={onNavigation}
+                    />
                   )}
                 </div>
                 <div className="pt-2">
                   {projects.length > 0 && (
-                    <p className="px-4 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Your competitions</p>
+                    <p className="px-4 pb-1 pt-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                      {t('โครงการของคุณ', 'Your Competitions', { compact: true })}
+                    </p>
                   )}
                   {projects.map((entry) => (
                     <button
@@ -627,15 +844,31 @@ export default function Navbar() {
                         navigateToProject(entry);
                         onNavigation();
                       }}
-                      className={`w-full rounded-sm px-4 py-3 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue ${Number(entry.id) === Number(projectId)
-                        ? 'font-semibold text-precision-blue'
-                        : 'text-slate-700 hover:bg-slate-50'}`}
+                      className={`w-full rounded-lg px-4 py-2.5 text-left text-sm ${
+                        Number(entry.id) === Number(projectId)
+                          ? 'bg-blue-50/70 font-semibold text-precision-blue'
+                          : 'text-slate-700 hover:bg-slate-50'
+                      }`}
                     >
                       {entry.name}
                     </button>
                   ))}
-                  <NavigationLink item={{ label: 'Workspace', path: '/workspace' }} mobile onNavigate={onNavigation} />
-                  <NavigationLink item={{ label: 'Create a competition', path: '/projects/new' }} mobile onNavigate={onNavigation} />
+                  <NavigationLink
+                    item={{
+                      label: t('พื้นที่ทำงานรวม', 'Workspace', { compact: true }),
+                      path: '/workspace',
+                    }}
+                    mobile
+                    onNavigate={onNavigation}
+                  />
+                  <NavigationLink
+                    item={{
+                      label: t('+ สร้างโครงการใหม่', '+ Create Competition', { compact: true }),
+                      path: '/projects/new',
+                    }}
+                    mobile
+                    onNavigate={onNavigation}
+                  />
                 </div>
               </>
             )}
