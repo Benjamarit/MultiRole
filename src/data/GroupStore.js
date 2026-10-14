@@ -7,6 +7,84 @@ function emptyTables() {
   return { groups: [], memberships: [] };
 }
 
+function toId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function normalizeTables(parsed) {
+  let groups;
+  let memberships;
+
+  if (Array.isArray(parsed)) {
+    groups = [];
+    memberships = [];
+    for (const projectEntry of parsed) {
+      if (!projectEntry || !Array.isArray(projectEntry.groups)) continue;
+      for (const group of projectEntry.groups) {
+        groups.push({
+          projectId: projectEntry.projectId,
+          id: group?.id,
+          name: group?.name,
+        });
+        for (const teamId of Array.isArray(group?.teamIds) ? group.teamIds : []) {
+          memberships.push({
+            projectId: projectEntry.projectId,
+            groupId: group?.id,
+            teamId,
+          });
+        }
+      }
+    }
+  } else if (
+    parsed &&
+    Array.isArray(parsed.groups) &&
+    Array.isArray(parsed.memberships)
+  ) {
+    groups = parsed.groups;
+    memberships = parsed.memberships;
+  } else {
+    throw new Error('รูปแบบข้อมูลกลุ่มในเบราว์เซอร์ไม่ถูกต้อง');
+  }
+
+  const validGroups = [];
+  const groupKeys = new Set();
+  for (const group of groups) {
+    const projectId = toId(group?.projectId);
+    const id = toId(group?.id);
+    const name = typeof group?.name === 'string' ? group.name.trim() : '';
+    if (!projectId || !id || !name || !getProjectById(projectId)) continue;
+    const key = `${projectId}:${id}`;
+    if (groupKeys.has(key)) continue;
+    groupKeys.add(key);
+    validGroups.push({ projectId, id, name });
+  }
+
+  const teamsByProject = new Map();
+  const validMemberships = [];
+  const seenTeams = new Set();
+  for (const membership of memberships) {
+    const projectId = toId(membership?.projectId);
+    const groupId = toId(membership?.groupId);
+    const teamId = toId(membership?.teamId);
+    if (!projectId || !groupId || !teamId) continue;
+    if (!groupKeys.has(`${projectId}:${groupId}`)) continue;
+    if (!teamsByProject.has(projectId)) {
+      teamsByProject.set(
+        projectId,
+        new Set(getTeamsByProject(projectId).map((team) => toId(team.id)))
+      );
+    }
+    if (!teamsByProject.get(projectId).has(teamId)) continue;
+    const teamKey = `${projectId}:${teamId}`;
+    if (seenTeams.has(teamKey)) continue;
+    seenTeams.add(teamKey);
+    validMemberships.push({ projectId, groupId, teamId });
+  }
+
+  return { groups: validGroups, memberships: validMemberships };
+}
+
 function readAll() {
   const stored = localStorage.getItem(GROUPS_KEY);
   if (!stored) return emptyTables();
@@ -15,49 +93,16 @@ function readAll() {
   try {
     parsed = JSON.parse(stored);
   } catch {
-    return emptyTables();
-  }
-  if (!Array.isArray(parsed)) {
-    if (!Array.isArray(parsed?.groups) || !Array.isArray(parsed?.memberships)) {
-      return emptyTables();
-    }
-    return {
-      groups: parsed.groups,
-      memberships: uniqueMemberships(parsed.memberships),
-    };
+    throw new Error('ข้อมูลกลุ่มในเบราว์เซอร์อ่านไม่ได้ กรุณาสำรองข้อมูลก่อนแก้ไข');
   }
 
-  const groups = [];
-  const memberships = [];
-  for (const projectEntry of parsed) {
-    for (const group of projectEntry.groups || []) {
-      groups.push({
-        projectId: Number(projectEntry.projectId),
-        id: Number(group.id),
-        name: group.name,
-      });
-      for (const teamId of group.teamIds || []) {
-        memberships.push({
-          projectId: Number(projectEntry.projectId),
-          groupId: Number(group.id),
-          teamId: Number(teamId),
-        });
-      }
-    }
+  const normalized = normalizeTables(parsed);
+  if (!Array.isArray(parsed) && JSON.stringify(parsed) !== JSON.stringify(normalized)) {
+    writeAll(normalized);
+  } else if (Array.isArray(parsed)) {
+    writeAll(normalized);
   }
-  const migrated = { groups, memberships: uniqueMemberships(memberships) };
-  writeAll(migrated);
-  return migrated;
-}
-
-function uniqueMemberships(memberships) {
-  const seenTeams = new Set();
-  return memberships.filter((membership) => {
-    const key = `${Number(membership.projectId)}:${Number(membership.teamId)}`;
-    if (seenTeams.has(key)) return false;
-    seenTeams.add(key);
-    return true;
-  });
+  return normalized;
 }
 
 function writeAll(tables) {
@@ -65,56 +110,63 @@ function writeAll(tables) {
     GROUPS_KEY,
     JSON.stringify({
       groups: tables.groups,
-      memberships: uniqueMemberships(tables.memberships),
+      memberships: tables.memberships,
     })
   );
 }
 
+function requireId(value, message) {
+  const id = toId(value);
+  if (!id) throw new Error(message);
+  return id;
+}
+
 export function getGroupsByProject(projectId) {
-  const numericProjectId = Number(projectId);
+  const numericProjectId = toId(projectId);
+  if (!numericProjectId) return [];
   return readAll()
-    .groups.filter((group) => Number(group.projectId) === numericProjectId)
-    .map(({ id, name }) => ({ id: Number(id), name }));
+    .groups.filter((group) => group.projectId === numericProjectId)
+    .map(({ id, name }) => ({ id, name }));
 }
 
 export function getGroupForTeam(projectId, teamId) {
-  const numericProjectId = Number(projectId);
-  const numericTeamId = Number(teamId);
+  const numericProjectId = toId(projectId);
+  const numericTeamId = toId(teamId);
+  if (!numericProjectId || !numericTeamId) return undefined;
   const tables = readAll();
   const membership = tables.memberships.find(
-    (item) =>
-      Number(item.projectId) === numericProjectId &&
-      Number(item.teamId) === numericTeamId
+    (item) => item.projectId === numericProjectId && item.teamId === numericTeamId
   );
   if (!membership) return undefined;
   return tables.groups.find(
-    (group) =>
-      Number(group.projectId) === numericProjectId &&
-      Number(group.id) === Number(membership.groupId)
+    (group) => group.projectId === numericProjectId && group.id === membership.groupId
   );
 }
 
 export function getTeamIdsInGroup(projectId, groupId) {
-  const numericProjectId = Number(projectId);
-  const numericGroupId = Number(groupId);
+  const numericProjectId = toId(projectId);
+  const numericGroupId = toId(groupId);
+  if (!numericProjectId || !numericGroupId) return [];
   return readAll()
     .memberships.filter(
       (membership) =>
-        Number(membership.projectId) === numericProjectId &&
-        Number(membership.groupId) === numericGroupId
+        membership.projectId === numericProjectId &&
+        membership.groupId === numericGroupId
     )
-    .map((membership) => Number(membership.teamId));
+    .map((membership) => membership.teamId);
 }
 
 export function createGroup(projectId, name) {
-  const numericProjectId = Number(projectId);
-  if (!getProjectById(projectId)) throw new Error('ไม่พบโครงการที่ต้องการจัดกลุ่ม');
-  const trimmedName = name.trim();
+  const numericProjectId = requireId(projectId, 'ไม่พบโครงการที่ต้องการจัดกลุ่ม');
+  if (!getProjectById(numericProjectId)) {
+    throw new Error('ไม่พบโครงการที่ต้องการจัดกลุ่ม');
+  }
+  const trimmedName = typeof name === 'string' ? name.trim() : '';
   if (!trimmedName) throw new Error('กรุณาระบุชื่อกลุ่ม');
 
   const tables = readAll();
   const projectGroups = tables.groups.filter(
-    (group) => Number(group.projectId) === numericProjectId
+    (group) => group.projectId === numericProjectId
   );
   if (
     projectGroups.some(
@@ -124,33 +176,31 @@ export function createGroup(projectId, name) {
     throw new Error('ชื่อกลุ่มนี้มีอยู่แล้ว');
   }
   const nextId = projectGroups.length
-    ? Math.max(...projectGroups.map((group) => Number(group.id))) + 1
+    ? Math.max(...projectGroups.map((group) => group.id)) + 1
     : 1;
+  if (!Number.isSafeInteger(nextId)) throw new Error('ไม่สามารถสร้างรหัสกลุ่มใหม่ได้');
   writeAll({
     ...tables,
-    groups: [
-      ...tables.groups,
-      { projectId: numericProjectId, id: nextId, name: trimmedName },
-    ],
+    groups: [...tables.groups, { projectId: numericProjectId, id: nextId, name: trimmedName }],
   });
 }
 
 export function renameGroup(projectId, groupId, name) {
-  const numericProjectId = Number(projectId);
-  const numericGroupId = Number(groupId);
-  const trimmedName = name.trim();
+  const numericProjectId = requireId(projectId, 'ไม่พบกลุ่มที่ต้องการแก้ไข');
+  const numericGroupId = requireId(groupId, 'ไม่พบกลุ่มที่ต้องการแก้ไข');
+  const trimmedName = typeof name === 'string' ? name.trim() : '';
   if (!trimmedName) throw new Error('กรุณาระบุชื่อกลุ่ม');
   const tables = readAll();
   const projectGroups = tables.groups.filter(
-    (group) => Number(group.projectId) === numericProjectId
+    (group) => group.projectId === numericProjectId
   );
-  if (!projectGroups.some((group) => Number(group.id) === numericGroupId)) {
+  if (!projectGroups.some((group) => group.id === numericGroupId)) {
     throw new Error('ไม่พบกลุ่มที่ต้องการแก้ไข');
   }
   if (
     projectGroups.some(
       (group) =>
-        Number(group.id) !== numericGroupId &&
+        group.id !== numericGroupId &&
         group.name.toLocaleLowerCase() === trimmedName.toLocaleLowerCase()
     )
   ) {
@@ -159,8 +209,7 @@ export function renameGroup(projectId, groupId, name) {
   writeAll({
     ...tables,
     groups: tables.groups.map((group) =>
-      Number(group.projectId) === numericProjectId &&
-      Number(group.id) === numericGroupId
+      group.projectId === numericProjectId && group.id === numericGroupId
         ? { ...group, name: trimmedName }
         : group
     ),
@@ -168,19 +217,21 @@ export function renameGroup(projectId, groupId, name) {
 }
 
 export function moveTeamToGroup(projectId, teamId, groupId) {
-  const numericProjectId = Number(projectId);
-  const numericTeamId = Number(teamId);
-  if (!getTeamsByProject(projectId).some((team) => Number(team.id) === numericTeamId)) {
+  const numericProjectId = requireId(projectId, 'ไม่พบโครงการที่ต้องการจัดกลุ่ม');
+  const numericTeamId = requireId(teamId, 'ทีมนี้ไม่ได้อยู่ในโครงการนี้');
+  if (!getProjectById(numericProjectId)) {
+    throw new Error('ไม่พบโครงการที่ต้องการจัดกลุ่ม');
+  }
+  if (!getTeamsByProject(numericProjectId).some((team) => toId(team.id) === numericTeamId)) {
     throw new Error('ทีมนี้ไม่ได้อยู่ในโครงการนี้');
   }
   const tables = readAll();
+  const numericGroupId =
+    groupId === null || groupId === '' ? null : requireId(groupId, 'กลุ่มนี้ไม่ได้อยู่ในโครงการนี้');
   if (
-    groupId !== null &&
-    groupId !== '' &&
+    numericGroupId !== null &&
     !tables.groups.some(
-      (group) =>
-        Number(group.projectId) === numericProjectId &&
-        Number(group.id) === Number(groupId)
+      (group) => group.projectId === numericProjectId && group.id === numericGroupId
     )
   ) {
     throw new Error('กลุ่มนี้ไม่ได้อยู่ในโครงการนี้');
@@ -188,42 +239,63 @@ export function moveTeamToGroup(projectId, teamId, groupId) {
 
   const memberships = tables.memberships.filter(
     (membership) =>
-      Number(membership.projectId) !== numericProjectId ||
-      Number(membership.teamId) !== numericTeamId
+      membership.projectId !== numericProjectId ||
+      membership.teamId !== numericTeamId
   );
-  if (groupId !== null && groupId !== '') {
+  if (numericGroupId !== null) {
     memberships.push({
       projectId: numericProjectId,
       teamId: numericTeamId,
-      groupId: Number(groupId),
+      groupId: numericGroupId,
     });
   }
   writeAll({ ...tables, memberships });
 }
 
 export function deleteGroup(projectId, groupId) {
-  const numericProjectId = Number(projectId);
-  const numericGroupId = Number(groupId);
+  const numericProjectId = requireId(projectId, 'ไม่พบกลุ่มที่ต้องการลบ');
+  const numericGroupId = requireId(groupId, 'ไม่พบกลุ่มที่ต้องการลบ');
   const tables = readAll();
   if (
     !tables.groups.some(
-      (group) =>
-        Number(group.projectId) === numericProjectId &&
-        Number(group.id) === numericGroupId
+      (group) => group.projectId === numericProjectId && group.id === numericGroupId
     )
   ) {
     throw new Error('ไม่พบกลุ่มที่ต้องการลบ');
   }
   writeAll({
     groups: tables.groups.filter(
-      (group) =>
-        Number(group.projectId) !== numericProjectId ||
-        Number(group.id) !== numericGroupId
+      (group) => group.projectId !== numericProjectId || group.id !== numericGroupId
     ),
     memberships: tables.memberships.filter(
       (membership) =>
-        Number(membership.projectId) !== numericProjectId ||
-        Number(membership.groupId) !== numericGroupId
+        membership.projectId !== numericProjectId ||
+        membership.groupId !== numericGroupId
+    ),
+  });
+}
+
+export function removeTeamFromGroups(projectId, teamId) {
+  const numericProjectId = requireId(projectId, 'ไม่พบโครงการที่ต้องการจัดกลุ่ม');
+  const numericTeamId = requireId(teamId, 'ทีมนี้ไม่ได้อยู่ในโครงการนี้');
+  const tables = readAll();
+  writeAll({
+    ...tables,
+    memberships: tables.memberships.filter(
+      (membership) =>
+        membership.projectId !== numericProjectId ||
+        membership.teamId !== numericTeamId
+    ),
+  });
+}
+
+export function removeProjectGroups(projectId) {
+  const numericProjectId = requireId(projectId, 'ไม่พบโครงการที่ต้องการจัดกลุ่ม');
+  const tables = readAll();
+  writeAll({
+    groups: tables.groups.filter((group) => group.projectId !== numericProjectId),
+    memberships: tables.memberships.filter(
+      (membership) => membership.projectId !== numericProjectId
     ),
   });
 }

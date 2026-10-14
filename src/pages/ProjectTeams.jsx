@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { deleteTeam, getTeamsByProject, saveTeam } from '../data/TeamStore';
 import { getProjectById, isProjectAdmin } from '../data/ProjectStore';
-import { getGroupForTeam } from '../data/GroupStore';
+import { getGroupForTeam, removeTeamFromGroups } from '../data/GroupStore';
 
 export default function ProjectTeams() {
   const { id } = useParams();
@@ -112,6 +112,7 @@ export default function ProjectTeams() {
     if (!teamToDelete) return;
     try {
       deleteTeam(id, teamToDelete.id);
+      removeTeamFromGroups(id, teamToDelete.id);
       setTeams((previousTeams) =>
         previousTeams.filter((team) => team.id !== teamToDelete.id)
       );
