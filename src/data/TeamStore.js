@@ -1,3 +1,5 @@
+import { removeTeamAssignments } from './JudgeTeamAssignmentStore';
+
 const TEAMS_KEY = 'ce_project_teams';
 
 const seedTeams = [
@@ -17,12 +19,19 @@ const seedTeams = [
 ];
 
 function readAll() {
+  const stored = localStorage.getItem(TEAMS_KEY);
+  if (!stored) return [{ projectId: 1, teams: seedTeams }];
+
+  let projectTeams;
   try {
-    const stored = localStorage.getItem(TEAMS_KEY);
-    return stored ? JSON.parse(stored) : [{ projectId: 1, teams: seedTeams }];
+    projectTeams = JSON.parse(stored);
   } catch {
-    return [{ projectId: 1, teams: seedTeams }];
+    throw new Error('ข้อมูลทีมในเบราว์เซอร์อ่านไม่ได้ กรุณาสำรองข้อมูลก่อนแก้ไข');
   }
+  if (!Array.isArray(projectTeams)) {
+    throw new Error('รูปแบบข้อมูลทีมในเบราว์เซอร์ไม่ถูกต้อง');
+  }
+  return projectTeams;
 }
 
 function writeAll(projectTeams) {
@@ -53,12 +62,17 @@ export function saveTeam(projectId, teamData) {
 
 export function deleteTeam(projectId, teamId) {
   const numericProjectId = Number(projectId);
+  const numericTeamId = Number(teamId);
   const updatedEntries = readAll().map((entry) =>
     entry.projectId === numericProjectId
-      ? { ...entry, teams: entry.teams.filter((team) => team.id !== teamId) }
+      ? {
+          ...entry,
+          teams: entry.teams.filter((team) => Number(team.id) !== numericTeamId),
+        }
       : entry
   );
   writeAll(updatedEntries);
+  removeTeamAssignments(numericProjectId, numericTeamId);
 }
 
 export function deleteProjectTeams(projectId) {

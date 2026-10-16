@@ -442,7 +442,7 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200/90 bg-white/95 backdrop-blur-md">
-      <div className="mx-auto flex min-h-16 max-w-[1600px] items-center gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex min-h-16 max-w-[1600px] items-center gap-3 px-4 sm:px-6 max-[360px]:flex-wrap">
         <Link
           to={brandPath}
           className="flex shrink-0 items-center gap-2.5 rounded-lg text-ink-navy focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-precision-blue"
@@ -484,7 +484,7 @@ export default function Navbar() {
           </div>
         )}
 
-        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3 max-[360px]:w-full max-[360px]:justify-end">
           <LanguageSwitcher />
 
           <div className="relative" ref={notifRef}>

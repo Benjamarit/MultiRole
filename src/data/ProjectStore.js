@@ -4,6 +4,8 @@ import {
   getJudgeIdsForTeam,
   getTeamIdsForJudge,
   importLegacyJudgeTeamAssignments,
+  pruneInvalidJudgeTeamAssignments,
+  removeProjectAssignments,
   removeJudgeTeamAssignments,
   replaceJudgeTeamAssignments,
 } from './JudgeTeamAssignmentStore';
@@ -35,13 +37,17 @@ function seedProjects() {
 }
 
 function readAll() {
+  const stored = localStorage.getItem(PROJECTS_KEY);
+  if (!stored) return seedProjects();
+
   let projects;
   try {
-    const stored = localStorage.getItem(PROJECTS_KEY);
-    if (!stored) return seedProjects();
     projects = JSON.parse(stored);
   } catch {
-    return seedProjects();
+    throw new Error('ข้อมูลโครงการในเบราว์เซอร์อ่านไม่ได้ กรุณาสำรองข้อมูลก่อนแก้ไข');
+  }
+  if (!Array.isArray(projects)) {
+    throw new Error('รูปแบบข้อมูลโครงการในเบราว์เซอร์ไม่ถูกต้อง');
   }
   const normalizedProjects = projects.map(normalizeProject);
   const legacyAssignments = projects.flatMap((project) =>
@@ -62,6 +68,22 @@ function readAll() {
     importLegacyJudgeTeamAssignments(legacyAssignments);
     writeAll(normalizedProjects);
   }
+  const validJudgeIdsByProject = new Map(
+    normalizedProjects.map((project) => [
+      Number(project.id),
+      new Set((project.judgeAssignments || []).map((assignment) => String(assignment.id))),
+    ])
+  );
+  const validTeamIdsByProject = new Map(
+    normalizedProjects.map((project) => [
+      Number(project.id),
+      new Set(getTeamsByProject(project.id).map((team) => Number(team.id))),
+    ])
+  );
+  pruneInvalidJudgeTeamAssignments((assignment) =>
+    validJudgeIdsByProject.get(assignment.projectId)?.has(assignment.judgeId) &&
+    validTeamIdsByProject.get(assignment.projectId)?.has(assignment.teamId)
+  );
   return normalizedProjects;
 }
 
@@ -98,6 +120,7 @@ export function deleteProject(projectId) {
   const projects = readAll();
   const updatedProjects = projects.filter((project) => Number(project.id) !== numericProjectId);
   if (updatedProjects.length === projects.length) return false;
+  removeProjectAssignments(numericProjectId);
   writeAll(updatedProjects);
   return true;
 }
@@ -207,17 +230,43 @@ export function setJudgeAssignedTeams(projectId, judgeId, teamIds) {
 
 export function removeJudgeAssignment(projectId, judgeId, judgeEmail) {
   const projects = readAll();
-  const updated = projects.map((project) =>
-    project.id === Number(projectId)
-      ? {
-          ...project,
-          judgeEmails: (project.judgeEmails || []).filter((email) => email !== judgeEmail),
-          judgeAssignments: (project.judgeAssignments || []).filter((assignment) => assignment.id !== judgeId),
-        }
-      : project
+  const numericProjectId = Number(projectId);
+  const project = projects.find((item) => Number(item.id) === numericProjectId);
+  if (!project) return false;
+
+  const requestedIds = new Set([judgeId, judgeEmail].filter(Boolean).map(String));
+  const removedAssignments = (project.judgeAssignments || []).filter(
+    (assignment) =>
+      requestedIds.has(String(assignment.id)) ||
+      requestedIds.has(String(assignment.email))
   );
-  removeJudgeTeamAssignments(projectId, judgeId);
+  if (!removedAssignments.length) return false;
+
+  const removedIds = new Set(
+    removedAssignments.flatMap((assignment) => [assignment.id, assignment.email])
+      .filter(Boolean)
+      .map(String)
+  );
+  const updated = projects.map((item) =>
+    Number(item.id) === numericProjectId
+      ? {
+          ...item,
+          judgeEmails: (item.judgeEmails || []).filter(
+            (email) => !removedIds.has(String(email))
+          ),
+          judgeAssignments: (item.judgeAssignments || []).filter(
+            (assignment) =>
+              !removedIds.has(String(assignment.id)) &&
+              !removedIds.has(String(assignment.email))
+          ),
+        }
+      : item
+  );
+  for (const removedId of removedIds) {
+    removeJudgeTeamAssignments(numericProjectId, removedId);
+  }
   writeAll(updated);
+  return true;
 }
 
 // TODO: ตอนต่อ API จริง เปลี่ยนเป็น PATCH /projects/:id { status } แทน
