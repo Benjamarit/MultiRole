@@ -1,6 +1,14 @@
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { Award, Crown, Download, FileSpreadsheet, Medal, Trophy } from 'lucide-react';
+import {
+  Award,
+  Crown,
+  Download,
+  FileSpreadsheet,
+  Medal,
+  Sparkles,
+  Trophy,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
 import BackButton from '../components/BackButton';
@@ -36,7 +44,6 @@ export default function ProjectLeaderboard() {
   const assignments = project?.judgeAssignments || EMPTY_ASSIGNMENTS;
   const allProjectEvaluations = getEvaluationsByProject(id);
 
-  // เฉพาะผลประเมินที่ส่งแล้ว (SUBMITTED) และมาจากกรรมการที่ได้รับมอบหมายให้ตรวจทีมนั้น
   const evaluations = allProjectEvaluations.filter(
     (evaluation) =>
       evaluation.status === 'SUBMITTED' &&
@@ -58,7 +65,6 @@ export default function ProjectLeaderboard() {
       const averageScore = teamEvals.length > 0 ? totalScore / teamEvals.length : 0;
       const group = getGroupForTeam(id, team.id);
 
-      // คำนวณคะแนนเฉลี่ยรายเกณฑ์ของทีมนี้ (จากกรรมการที่ส่งผลแล้ว)
       const criteriaAverages = {};
       criteria.forEach((criterion) => {
         const validScores = teamEvals
@@ -86,11 +92,57 @@ export default function ProjectLeaderboard() {
       .map((team, index) => ({ ...team, rank: index + 1 }));
   }, [id, teams, evaluations, assignments, criteria]);
 
-  const topThree = leaderboard.slice(0, 3);
-  const podiumOrder = [
-    topThree[1] || null, // อันดับ 2 (ซ้าย)
-    topThree[0] || null, // อันดับ 1 (กลาง)
-    topThree[2] || null, // อันดับ 3 (ขวา)
+  // จัดเรียงลำดับแท่นโพเดียม: ซ้าย = อันดับ 2, กลาง = อันดับ 1 (สูงสุด), ขวา = อันดับ 3
+  const podiumSlots = [
+    {
+      targetRank: 2,
+      team: leaderboard[1] || null,
+      label: t('รองชนะเลิศอันดับ 1', '1st Runner-Up'),
+      subLabel: '2nd Place',
+      icon: Medal,
+      pedestalHeight: 'h-32 sm:h-40',
+      pedestalBg:
+        'bg-gradient-to-b from-slate-300 via-slate-400 to-slate-500 border-t-4 border-slate-200 text-white',
+      cardRing: 'border-slate-300 bg-white/95 shadow-md',
+      iconBadge:
+        'bg-gradient-to-br from-slate-400 to-slate-600 text-white ring-4 ring-slate-100',
+      scoreColor: 'text-slate-800',
+      rankBadge: 'bg-slate-200 text-slate-800',
+      orderClass: 'order-2 sm:order-1',
+    },
+    {
+      targetRank: 1,
+      team: leaderboard[0] || null,
+      label: t('ชนะเลิศอันดับ 1', 'Champion'),
+      subLabel: '1st Place',
+      icon: Crown,
+      pedestalHeight: 'h-44 sm:h-56',
+      pedestalBg:
+        'bg-gradient-to-b from-amber-400 via-amber-500 to-amber-600 border-t-4 border-yellow-200 text-white shadow-lg',
+      cardRing:
+        'border-amber-300 bg-gradient-to-b from-amber-50/90 to-white ring-2 ring-amber-300/70 shadow-xl',
+      iconBadge:
+        'bg-gradient-to-br from-amber-400 to-amber-600 text-white ring-4 ring-amber-100 shadow-md',
+      scoreColor: 'text-amber-600',
+      rankBadge: 'bg-amber-100 text-amber-900',
+      orderClass: 'order-1 sm:order-2',
+    },
+    {
+      targetRank: 3,
+      team: leaderboard[2] || null,
+      label: t('รองชนะเลิศอันดับ 2', '2nd Runner-Up'),
+      subLabel: '3rd Place',
+      icon: Award,
+      pedestalHeight: 'h-24 sm:h-32',
+      pedestalBg:
+        'bg-gradient-to-b from-amber-600 via-orange-700 to-amber-800 border-t-4 border-orange-300 text-white',
+      cardRing: 'border-orange-200 bg-white/95 shadow-md',
+      iconBadge:
+        'bg-gradient-to-br from-orange-400 to-amber-700 text-white ring-4 ring-orange-100',
+      scoreColor: 'text-orange-700',
+      rankBadge: 'bg-orange-100 text-orange-900',
+      orderClass: 'order-3 sm:order-3',
+    },
   ];
 
   // ดาวน์โหลดแบบที่ 1: สรุปผลจัดอันดับ (Summary CSV)
@@ -164,7 +216,6 @@ export default function ProjectLeaderboard() {
       criteria.reduce((sum, criterion) => sum + Number(criterion.weight || 0), 0) || 1;
     const userByEmail = new Map(registeredUsers.map((u) => [u.email, u]));
 
-    // สร้างคอลัมน์สำหรับแต่ละเกณฑ์: คะแนนดิบ, คะแนนถ่วงน้ำหนัก, และความคิดเห็นรายเกณฑ์
     const criterionColumns = criteria.flatMap((c) => {
       const maxLabel = c.type === 'PASS_FAIL' ? 'Pass=1/Fail=0' : `เต็ม ${c.maxScore}`;
       return [
@@ -201,7 +252,6 @@ export default function ProjectLeaderboard() {
       );
 
       if (assignedJudges.length === 0) {
-        // กรณีทีมยังไม่ได้รับการมอบหมายกรรมการเลย แสดงแถวของทีมไว้เพื่อความครบถ้วน
         const emptyCriteriaCols = criteria.flatMap(() => ['-', '-', '-']);
         detailedRows.push([
           project?.name || `Project #${id}`,
@@ -308,7 +358,7 @@ export default function ProjectLeaderboard() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 p-6">
+    <div className="mx-auto max-w-7xl space-y-8 p-6">
       <BackButton to={`/project/${id}/dashboard`}>
         {t('กลับไปหน้า Dashboard โครงการ', 'Back to Dashboard')}
       </BackButton>
@@ -344,92 +394,130 @@ export default function ProjectLeaderboard() {
         }
       />
 
-      {/* แท่นรางวัล Podium สำหรับทีมอันดับ 1–3 */}
-      {topThree.length > 0 && (
-        <section aria-label="Top 3 Podium" className="pt-2">
-          <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-3">
-            {podiumOrder.map((team, idx) => {
-              if (!team) {
-                return <div key={`empty-${idx}`} className="hidden md:block" />;
-              }
+      {/* โพเดียมแท่นรางวัล 3 ระดับ (Stepped Podium Showcase) */}
+      {leaderboard.length > 0 && (
+        <section
+          aria-label="Top 3 Stepped Podium"
+          className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 px-4 pt-8 pb-0 text-white shadow-xl sm:px-10 sm:pt-10"
+        >
+          {/* แสงตกแต่งพื้นหลังโพเดียม */}
+          <div className="pointer-events-none absolute left-1/2 top-0 h-72 w-3/4 -translate-x-1/2 rounded-full bg-amber-400/15 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-0 left-10 h-48 w-48 rounded-full bg-blue-500/15 blur-2xl" />
+          <div className="pointer-events-none absolute bottom-0 right-10 h-48 w-48 rounded-full bg-indigo-500/15 blur-2xl" />
 
-              const isFirst = team.rank === 1;
-              const isSecond = team.rank === 2;
+          <div className="relative z-10 mb-8 text-center">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-amber-300">
+              <Sparkles className="h-3.5 w-3.5" />
+              {t('แท่นเกียรติยศผู้นำคะแนนสูงสุด', 'Top Performers Podium')}
+            </div>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+              {project?.name || t('สรุปอันดับผู้ชนะการแข่งขัน', 'Winners Podium')}
+            </h2>
+          </div>
 
-              const cardStyle = isFirst
-                ? 'border-amber-300 bg-gradient-to-b from-amber-50/90 via-white to-white ring-2 ring-amber-200/70 md:-translate-y-2'
-                : isSecond
-                  ? 'border-slate-300 bg-gradient-to-b from-slate-100/80 via-white to-white'
-                  : 'border-orange-200 bg-gradient-to-b from-orange-50/70 via-white to-white';
-
-              const badgeBg = isFirst
-                ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white shadow-md'
-                : isSecond
-                  ? 'bg-gradient-to-br from-slate-400 to-slate-600 text-white'
-                  : 'bg-gradient-to-br from-orange-400 to-amber-700 text-white';
-
-              const RankIcon = isFirst ? Crown : isSecond ? Medal : Award;
+          {/* โครงสร้างแท่นโพเดียม 3 คอลัมน์ (2 - 1 - 3) */}
+          <div className="relative z-10 mx-auto grid max-w-4xl grid-cols-1 items-end gap-4 sm:grid-cols-3 sm:gap-5">
+            {podiumSlots.map((slot) => {
+              const Icon = slot.icon;
+              const team = slot.team;
+              const isFirst = slot.targetRank === 1;
 
               return (
-                <Card key={team.id} className={`relative text-center ${cardStyle}`}>
-                  <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl">
-                    <span
-                      className={`flex h-13 w-13 items-center justify-center rounded-2xl ${badgeBg}`}
-                    >
-                      <RankIcon className="h-7 w-7" />
-                    </span>
-                  </div>
-
-                  <span
-                    className={`inline-block rounded-full px-3 py-0.5 text-xs font-extrabold uppercase tracking-wider ${
-                      isFirst
-                        ? 'bg-amber-100 text-amber-800'
-                        : isSecond
-                          ? 'bg-slate-200 text-slate-800'
-                          : 'bg-orange-100 text-orange-800'
-                    }`}
+                <div
+                  key={slot.targetRank}
+                  className={`flex flex-col items-center ${slot.orderClass}`}
+                >
+                  {/* การ์ดข้อมูลทีมเหนือแท่น */}
+                  <div
+                    className={`mb-3 w-full rounded-2xl border p-4 text-center text-slate-900 transition-transform duration-200 hover:-translate-y-1 ${slot.cardRing}`}
                   >
-                    {isFirst
-                      ? t('อันดับ 1', '1st Place')
-                      : isSecond
-                        ? t('อันดับ 2', '2nd Place')
-                        : t('อันดับ 3', '3rd Place')}
-                  </span>
+                    <div className="-mt-9 mb-2 flex justify-center">
+                      <span
+                        className={`flex items-center justify-center rounded-2xl ${
+                          isFirst ? 'h-14 w-14' : 'h-12 w-12'
+                        } ${slot.iconBadge}`}
+                      >
+                        <Icon className={isFirst ? 'h-7 w-7' : 'h-6 w-6'} />
+                      </span>
+                    </div>
 
-                  <h3 className="mt-2 truncate text-xl font-bold text-slate-900">
-                    {team.name}
-                  </h3>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {t('กลุ่ม:', 'Group:')} {team.groupName}
-                  </p>
-
-                  <div className="my-4 rounded-xl border border-slate-100 bg-slate-50/80 py-3">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                      {t('คะแนนเฉลี่ย', 'Average Score')}
-                    </p>
-                    <p
-                      className={`font-mono text-3xl font-extrabold ${
-                        isFirst ? 'text-amber-600' : 'text-blue-700'
-                      }`}
+                    <span
+                      className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wider ${slot.rankBadge}`}
                     >
-                      {team.averageScore.toFixed(2)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>
-                      {t('กรรมการตรวจแล้ว:', 'Judges:')}{' '}
-                      <strong className="text-slate-700">
-                        {team.evaluatedCount}/{team.expectedCount}
-                      </strong>
+                      {slot.label}
                     </span>
-                    {team.isComplete ? (
-                      <Badge variant="success">{t('ครบถ้วน', 'Complete')}</Badge>
+
+                    {team ? (
+                      <>
+                        <h3
+                          className={`mt-2 truncate font-extrabold text-slate-900 ${
+                            isFirst ? 'text-xl' : 'text-base'
+                          }`}
+                          title={team.name}
+                        >
+                          {team.name}
+                        </h3>
+                        <p className="mt-0.5 truncate text-xs text-slate-500">
+                          {t('กลุ่ม:', 'Group:')} {team.groupName}
+                        </p>
+
+                        <div className="my-3 rounded-xl border border-slate-100 bg-slate-50/90 py-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            {t('คะแนนเฉลี่ย', 'Average Score')}
+                          </p>
+                          <p
+                            className={`font-mono font-extrabold ${
+                              isFirst ? 'text-3xl' : 'text-2xl'
+                            } ${slot.scoreColor}`}
+                          >
+                            {team.averageScore.toFixed(2)}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span>
+                            {t('ตรวจแล้ว:', 'Judges:')}{' '}
+                            <strong className="text-slate-700">
+                              {team.evaluatedCount}/{team.expectedCount}
+                            </strong>
+                          </span>
+                          {team.isComplete ? (
+                            <Badge variant="success">
+                              {t('ครบถ้วน', 'Complete')}
+                            </Badge>
+                          ) : (
+                            <Badge variant="warning">
+                              {t('รอผล', 'Pending')}
+                            </Badge>
+                          )}
+                        </div>
+                      </>
                     ) : (
-                      <Badge variant="warning">{t('รอผลประเมิน', 'Pending')}</Badge>
+                      <div className="py-6 text-xs text-slate-400">
+                        {t('ยังไม่มีทีมในอันดับนี้', 'No team in this slot yet')}
+                      </div>
                     )}
                   </div>
-                </Card>
+
+                  {/* แท่นยืนโพเดียม (Stepped Pedestal Block) */}
+                  <div
+                    className={`flex w-full flex-col items-center justify-between rounded-t-2xl px-4 py-4 ${slot.pedestalHeight} ${slot.pedestalBg}`}
+                  >
+                    <div className="text-center">
+                      <span className="block font-mono text-4xl font-black leading-none drop-shadow-xs sm:text-5xl">
+                        {slot.targetRank}
+                      </span>
+                      <span className="mt-1 block text-[11px] font-bold uppercase tracking-widest opacity-90">
+                        {slot.subLabel}
+                      </span>
+                    </div>
+                    {team && (
+                      <div className="w-full truncate rounded-lg bg-black/15 px-2.5 py-1 text-center text-xs font-semibold backdrop-blur-2xs">
+                        {team.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>

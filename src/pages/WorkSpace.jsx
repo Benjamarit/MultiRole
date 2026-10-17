@@ -32,7 +32,6 @@ import {
 import { deleteProjectTeams, getTeamsByProject } from '../data/TeamStore';
 import { deleteProjectCriteria, hasCompleteCriteriaWeights } from '../data/CriteriaStore';
 import { deleteProjectEvaluations, getEvaluation } from '../data/EvaluationStore';
-import { removeProjectGroups } from '../data/GroupStore';
 
 const statusVariant = (status) => {
   switch (status) {
@@ -139,7 +138,6 @@ export default function Workspace() {
   const confirmDeleteProject = () => {
     if (!projectToDelete) return;
     try {
-      removeProjectGroups(projectToDelete.id);
       deleteProjectEvaluations(projectToDelete.id);
       deleteProjectTeams(projectToDelete.id);
       deleteProjectCriteria(projectToDelete.id);
