@@ -14,6 +14,7 @@ import {
   EyeOff,
   Sparkles,
 } from 'lucide-react';
+import apiClient from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -51,8 +52,24 @@ export default function Login() {
 
     setIsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // 1. ยิง API ไปยัง Spring Boot Backend (POST /api/auth/login)
+      try {
+        const res = await apiClient.post('/auth/login', { email, password });
+        const { token, user: backendUser } = res.data;
+        login(backendUser, token);
+        navigate(backendUser.role === 'SYSTEM_ADMIN' ? '/admin/users' : '/workspace');
+        return;
+      } catch (apiErr) {
+        if (apiErr.response?.data?.message) {
+          throw new Error(apiErr.response.data.message);
+        }
+        if (apiErr.response) {
+          throw new Error('Invalid credentials');
+        }
+        // หากยังไม่ได้เปิด Spring Boot (Network Error) ให้ใช้ Fallback localStorage ด้านล่าง
+      }
 
+      // 2. Fallback กรณีไม่ได้เปิดเซิร์ฟเวอร์ Backend
       if (email === SYSTEM_ADMIN.email && password === SYSTEM_ADMIN.password) {
         const adminUser = { ...SYSTEM_ADMIN };
         delete adminUser.password;
@@ -97,14 +114,33 @@ export default function Login() {
 
     if (!email) {
       setError(
-        t('กรุณากรอกอีเมลที่ต้องการขอรหัสผ่านใหม่', 'Please enter your registered email')
+        t('กรุณากรอกอีเมลที่ต้องการรีเซ็ตรหัสผ่าน', 'Please enter your registered email')
       );
       return;
     }
 
     setIsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        const res = await apiClient.post('/auth/forgot-password', { email });
+        toast.success(
+          res.data?.message ||
+            t(
+              'ส่งลิงก์รีเซ็ตรหัสผ่านไปยังอีเมลของคุณแล้ว (ลิงก์มีอายุ 15 นาที)',
+              'Password reset link sent to your email (valid for 15 minutes).'
+            )
+        );
+        setIsForgotMode(false);
+        setPassword('');
+        return;
+      } catch (apiErr) {
+        if (apiErr.response?.data?.message) {
+          throw new Error(apiErr.response.data.message);
+        }
+        if (apiErr.response) {
+          throw new Error(t('ไม่พบอีเมลนี้ในระบบ', 'Email not found in system'));
+        }
+      }
 
       const registeredUsers = getRegisteredUsers();
       const userExists = registeredUsers.find((u) => u.email === email);
@@ -113,8 +149,8 @@ export default function Login() {
         updateRegisteredUser(email, { resetRequested: true });
         toast.success(
           t(
-            'ส่งคำขอสำเร็จ! โปรดติดต่อ System Admin เพื่อรับรหัสผ่านใหม่',
-            'Request sent! Please contact System Admin for your new password.'
+            'ส่งคำขอสำเร็จ! กรุณาตรวจสอบลิงก์รีเซ็ตรหัสผ่านในอีเมลของคุณ (มีอายุ 15 นาที)',
+            'Reset link sent! Please check your email inbox (valid for 15 minutes).'
           )
         );
         setIsForgotMode(false);
@@ -207,14 +243,14 @@ export default function Login() {
             </div>
             <h2 className="text-3xl font-bold tracking-tight text-slate-900">
               {isForgotMode
-                ? t('รีเซ็ตรหัสผ่าน', 'Reset Password')
+                ? t('ลืมรหัสผ่าน', 'Forgot Password')
                 : t('เข้าสู่ระบบ', 'Sign In')}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-500">
               {isForgotMode
                 ? t(
-                    'กรอกอีเมลที่ลงทะเบียนไว้ ระบบจะแจ้งไปยังผู้ดูแลระบบเพื่อออกรหัสผ่านใหม่',
-                    'Enter your registered email to request a password reset from the System Admin.'
+                    'กรอกอีเมลที่ลงทะเบียนไว้ ระบบจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปทางอีเมลของคุณ (ลิงก์มีอายุ 15 นาที)',
+                    'Enter your registered email and we will send a password reset link to your inbox (valid for 15 minutes).'
                   )
                 : t(
                     'กรอกข้อมูลบัญชีของคุณเพื่อเข้าสู่ระบบบริหารจัดการการแข่งขัน',
@@ -258,7 +294,7 @@ export default function Login() {
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    {t('ส่งคำขอรีเซ็ตรหัสผ่าน', 'Send Reset Request')}{' '}
+                    {t('ส่งลิงก์รีเซ็ตรหัสผ่านทางอีเมล', 'Send Reset Link via Email')}{' '}
                     <ArrowRight className="h-4 w-4" />
                   </>
                 )}

@@ -1,17 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { KeyRound, Search, ShieldAlert, UserCheck, Users } from 'lucide-react';
+import { RefreshCw, Search, UserCheck, UserX, Users } from 'lucide-react';
+import apiClient from '../api/client';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import Button from '../components/Button';
-import Input from '../components/Input';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
-import CriteriaModal from '../components/CriteriaModal';
 import { useLanguage } from '../context/LanguageContext';
 import {
   deleteRegisteredUser,
   getRegisteredUsers,
+  setRegisteredUsersCache,
   updateRegisteredUser,
 } from '../context/authStore';
 
@@ -20,23 +20,40 @@ const PAGE_SIZE = 10;
 export default function UserManagement() {
   const { t, tDesc } = useLanguage();
   const [users, setUsers] = useState(() => getRegisteredUsers());
+  const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
 
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-  const [userToReset, setUserToReset] = useState(null);
-  const [newPassword, setNewPassword] = useState('');
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      const res = await apiClient.get('/admin/users');
+      if (Array.isArray(res.data)) {
+        setUsers(res.data);
+        setRegisteredUsersCache(res.data);
+      }
+    } catch {
+      // Fallback กรณีไม่ได้เปิดเซิร์ฟเวอร์ Spring Boot
+      setUsers(getRegisteredUsers());
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const filteredUsers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     return users.filter((user) => {
       return (
         !query ||
-        user.name.toLowerCase().includes(query) ||
-        user.email.toLowerCase().includes(query)
+        (user.name || '').toLowerCase().includes(query) ||
+        (user.email || '').toLowerCase().includes(query)
       );
     });
   }, [users, searchTerm]);
@@ -49,20 +66,30 @@ export default function UserManagement() {
   );
 
   const activeCount = users.filter((u) => (u.status || 'Active') === 'Active').length;
-  const resetReqCount = users.filter((u) => u.resetRequested).length;
+  const suspendedCount = users.filter((u) => u.status === 'Suspended').length;
 
   const updateSearch = (value) => {
     setSearchTerm(value);
     setPage(1);
   };
 
-  const handleToggleStatus = (email) => {
-    const user = users.find((item) => item.email === email);
-    if (!user) return;
-    const nextStatus = (user.status || 'Active') === 'Active' ? 'Suspended' : 'Active';
-    updateRegisteredUser(email, { status: nextStatus });
+  const handleToggleStatus = async (targetUser) => {
+    const nextStatus =
+      (targetUser.status || 'Active') === 'Active' ? 'Suspended' : 'Active';
+    try {
+      if (targetUser.id) {
+        await apiClient.patch(`/admin/users/${targetUser.id}/status`, {
+          status: nextStatus,
+        });
+      }
+    } catch {
+      // fallback localStorage
+    }
+    updateRegisteredUser(targetUser.email, { status: nextStatus });
     setUsers((prevUsers) =>
-      prevUsers.map((u) => (u.email === email ? { ...u, status: nextStatus } : u))
+      prevUsers.map((u) =>
+        u.email === targetUser.email ? { ...u, status: nextStatus } : u
+      )
     );
     toast.success(
       t(
@@ -77,51 +104,22 @@ export default function UserManagement() {
     setIsConfirmOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (userToDelete) {
-      deleteRegisteredUser(userToDelete.email);
-      setUsers((prevUsers) => prevUsers.filter((u) => u.email !== userToDelete.email));
-      setIsConfirmOpen(false);
-      setUserToDelete(null);
-      toast.success(t('ลบผู้ใช้งานสำเร็จ', 'User deleted successfully'));
+  const confirmDelete = async () => {
+    if (!userToDelete) return;
+    try {
+      if (userToDelete.id) {
+        await apiClient.delete(`/admin/users/${userToDelete.id}`);
+      }
+    } catch {
+      // fallback localStorage
     }
-  };
-
-  const handleResetPassword = (e) => {
-    e.preventDefault();
-    if (!userToReset) {
-      toast.error(t('ไม่พบข้อมูลผู้ใช้งาน', 'User not found'));
-      return;
-    }
-    if (newPassword.length < 4) {
-      toast.error(
-        t('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร', 'Password must be at least 4 characters')
-      );
-      return;
-    }
-
-    updateRegisteredUser(userToReset.email, {
-      password: newPassword,
-      resetRequested: false,
-    });
-
+    deleteRegisteredUser(userToDelete.email);
     setUsers((prevUsers) =>
-      prevUsers.map((u) =>
-        u.email === userToReset.email
-          ? { ...u, password: newPassword, resetRequested: false }
-          : u
-      )
+      prevUsers.filter((u) => u.email !== userToDelete.email)
     );
-
-    toast.success(
-      t(
-        `เปลี่ยนรหัสผ่านของ ${userToReset.name} สำเร็จ`,
-        `Password updated for ${userToReset.name}`
-      )
-    );
-    setIsResetModalOpen(false);
-    setUserToReset(null);
-    setNewPassword('');
+    setIsConfirmOpen(false);
+    setUserToDelete(null);
+    toast.success(t('ลบผู้ใช้งานสำเร็จ', 'User deleted successfully'));
   };
 
   const formatDate = (date) =>
@@ -132,9 +130,15 @@ export default function UserManagement() {
       <PageHeader
         title={t('จัดการผู้ใช้งาน', 'User Management')}
         description={tDesc(
-          'ดูบัญชีผู้ใช้ที่สมัครผ่านระบบ จัดการสถานะการใช้งาน และรีเซ็ตรหัสผ่านตามคำขอ',
-          'Manage registered accounts, toggle active/suspended status, and handle password reset requests.'
+          'ดูบัญชีผู้ใช้ที่สมัครผ่านระบบ และจัดการสถานะการใช้งาน (การรีเซ็ตรหัสผ่านดำเนินการผ่านลิงก์อีเมลอัตโนมัติ)',
+          'View registered accounts and manage active or suspended status (password resets are handled via automated email links).'
         )}
+        action={
+          <Button variant="secondary" onClick={fetchUsers} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            {t('รีเฟรชข้อมูล', 'Refresh')}
+          </Button>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -144,7 +148,7 @@ export default function UserManagement() {
           </div>
           <div>
             <p className="text-xs font-medium text-slate-500">
-              {t('ผู้ใช้ทั้งหมด', 'Total Users', { compact: true })}
+              {t('ผู้ใช้ทั้งหมด', 'Total Users')}
             </p>
             <p className="text-2xl font-bold text-slate-900">{users.length}</p>
           </div>
@@ -155,20 +159,20 @@ export default function UserManagement() {
           </div>
           <div>
             <p className="text-xs font-medium text-slate-500">
-              {t('เปิดใช้งานปกติ', 'Active Accounts', { compact: true })}
+              {t('เปิดใช้งานปกติ', 'Active Accounts')}
             </p>
             <p className="text-2xl font-bold text-emerald-700">{activeCount}</p>
           </div>
         </Card>
         <Card className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-            <KeyRound className="h-6 w-6" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+            <UserX className="h-6 w-6" />
           </div>
           <div>
             <p className="text-xs font-medium text-slate-500">
-              {t('คำขอกู้รหัสผ่าน', 'Password Reset Requests', { compact: true })}
+              {t('บัญชีที่ถูกระงับ', 'Suspended Accounts')}
             </p>
-            <p className="text-2xl font-bold text-amber-700">{resetReqCount}</p>
+            <p className="text-2xl font-bold text-rose-700">{suspendedCount}</p>
           </div>
         </Card>
       </div>
@@ -198,11 +202,11 @@ export default function UserManagement() {
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                <th className="px-6 py-3.5">{t('ชื่อ-นามสกุล', 'Full Name', { compact: true })}</th>
-                <th className="px-6 py-3.5">{t('อีเมล', 'Email', { compact: true })}</th>
-                <th className="px-6 py-3.5">{t('วันที่สมัคร', 'Joined', { compact: true })}</th>
-                <th className="px-6 py-3.5">{t('สถานะ', 'Status', { compact: true })}</th>
-                <th className="px-6 py-3.5 text-right">{t('จัดการ', 'Actions', { compact: true })}</th>
+                <th className="px-6 py-3.5">{t('ชื่อ-นามสกุล', 'Full Name')}</th>
+                <th className="px-6 py-3.5">{t('อีเมล', 'Email')}</th>
+                <th className="px-6 py-3.5">{t('วันที่สมัคร', 'Joined')}</th>
+                <th className="px-6 py-3.5">{t('สถานะ', 'Status')}</th>
+                <th className="px-6 py-3.5 text-right">{t('จัดการ', 'Actions')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -216,47 +220,29 @@ export default function UserManagement() {
                     <td className="px-6 py-4 text-slate-600">{user.email}</td>
                     <td className="px-6 py-4 text-slate-500">{formatDate(user.createdAt)}</td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Badge
-                          variant={(user.status || 'Active') === 'Active' ? 'success' : 'error'}
-                        >
-                          {user.status || 'Active'}
-                        </Badge>
-                        {user.resetRequested && (
-                          <Badge variant="warning">
-                            <ShieldAlert className="h-3 w-3" />
-                            {t('ขอกู้รหัสผ่าน', 'Reset Requested', { compact: true })}
-                          </Badge>
-                        )}
-                      </div>
+                      <Badge
+                        variant={(user.status || 'Active') === 'Active' ? 'success' : 'error'}
+                      >
+                        {user.status || 'Active'}
+                      </Badge>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="inline-flex items-center gap-1.5">
                         <Button
-                          variant="text"
-                          size="sm"
-                          onClick={() => {
-                            setUserToReset(user);
-                            setIsResetModalOpen(true);
-                          }}
-                        >
-                          {t('เปลี่ยนรหัส', 'Reset PW', { compact: true })}
-                        </Button>
-                        <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleToggleStatus(user.email)}
+                          onClick={() => handleToggleStatus(user)}
                         >
                           {(user.status || 'Active') === 'Active'
-                            ? t('ระงับ', 'Suspend', { compact: true })
-                            : t('เปิดใช้', 'Activate', { compact: true })}
+                            ? t('ระงับ', 'Suspend')
+                            : t('เปิดใช้', 'Activate')}
                         </Button>
                         <Button
                           variant="danger"
                           size="sm"
                           onClick={() => handleDeleteClick(user)}
                         >
-                          {t('ลบ', 'Delete', { compact: true })}
+                          {t('ลบ', 'Delete')}
                         </Button>
                       </div>
                     </td>
@@ -288,7 +274,7 @@ export default function UserManagement() {
                 disabled={currentPage === 1}
                 onClick={() => setPage(currentPage - 1)}
               >
-                {t('ก่อนหน้า', 'Previous', { compact: true })}
+                {t('ก่อนหน้า', 'Previous')}
               </Button>
               <Button
                 variant="secondary"
@@ -296,7 +282,7 @@ export default function UserManagement() {
                 disabled={currentPage === totalPages}
                 onClick={() => setPage(currentPage + 1)}
               >
-                {t('ถัดไป', 'Next', { compact: true })}
+                {t('ถัดไป', 'Next')}
               </Button>
             </div>
           </div>
@@ -312,49 +298,8 @@ export default function UserManagement() {
         )}
         onConfirm={confirmDelete}
         onCancel={() => setIsConfirmOpen(false)}
-        confirmText={t('ลบข้อมูล', 'Delete User', { compact: true })}
+        confirmText={t('ลบข้อมูล', 'Delete User')}
       />
-
-      <CriteriaModal
-        isOpen={isResetModalOpen}
-        onClose={() => {
-          setIsResetModalOpen(false);
-          setNewPassword('');
-        }}
-        title={t('กำหนดรหัสผ่านใหม่', 'Reset User Password')}
-        maxWidth="max-w-md"
-      >
-        <form onSubmit={handleResetPassword} className="space-y-4">
-          <p className="text-sm text-slate-600">
-            {t('กำหนดรหัสผ่านใหม่ให้กับ', 'Set a new password for')}{' '}
-            <strong className="text-slate-900">{userToReset?.name}</strong> ({userToReset?.email})
-          </p>
-          <Input
-            type="password"
-            label={t('รหัสผ่านใหม่', 'New Password')}
-            placeholder={t(
-              'กรอกรหัสผ่านใหม่ (อย่างน้อย 4 ตัวอักษร)',
-              'Enter new password (min 4 chars)'
-            )}
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            autoFocus
-          />
-          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setIsResetModalOpen(false);
-                setNewPassword('');
-              }}
-            >
-              {t('ยกเลิก', 'Cancel', { compact: true })}
-            </Button>
-            <Button type="submit">{t('บันทึกรหัสผ่าน', 'Save Password', { compact: true })}</Button>
-          </div>
-        </form>
-      </CriteriaModal>
     </div>
   );
 }

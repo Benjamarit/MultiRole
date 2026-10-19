@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Login from './pages/Login.jsx';
 import SignUp from './pages/SignUp.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import WorkSpace from './pages/WorkSpace.jsx';
 import CreateProject from './pages/CreateProject.jsx';
 import UserManagement from './pages/UserManagement.jsx';
@@ -43,6 +44,7 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* ต้องล็อกอินก่อนจึงจะเข้าถึงหน้าภายในระบบได้ทั้งหมด */}
         <Route element={<ProtectedRoute />}>

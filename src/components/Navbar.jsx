@@ -25,7 +25,7 @@ import {
 } from '../data/ProjectStore';
 
 function getProjectIdFromPath(pathname) {
-  return pathname.match(/^\/(?:project|judge\/project)\/(\d+)(?:\/|$)/)?.[1] || null;
+  return pathname.match(/^\/(?:project|judge\/project)\/([^/]+)(?:\/|$)/)?.[1] || null;
 }
 
 function getProjectNavigation(projectId, email, t) {

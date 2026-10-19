@@ -9,6 +9,16 @@ export function getRegisteredUsers() {
   }
 }
 
+export function setRegisteredUsersCache(users) {
+  try {
+    if (Array.isArray(users)) {
+      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users));
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export function updateRegisteredUser(email, changes) {
   const users = getRegisteredUsers();
   const updatedUsers = users.map((user) =>
