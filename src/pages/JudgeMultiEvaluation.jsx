@@ -3,9 +3,12 @@ import { useParams } from 'react-router-dom';
 import {
   ArrowDown,
   ArrowUp,
+  BookOpen,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ExternalLink,
   ListFilter,
   LockOpen,
@@ -37,6 +40,39 @@ function normalizedScore(criterion, value) {
   if (value === null || value === undefined) return 0;
   if (criterion.type === 'PASS_FAIL') return value === 1 ? 100 : 0;
   return (value / criterion.maxScore) * 100;
+}
+
+/**
+ * แยกข้อความคำอธิบายเกณฑ์ (Rubric) ออกเป็นระดับคะแนนย่อยอัตโนมัติ
+ * โดยรักษาเครื่องหมาย ★ ให้อยู่คู่กับระดับคะแนน (เช่น "★ 5 ดาว") ไม่แยกออกมาเป็นกล่องเดี่ยว
+ */
+function parseRubricLevels(description) {
+  if (!description || !String(description).trim()) return [];
+  const raw = String(description).trim();
+
+  const normalized = raw.replace(
+    /\s*((?:[★⭐•]\s*)?\d+(?:\s*-\s*\d+)?\s*(?:ดาว|คะแนน|แต้ม|stars?|points?|pts)\s*[:：]|[★⭐•]\s+)/gi,
+    '\n$1'
+  );
+
+  const segments = normalized
+    .split(/\r?\n+/)
+    .map((s) => s.trim())
+    .filter((s) => s && !/^[★⭐•\-]+$/.test(s));
+
+  return segments.map((seg) => {
+    const colonMatch = seg.match(/^([^:：]{1,35})[:：]\s*(.+)$/);
+    if (colonMatch) {
+      return {
+        label: colonMatch[1].trim(),
+        detail: colonMatch[2].trim(),
+      };
+    }
+    return {
+      label: null,
+      detail: seg,
+    };
+  });
 }
 
 export default function JudgeMultiEvaluation() {
@@ -90,6 +126,10 @@ export default function JudgeMultiEvaluation() {
   );
   // โหมดโฟกัสทีละเกณฑ์ ('all' = แสดงทุกเกณฑ์ที่ติ๊กเลือก, หรือเก็บ criterion.id เมื่อกดโฟกัสเกณฑ์เดียว)
   const [focusedCriterionId, setFocusedCriterionId] = useState('all');
+
+  // 3. State สำหรับพับ/กาง Rubric (แบบ B: พับ/กางทั้งหมด และพับ/กางรายข้อ)
+  const [showAllRubrics, setShowAllRubrics] = useState(true);
+  const [collapsedRubricIds, setCollapsedRubricIds] = useState({});
 
   // คะแนนรายเกณฑ์: { [teamId]: { [criterionId]: score } }
   const [matrixScores, setMatrixScores] = useState(() => {
@@ -151,6 +191,61 @@ export default function JudgeMultiEvaluation() {
     isBeforeEvaluationDeadline(getProjectById(projectId)) &&
     (statuses[teamId] !== 'SUBMITTED' || unlockedTeams[teamId]);
 
+  // คำนวณจำนวนข้อที่แต่ละทีมกรอกคะแนนแล้ว และสถานะสีของแต่ละทีม (SUBMITTED | IN_PROGRESS | NOT_STARTED)
+  const teamProgressByTeamId = useMemo(() => {
+    const map = {};
+    eligibleTeams.forEach((team) => {
+      const teamScores = matrixScores[team.id] || {};
+      const scoredCount = criteria.filter(
+        (c) => teamScores[c.id] !== undefined && teamScores[c.id] !== null
+      ).length;
+      const rawStatus = statuses[team.id] || 'NOT_STARTED';
+      let visualStatus = 'NOT_STARTED';
+      if (rawStatus === 'SUBMITTED') {
+        visualStatus = 'SUBMITTED';
+      } else if (rawStatus === 'DRAFT' || scoredCount > 0) {
+        visualStatus = 'IN_PROGRESS';
+      }
+      map[team.id] = {
+        scoredCount,
+        totalCriteria: criteria.length,
+        visualStatus,
+      };
+    });
+    return map;
+  }, [criteria, eligibleTeams, matrixScores, statuses]);
+
+  // นับจำนวนทีมในแต่ละกลุ่มสถานะเพื่อแสดงบนป้ายกำกับสี (Legend)
+  const statusCounts = useMemo(() => {
+    const counts = { SUBMITTED: 0, IN_PROGRESS: 0, NOT_STARTED: 0 };
+    eligibleTeams.forEach((team) => {
+      const st = teamProgressByTeamId[team.id]?.visualStatus || 'NOT_STARTED';
+      counts[st] = (counts[st] || 0) + 1;
+    });
+    return counts;
+  }, [eligibleTeams, teamProgressByTeamId]);
+
+  // กรองเลือกเฉพาะทีมในกลุ่มสถานะเมื่อคลิกที่ป้ายกำกับสี (Legend)
+  const filterTeamsByVisualStatus = (targetStatus) => {
+    const matchingIds = eligibleTeams
+      .filter(
+        (team) =>
+          (teamProgressByTeamId[team.id]?.visualStatus || 'NOT_STARTED') ===
+          targetStatus
+      )
+      .map((team) => team.id);
+    if (matchingIds.length === 0) {
+      toast(
+        t(
+          'ไม่มีทีมที่อยู่ในสถานะนี้',
+          'No teams currently in this status'
+        )
+      );
+      return;
+    }
+    setSelectedTeamIds(matchingIds);
+  };
+
   const teamTotals = useMemo(() => {
     const totals = {};
     const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0) || 1;
@@ -200,6 +295,14 @@ export default function JudgeMultiEvaluation() {
     return orderedCriteria.filter((c) => selectedCriteriaIds.includes(c.id));
   }, [orderedCriteria, focusedCriterionId, selectedCriteriaIds]);
 
+  const focusedCriterionObj = useMemo(() => {
+    if (focusedCriterionId === 'all') return null;
+    return (
+      orderedCriteria.find((c) => String(c.id) === String(focusedCriterionId)) ||
+      null
+    );
+  }, [orderedCriteria, focusedCriterionId]);
+
   // เลื่อนลำดับเกณฑ์ขึ้น/ลง
   const moveCriterionOrder = (criterionId, direction) => {
     setCriteriaOrderIds((prev) => {
@@ -216,7 +319,7 @@ export default function JudgeMultiEvaluation() {
     });
   };
 
-  // จัดเรียงเกณฑ์อัตโนมัติ (ตามเกณฑ์ที่ยังประเมินไม่ครบก่อน / ตามน้ำหนักมากสุดก่อน / ลำดับตั้งต้น)
+  // จัดเรียงเกณฑ์อัตโนมัติ
   const sortCriteriaOrder = (mode) => {
     if (mode === 'default') {
       setCriteriaOrderIds(criteria.map((c) => c.id));
@@ -257,6 +360,26 @@ export default function JudgeMultiEvaluation() {
     const nextIndex =
       (currentIndex + offset + orderedCriteria.length) % orderedCriteria.length;
     setFocusedCriterionId(orderedCriteria[nextIndex].id);
+  };
+
+  const toggleCriterionRubric = (criterionId) => {
+    setCollapsedRubricIds((prev) => ({
+      ...prev,
+      [criterionId]: !(prev[criterionId] ?? !showAllRubrics),
+    }));
+  };
+
+  const isCriterionRubricVisible = (criterionId) => {
+    if (collapsedRubricIds[criterionId] !== undefined) {
+      return !collapsedRubricIds[criterionId];
+    }
+    return showAllRubrics;
+  };
+
+  const handleToggleAllRubrics = () => {
+    const nextShow = !showAllRubrics;
+    setShowAllRubrics(nextShow);
+    setCollapsedRubricIds({});
   };
 
   const isTeamAnswered = (teamId) =>
@@ -430,9 +553,9 @@ export default function JudgeMultiEvaluation() {
         </Card>
       ) : (
         <>
-          {/* แผงควบคุม: 1) เลือกทีม และ 2) เลือก/จัดลำดับเกณฑ์ประเมินที่ต้องการประเมินก่อน */}
+          {/* แผงควบคุม: 1) เลือกทีมพร้อมสีสถานะ และ 2) เลือก/จัดลำดับเกณฑ์ประเมิน */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {/* การ์ดที่ 1: เลือกทีมที่จะแสดงเปรียบเทียบ */}
+            {/* การ์ดที่ 1: เลือกทีมที่จะแสดงเปรียบเทียบ (ไฮไลต์สีพื้นหลัง + สีตัวอักษรตามกลุ่มสถานะการประเมิน) */}
             <Card className="border-slate-200 bg-slate-50/70">
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -464,9 +587,72 @@ export default function JudgeMultiEvaluation() {
                     </Button>
                   </div>
                 </div>
+
+                {/* แถบกำกับความหมายของสีพื้นหลังและตัวอักษรตอนไฮไลต์ (Color Legend) */}
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-xs">
+                  <span className="font-semibold text-slate-500">
+                    {t('สีเมื่อเลือกทีม (คลิกเพื่อกรอง):', 'Highlight Color Legend:')}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => filterTeamsByVisualStatus('SUBMITTED')}
+                    title={t(
+                      'คลิกเพื่อแสดงเฉพาะทีมที่ส่งคะแนนแล้ว',
+                      'Click to show only submitted teams'
+                    )}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-0.5 font-semibold text-emerald-800 transition-transform hover:scale-105"
+                  >
+                    {t('ส่งคะแนนแล้ว', 'Submitted')} ({statusCounts.SUBMITTED})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => filterTeamsByVisualStatus('IN_PROGRESS')}
+                    title={t(
+                      'คลิกเพื่อแสดงเฉพาะทีมที่กำลังประเมินหรือบันทึกร่าง',
+                      'Click to show only in-progress or draft teams'
+                    )}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 font-semibold text-amber-900 transition-transform hover:scale-105"
+                  >
+                    {t('กำลังประเมิน / ร่าง', 'In Progress / Draft')} (
+                    {statusCounts.IN_PROGRESS})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => filterTeamsByVisualStatus('NOT_STARTED')}
+                    title={t(
+                      'คลิกเพื่อแสดงเฉพาะทีมที่ยังไม่เริ่มประเมิน',
+                      'Click to show only not-started teams'
+                    )}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-blue-300 bg-blue-100 px-2.5 py-0.5 font-semibold text-blue-800 transition-transform hover:scale-105"
+                  >
+                    {t('ยังไม่เริ่มประเมิน', 'Not Started')} (
+                    {statusCounts.NOT_STARTED})
+                  </button>
+                </div>
+
+                {/* รายการปุ่มชื่อทีม: เปลี่ยนสีพื้นหลัง + สีตัวอักษรตามกลุ่มสถานะเมื่อกดเลือกไฮไลต์ */}
                 <div className="flex flex-wrap gap-2">
                   {eligibleTeams.map((team) => {
                     const isSelected = selectedTeamIds.includes(team.id);
+                    const teamProg = teamProgressByTeamId[team.id] || {
+                      scoredCount: 0,
+                      totalCriteria: criteria.length,
+                      visualStatus: 'NOT_STARTED',
+                    };
+
+                    let statusHighlightClasses =
+                      'border-blue-300 bg-blue-100 text-blue-800 shadow-2xs ring-1 ring-blue-200';
+                    if (teamProg.visualStatus === 'SUBMITTED') {
+                      statusHighlightClasses =
+                        'border-emerald-300 bg-emerald-100 text-emerald-800 shadow-2xs ring-1 ring-emerald-200';
+                    } else if (teamProg.visualStatus === 'IN_PROGRESS') {
+                      statusHighlightClasses =
+                        'border-amber-300 bg-amber-100 text-amber-900 shadow-2xs ring-1 ring-amber-200';
+                    }
+
                     return (
                       <button
                         key={team.id}
@@ -478,13 +664,17 @@ export default function JudgeMultiEvaluation() {
                               : [...prev, team.id]
                           );
                         }}
-                        className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all ${
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all ${
                           isSelected
-                            ? 'border-blue-300 bg-blue-100 text-blue-800 shadow-2xs'
-                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                            ? statusHighlightClasses
+                            : 'border-dashed border-slate-300 bg-white text-slate-500 opacity-75 hover:border-slate-400 hover:bg-slate-100 hover:opacity-100'
                         }`}
                       >
-                        {isSelected ? '✓ ' : '+ '} {team.name}
+                        <span>{isSelected ? '✓' : '+'}</span>
+                        <span>{team.name}</span>
+                        <span className="ml-0.5 rounded-full bg-black/5 px-1.5 py-0.2 text-[10px] font-bold">
+                          {teamProg.scoredCount}/{teamProg.totalCriteria}
+                        </span>
                       </button>
                     );
                   })}
@@ -551,7 +741,7 @@ export default function JudgeMultiEvaluation() {
                 </p>
 
                 {/* รายการเกณฑ์พร้อมปุ่มโฟกัส, ปุ่มติ๊กเลือก และปุ่มเลื่อนลำดับ ↑ ↓ */}
-                <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                <div className="flex max-h-48 flex-col gap-1.5 overflow-y-auto pr-1">
                   {orderedCriteria.map((criterion, idx) => {
                     const prog = criterionProgressMap[criterion.id] || {
                       scoredCount: 0,
@@ -675,13 +865,7 @@ export default function JudgeMultiEvaluation() {
                   <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-600 px-3.5 py-2 text-xs text-white shadow-xs">
                     <span className="font-semibold">
                       {t('โหมดประเมินทีละเกณฑ์:', 'Single-Criterion Focus:')}{' '}
-                      <strong>
-                        {
-                          orderedCriteria.find(
-                            (c) => String(c.id) === String(focusedCriterionId)
-                          )?.name
-                        }
-                      </strong>
+                      <strong>{focusedCriterionObj?.name}</strong>
                     </span>
                     <div className="flex items-center gap-1.5">
                       <button
@@ -714,6 +898,64 @@ export default function JudgeMultiEvaluation() {
             </Card>
           </div>
 
+          {/* แบบ C: แผงแสดงการ์ด Rubric แนวนอนเต็มความกว้างด้านบนตาราง เมื่ออยู่ในโหมดประเมินทีละเกณฑ์ (Focus Mode) */}
+          {focusedCriterionObj && focusedCriterionObj.description && (
+            <Card className="border-blue-200 bg-gradient-to-r from-blue-50/70 via-white to-indigo-50/40">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white">
+                      <BookOpen className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">
+                        {t('รายละเอียดเกณฑ์การให้คะแนน (Rubric):', 'Scoring Rubric Guide:')}{' '}
+                        <span className="text-blue-700">{focusedCriterionObj.name}</span>
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        {focusedCriterionObj.type} · Weight {focusedCriterionObj.weight}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {(() => {
+                  const rubricItems = parseRubricLevels(
+                    focusedCriterionObj.description
+                  );
+                  if (rubricItems.length > 1) {
+                    return (
+                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+                        {rubricItems.map((item, rIdx) => (
+                          <div
+                            key={rIdx}
+                            className="flex flex-col rounded-xl border border-slate-200/90 bg-white p-3 shadow-2xs"
+                          >
+                            {item.label && (
+                              <div className="mb-2 flex items-center">
+                                <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                                  {item.label}
+                                </span>
+                              </div>
+                            )}
+                            <p className="text-xs leading-relaxed text-slate-700">
+                              {item.detail}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="rounded-xl border border-blue-200/80 bg-white p-3 text-xs leading-relaxed text-slate-700">
+                      {focusedCriterionObj.description}
+                    </div>
+                  );
+                })()}
+              </div>
+            </Card>
+          )}
+
           <Card noPadding className="overflow-hidden">
             {displayedTeams.length === 0 ? (
               <div className="p-10 text-center text-sm text-slate-500">
@@ -734,92 +976,124 @@ export default function JudgeMultiEvaluation() {
                 <table className="w-full border-collapse text-left">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-100/90">
-                      <th className="sticky left-0 z-10 w-64 bg-slate-100 px-6 py-4 text-sm font-bold text-slate-800 shadow-[1px_0_0_0_#e2e8f0]">
-                        {t('เกณฑ์ประเมิน / ชื่อทีม', 'Criteria / Teams')}
+                      {/* แบบ A + B: ขยายความกว้างขั้นต่ำของคอลัมน์เกณฑ์ด้านซ้าย และเพิ่มปุ่มพับ/กาง Rubric ทั้งหมด */}
+                      <th className="sticky left-0 z-10 min-w-[300px] max-w-[380px] bg-slate-100 px-6 py-4 text-sm font-bold text-slate-800 shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
+                        <div className="flex flex-col gap-2">
+                          <span>
+                            {t('เกณฑ์ประเมิน / ชื่อทีม', 'Criteria / Teams')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleToggleAllRubrics}
+                            className="inline-flex w-fit items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-2xs transition-colors hover:bg-slate-50"
+                          >
+                            <BookOpen className="h-3.5 w-3.5 text-blue-600" />
+                            {showAllRubrics
+                              ? t('ซ่อน Rubric ทั้งหมด', 'Collapse All Rubrics')
+                              : t('แสดง Rubric ทั้งหมด', 'Expand All Rubrics')}
+                          </button>
+                        </div>
                       </th>
-                      {displayedTeams.map((team) => (
-                        <th
-                          key={team.id}
-                          className="min-w-[300px] border-l border-slate-200 px-6 py-4 text-center font-bold text-slate-900"
-                        >
-                          <div className="text-base">{team.name}</div>
-                          {team.link && (
-                            <div className="mt-1">
-                              <a
-                                href={team.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 break-all text-xs font-semibold text-blue-600 hover:underline"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                {t('ดูผลงาน', 'Submission')}
-                              </a>
-                            </div>
-                          )}
-                          <div className="mt-1.5">
-                            {statuses[team.id] === 'SUBMITTED' ? (
-                              <Badge variant="success">
-                                {t('ส่งแล้ว', 'Submitted')}
-                              </Badge>
-                            ) : statuses[team.id] === 'DRAFT' ? (
-                              <Badge variant="warning">
-                                {t('ร่าง', 'Draft')}
-                              </Badge>
-                            ) : (
-                              <Badge variant="default">
-                                {t('ยังไม่เริ่ม', 'Not Started')}
-                              </Badge>
+                      {displayedTeams.map((team) => {
+                        const teamProg = teamProgressByTeamId[team.id] || {
+                          visualStatus: 'NOT_STARTED',
+                        };
+                        let headerToneClass = 'bg-blue-50/40';
+                        if (teamProg.visualStatus === 'SUBMITTED') {
+                          headerToneClass = 'bg-emerald-50/60';
+                        } else if (teamProg.visualStatus === 'IN_PROGRESS') {
+                          headerToneClass = 'bg-amber-50/60';
+                        }
+
+                        return (
+                          <th
+                            key={team.id}
+                            className={`min-w-[300px] border-l border-slate-200 px-6 py-4 text-center font-bold text-slate-900 ${headerToneClass}`}
+                          >
+                            <div className="text-base">{team.name}</div>
+                            {team.link && (
+                              <div className="mt-1">
+                                <a
+                                  href={team.link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 break-all text-xs font-semibold text-blue-600 hover:underline"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  {t('ดูผลงาน', 'Submission')}
+                                </a>
+                              </div>
                             )}
-                          </div>
-                          <div className="mt-3 flex flex-wrap justify-center gap-2">
-                            {statuses[team.id] === 'SUBMITTED' && !unlockedTeams[team.id] ? (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => handleUnlockTeam(team.id)}
-                                disabled={!canEdit}
-                              >
-                                <LockOpen className="h-3.5 w-3.5" />
-                                {t('ปลดล็อกแก้ไข', 'Unlock to Edit')}
-                              </Button>
-                            ) : (
-                              <>
+                            <div className="mt-1.5">
+                              {teamProg.visualStatus === 'SUBMITTED' ? (
+                                <Badge variant="success">
+                                  {t('ส่งคะแนนแล้ว', 'Submitted')}
+                                </Badge>
+                              ) : teamProg.visualStatus === 'IN_PROGRESS' ? (
+                                <Badge variant="warning">
+                                  {t('กำลังประเมิน / ร่าง', 'In Progress / Draft')}
+                                </Badge>
+                              ) : (
+                                <Badge variant="info">
+                                  {t('ยังไม่เริ่มประเมิน', 'Not Started')}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="mt-3 flex flex-wrap justify-center gap-2">
+                              {statuses[team.id] === 'SUBMITTED' &&
+                              !unlockedTeams[team.id] ? (
                                 <Button
                                   variant="secondary"
                                   size="sm"
-                                  onClick={() => handleSaveDraft(team.id)}
-                                  disabled={!isTeamEditable(team.id)}
+                                  onClick={() => handleUnlockTeam(team.id)}
+                                  disabled={!canEdit}
                                 >
-                                  <Save className="h-3.5 w-3.5" />
-                                  {t('บันทึกร่าง', 'Save Draft')}
+                                  <LockOpen className="h-3.5 w-3.5" />
+                                  {t('ปลดล็อกแก้ไข', 'Unlock to Edit')}
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => {
-                                    if (!isTeamEditable(team.id) || !isTeamAnswered(team.id))
-                                      return;
-                                    setConfirmTeamId(team.id);
-                                    setIsConfirmOpen(true);
-                                  }}
-                                  disabled={
-                                    !isTeamEditable(team.id) || !isTeamAnswered(team.id)
-                                  }
-                                >
-                                  <Send className="h-3.5 w-3.5" />
-                                  {statuses[team.id] === 'SUBMITTED'
-                                    ? t('ส่งอีกครั้ง', 'Resubmit')
-                                    : t('ส่งคะแนน', 'Submit')}
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </th>
-                      ))}
+                              ) : (
+                                <>
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => handleSaveDraft(team.id)}
+                                    disabled={!isTeamEditable(team.id)}
+                                  >
+                                    <Save className="h-3.5 w-3.5" />
+                                    {t('บันทึกร่าง', 'Save Draft')}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      if (
+                                        !isTeamEditable(team.id) ||
+                                        !isTeamAnswered(team.id)
+                                      )
+                                        return;
+                                      setConfirmTeamId(team.id);
+                                      setIsConfirmOpen(true);
+                                    }}
+                                    disabled={
+                                      !isTeamEditable(team.id) ||
+                                      !isTeamAnswered(team.id)
+                                    }
+                                  >
+                                    <Send className="h-3.5 w-3.5" />
+                                    {statuses[team.id] === 'SUBMITTED'
+                                      ? t('ส่งอีกครั้ง', 'Resubmit')
+                                      : t('ส่งคะแนน', 'Submit')}
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b border-slate-200 bg-blue-50/60">
-                      <td className="sticky left-0 z-10 bg-blue-50 px-6 py-3.5 text-sm font-bold text-blue-900 shadow-[1px_0_0_0_#e2e8f0]">
+                      <td className="sticky left-0 z-10 min-w-[300px] max-w-[380px] bg-blue-50 px-6 py-3.5 text-sm font-bold text-blue-900 shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
                         {t(
                           'คะแนนรวมถ่วงน้ำหนัก (เต็ม 100)',
                           'Weighted Total Score (/100)'
@@ -837,35 +1111,90 @@ export default function JudgeMultiEvaluation() {
 
                     {displayedCriteria.map((criterion) => {
                       const prog = criterionProgressMap[criterion.id];
+                      const rubricItems = parseRubricLevels(criterion.description);
+                      const isRubricOpen = isCriterionRubricVisible(criterion.id);
+
                       return (
                         <tr
                           key={criterion.id}
                           className="border-b border-slate-200 hover:bg-slate-50/40"
                         >
-                          <td className="sticky left-0 z-10 bg-white px-6 py-4 align-top shadow-[1px_0_0_0_#e2e8f0]">
+                          {/* คอลัมน์ซ้ายสุด: ชื่อเกณฑ์ + ปุ่มพับ/กาง Rubric + ตารางระดับคะแนนเรียงเป็นแถวสะอาดตา */}
+                          <td className="sticky left-0 z-10 min-w-[300px] max-w-[380px] bg-white px-6 py-4 align-top shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
                             <div className="flex items-start justify-between gap-2">
-                              <p className="font-bold text-slate-900">{criterion.name}</p>
+                              <p className="font-bold text-slate-900">
+                                {criterion.name}
+                              </p>
                               {prog?.isComplete && (
                                 <Badge variant="success">
                                   {t('ครบทุกทีม', 'Done')}
                                 </Badge>
                               )}
                             </div>
-                            <p className="mt-1 text-xs font-medium text-slate-500">
-                              {criterion.type} · Weight: {criterion.weight}%
-                            </p>
-                            {criterion.description && (
-                              <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-slate-500">
-                                {criterion.description}
+
+                            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-slate-500">
+                                {criterion.type} · Weight: {criterion.weight}%
                               </p>
+
+                              {criterion.description && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleCriterionRubric(criterion.id)
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-50"
+                                >
+                                  {isRubricOpen ? (
+                                    <>
+                                      {t('ซ่อนเกณฑ์ละเอียด', 'Hide Rubric')}
+                                      <ChevronUp className="h-3 w-3" />
+                                    </>
+                                  ) : (
+                                    <>
+                                      {t('ดูเกณฑ์ละเอียด (Rubric)', 'Show Rubric')}
+                                      <ChevronDown className="h-3 w-3" />
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* แบบ A + B: แสดงแต่ละระดับคะแนนในกรอบเดียวคั่นเส้นบางๆ ไม่แยกกล่อง ★ เดี่ยว */}
+                            {criterion.description && isRubricOpen && (
+                              <div className="mt-2.5 overflow-hidden rounded-xl border border-slate-200/90 bg-slate-50/70">
+                                {rubricItems.length > 1 ? (
+                                  <div className="divide-y divide-slate-200/70">
+                                    {rubricItems.map((item, rIdx) => (
+                                      <div
+                                        key={rIdx}
+                                        className="flex items-start gap-2.5 bg-white/80 px-3 py-2 text-xs leading-relaxed text-slate-700"
+                                      >
+                                        {item.label && (
+                                          <span className="mt-0.5 shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+                                            {item.label}
+                                          </span>
+                                        )}
+                                        <span className="flex-1">{item.detail}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="whitespace-pre-wrap p-3 text-xs leading-relaxed text-slate-700">
+                                    {criterion.description}
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </td>
+
                           {displayedTeams.map((team) => {
                             const cellKey = `${team.id}:${criterion.id}`;
                             const cellComment =
                               matrixCriteriaComments[team.id]?.[criterion.id] || '';
                             const isCommentOpen =
-                              Boolean(openCommentCells[cellKey]) || Boolean(cellComment);
+                              Boolean(openCommentCells[cellKey]) ||
+                              Boolean(cellComment);
 
                             return (
                               <td
@@ -875,7 +1204,9 @@ export default function JudgeMultiEvaluation() {
                                 <div className="space-y-2.5">
                                   <CriterionScoreInput
                                     criterion={criterion}
-                                    value={matrixScores[team.id]?.[criterion.id] ?? null}
+                                    value={
+                                      matrixScores[team.id]?.[criterion.id] ?? null
+                                    }
                                     onChange={(val) =>
                                       handleScoreChange(team.id, criterion.id, val)
                                     }
@@ -893,7 +1224,10 @@ export default function JudgeMultiEvaluation() {
                                       <MessageSquarePlus className="h-3.5 w-3.5" />
                                       {isCommentOpen
                                         ? t('ความคิดเห็นเกณฑ์นี้', 'Criterion Note')
-                                        : t('+ เพิ่มความเห็นเกณฑ์นี้', '+ Add Criterion Note')}
+                                        : t(
+                                            '+ เพิ่มความเห็นเกณฑ์นี้',
+                                            '+ Add Criterion Note'
+                                          )}
                                     </button>
 
                                     {isCommentOpen && (
@@ -925,12 +1259,15 @@ export default function JudgeMultiEvaluation() {
                     })}
 
                     <tr className="border-b border-slate-200">
-                      <td className="sticky left-0 z-10 bg-white px-6 py-4 align-top shadow-[1px_0_0_0_#e2e8f0]">
+                      <td className="sticky left-0 z-10 min-w-[300px] max-w-[380px] bg-white px-6 py-4 align-top shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
                         <p className="font-bold text-slate-900">
                           {t('ข้อเสนอแนะภาพรวม', 'Overall Feedback')}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {t('ความเห็นรวมถึงทีมผู้เข้าแข่งขัน', 'General comments for the team')}
+                          {t(
+                            'ความเห็นรวมถึงทีมผู้เข้าแข่งขัน',
+                            'General comments for the team'
+                          )}
                         </p>
                       </td>
                       {displayedTeams.map((team) => (
@@ -946,7 +1283,9 @@ export default function JudgeMultiEvaluation() {
                               'Overall feedback...'
                             )}
                             value={comments[team.id]}
-                            onChange={(e) => handleCommentChange(team.id, e.target.value)}
+                            onChange={(e) =>
+                              handleCommentChange(team.id, e.target.value)
+                            }
                             disabled={!isTeamEditable(team.id)}
                           />
                         </td>
