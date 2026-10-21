@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import {
   BookOpen,
   CheckCircle2,
-  FileText,
   Plus,
   Trash2,
 } from 'lucide-react';
@@ -221,7 +220,7 @@ export default function CriteriaManagement() {
     );
   };
 
-  // กดปุ่ม "+ เพิ่มเกณฑ์ประเมิน" -> เพิ่มแถว Inline ในตารางทันที พร้อมเปิดโหมด Rubric Builder ให้กรอกง่ายๆ
+  // กดปุ่ม "+ เพิ่มเกณฑ์ประเมิน" -> เพิ่มแถว Inline ในตารางทันที พร้อมตาราง Rubric แยกระดับคะแนน
   const handleAddClick = () => {
     if (totalWeight >= 100) {
       toast.error(
@@ -242,7 +241,6 @@ export default function CriteriaManagement() {
       id: NEW_ROW_ID,
       name: '',
       description: '',
-      descriptionMode: 'rubric', // 'rubric' | 'simple'
       rubricRows: buildDefaultRubricRows('STAR', 5),
       type: 'STAR',
       weight: Math.min(10, Math.max(1, remainingWeight)),
@@ -254,14 +252,11 @@ export default function CriteriaManagement() {
     const resolvedMaxScore = isFixedScoreType(item.type)
       ? getFixedMaxScore(item.type)
       : item.maxScore;
-    const parsed = parseRubricLevels(item.description || '');
-    const hasStructuredRubric = parsed.some((p) => p.label);
 
     setEditingRowId(item.id);
     setEditRowData({
       ...item,
       description: item.description || '',
-      descriptionMode: hasStructuredRubric || !item.description ? 'rubric' : 'simple',
       rubricRows: hydrateRubricRowsFromDescription(
         item.type,
         resolvedMaxScore,
@@ -334,10 +329,7 @@ export default function CriteriaManagement() {
 
     const isAddingNew = editingRowId === NEW_ROW_ID;
     const name = (editRowData.name || '').trim();
-    const description =
-      editRowData.descriptionMode === 'rubric'
-        ? serializeRubricRows(editRowData.rubricRows)
-        : (editRowData.description || '').trim();
+    const description = serializeRubricRows(editRowData.rubricRows);
     const weightValue = Number(editRowData.weight);
     const originalItem = isAddingNew
       ? null
@@ -598,165 +590,107 @@ export default function CriteriaManagement() {
                             />
                           </div>
 
-                          {/* 2. แถบสลับโหมดการใส่คำอธิบาย: กำหนด Rubric แยกระดับ vs คำอธิบายทั่วไป */}
+                          {/* 2. ตารางกำหนด Rubric แยกระดับคะแนน */}
                           <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs">
-                            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                            <div className="mb-2 flex items-center gap-1.5">
+                              <BookOpen className="h-3.5 w-3.5 text-blue-600" />
                               <span className="text-xs font-bold text-slate-700">
                                 {t(
-                                  'รูปแบบคำอธิบายเกณฑ์สำหรับกรรมการ:',
-                                  'Description / Rubric Format:'
+                                  'ตาราง Rubric แยกระดับคะแนน',
+                                  'Level-by-Level Scoring Rubric'
                                 )}
                               </span>
-                              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setEditRowData((prev) => ({
-                                      ...prev,
-                                      descriptionMode: 'rubric',
-                                    }))
-                                  }
-                                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-semibold transition-colors ${
-                                    editRowData.descriptionMode === 'rubric'
-                                      ? 'bg-blue-600 text-white shadow-2xs'
-                                      : 'text-slate-600 hover:text-slate-900'
-                                  }`}
-                                >
-                                  <BookOpen className="h-3.5 w-3.5" />
-                                  {t(
-                                    'ตาราง Rubric แยกระดับคะแนน',
-                                    'Level-by-Level Rubric'
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setEditRowData((prev) => ({
-                                      ...prev,
-                                      descriptionMode: 'simple',
-                                    }))
-                                  }
-                                  className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 font-semibold transition-colors ${
-                                    editRowData.descriptionMode === 'simple'
-                                      ? 'bg-blue-600 text-white shadow-2xs'
-                                      : 'text-slate-600 hover:text-slate-900'
-                                  }`}
-                                >
-                                  <FileText className="h-3.5 w-3.5" />
-                                  {t('คำอธิบายสั้นทั่วไป', 'Simple Note')}
-                                </button>
-                              </div>
                             </div>
 
-                            {editRowData.descriptionMode === 'rubric' ? (
-                              <div className="space-y-2">
-                                <p className="text-[11px] text-slate-500">
-                                  {t(
-                                    'กรอกคำอธิบายในแต่ละระดับคะแนน (ระดับไหนไม่ต้องการระบุสามารถเว้นว่างไว้ได้ ระบบจะข้ามให้อัตโนมัติ)',
-                                    'Fill in descriptions for each score level (leave blank any level you wish to omit).'
-                                  )}
-                                </p>
+                            <div className="space-y-2">
+                              <p className="text-[11px] text-slate-500">
+                                {t(
+                                  'กรอกคำอธิบายในแต่ละระดับคะแนน (ระดับไหนไม่ต้องการระบุสามารถเว้นว่างไว้ได้ ระบบจะข้ามให้อัตโนมัติ)',
+                                  'Fill in descriptions for each score level (leave blank any level you wish to omit).'
+                                )}
+                              </p>
 
-                                <div className="space-y-1.5">
-                                  {(editRowData.rubricRows || []).map(
-                                    (row, rIdx) => (
-                                      <div
-                                        key={rIdx}
-                                        className="flex items-center gap-2"
-                                      >
-                                        {row.fixedLabel ? (
-                                          <span className="inline-flex w-28 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800">
-                                            {row.label}
-                                          </span>
-                                        ) : (
-                                          <input
-                                            type="text"
-                                            value={row.label}
-                                            onChange={(e) =>
-                                              handleRubricRowChange(
-                                                rIdx,
-                                                'label',
-                                                e.target.value
-                                              )
-                                            }
-                                            placeholder={t(
-                                              'เช่น 80-100 คะแนน',
-                                              'e.g. 80-100 pts'
-                                            )}
-                                            className="w-32 shrink-0 rounded-lg border border-amber-300 bg-amber-50/70 px-2.5 py-1.5 text-xs font-bold text-amber-900 placeholder-amber-400 focus:border-blue-500 focus:bg-white focus:outline-none"
-                                          />
-                                        )}
-
+                              <div className="space-y-1.5">
+                                {(editRowData.rubricRows || []).map(
+                                  (row, rIdx) => (
+                                    <div
+                                      key={rIdx}
+                                      className="flex items-center gap-2"
+                                    >
+                                      {row.fixedLabel ? (
+                                        <span className="inline-flex w-28 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800">
+                                          {row.label}
+                                        </span>
+                                      ) : (
                                         <input
                                           type="text"
-                                          value={row.detail}
+                                          value={row.label}
                                           onChange={(e) =>
                                             handleRubricRowChange(
                                               rIdx,
-                                              'detail',
+                                              'label',
                                               e.target.value
                                             )
                                           }
                                           placeholder={t(
-                                            `อธิบายเกณฑ์ของระดับ "${row.label || 'นี้'}"...`,
-                                            `Describe criteria for "${row.label || 'this level'}"...`
+                                            'เช่น 80-100 คะแนน',
+                                            'e.g. 80-100 pts'
                                           )}
-                                          className="flex-1 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+                                          className="w-32 shrink-0 rounded-lg border border-amber-300 bg-amber-50/70 px-2.5 py-1.5 text-xs font-bold text-amber-900 placeholder-amber-400 focus:border-blue-500 focus:bg-white focus:outline-none"
                                         />
+                                      )}
 
-                                        {!row.fixedLabel &&
-                                          (editRowData.rubricRows || []).length >
-                                            1 && (
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                handleRemoveRubricRow(rIdx)
-                                              }
-                                              title={t(
-                                                'ลบช่วงคะแนนนี้',
-                                                'Remove level'
-                                              )}
-                                              className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                                            >
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                            </button>
-                                          )}
-                                      </div>
-                                    )
-                                  )}
-                                </div>
+                                      <input
+                                        type="text"
+                                        value={row.detail}
+                                        onChange={(e) =>
+                                          handleRubricRowChange(
+                                            rIdx,
+                                            'detail',
+                                            e.target.value
+                                          )
+                                        }
+                                        placeholder={t(
+                                          `อธิบายเกณฑ์ของระดับ "${row.label || 'นี้'}"...`,
+                                          `Describe criteria for "${row.label || 'this level'}"...`
+                                        )}
+                                        className="flex-1 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:bg-white focus:outline-none"
+                                      />
 
-                                {(editRowData.type === 'NUMERIC' ||
-                                  editRowData.type === 'PERCENTAGE') && (
-                                  <button
-                                    type="button"
-                                    onClick={handleAddRubricRow}
-                                    className="mt-1 inline-flex items-center gap-1 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100/70"
-                                  >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    {t('+ เพิ่มช่วงคะแนน', '+ Add Score Range')}
-                                  </button>
+                                      {!row.fixedLabel &&
+                                        (editRowData.rubricRows || []).length >
+                                          1 && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleRemoveRubricRow(rIdx)
+                                            }
+                                            title={t(
+                                              'ลบช่วงคะแนนนี้',
+                                              'Remove level'
+                                            )}
+                                            className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        )}
+                                    </div>
+                                  )
                                 )}
                               </div>
-                            ) : (
-                              <div>
-                                <textarea
-                                  rows={2}
-                                  placeholder={t(
-                                    'พิมพ์คำอธิบายเกณฑ์โดยย่อสำหรับกรรมการ (ไม่บังคับ)...',
-                                    'Enter a brief description for judges (optional)...'
-                                  )}
-                                  className="w-full rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs text-slate-700 focus:border-blue-500 focus:bg-white focus:outline-none"
-                                  value={editRowData.description || ''}
-                                  onChange={(e) =>
-                                    handleInlineChange(
-                                      'description',
-                                      e.target.value
-                                    )
-                                  }
-                                />
-                              </div>
-                            )}
+
+                              {(editRowData.type === 'NUMERIC' ||
+                                editRowData.type === 'PERCENTAGE') && (
+                                <button
+                                  type="button"
+                                  onClick={handleAddRubricRow}
+                                  className="mt-1 inline-flex items-center gap-1 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100/70"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  {t('+ เพิ่มช่วงคะแนน', '+ Add Score Range')}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ) : (
