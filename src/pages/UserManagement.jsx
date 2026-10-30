@@ -11,6 +11,7 @@ import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { MonitoringStat, MonitoringTabs, MonitoringSearch, MonitoringEmpty, MonitoringPagination, MonitoringSkeleton } from '../components/MonitoringUI';
 import { useLanguage } from '../context/LanguageContext';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import {
   deleteRegisteredUser,
   getRegisteredUsers,
@@ -23,21 +24,18 @@ const PAGE_SIZE = 10;
 export default function UserManagement() {
   const { t, lang } = useLanguage();
   const [users, setUsers] = useState(() => getRegisteredUsers());
-  const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [monitoring, setMonitoring] = useState(null);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [creationTarget, setCreationTarget] = useState(null);
   const [changingAccess, setChangingAccess] = useState(false);
-  const [loadError, setLoadError] = useState('');
   const [activeTab, setActiveTab] = useState('users');
   const [ownerId, setOwnerId] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedId, setSelectedId] = useState(null);
   const [statusTarget, setStatusTarget] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState(null);
   const selectionHeading = useRef(null);
   useEffect(() => { selectionHeading.current?.focus(); }, [selectedId]);
 
@@ -45,29 +43,16 @@ export default function UserManagement() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
 
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    try {
+  const { loading: isLoading, error: refreshError, updatedAt, refresh: fetchUsers } = useVisiblePolling(async isActive => {
       const [res, monitor] = await Promise.all([apiClient.get('/admin/users'), apiClient.get('/admin/monitoring')]);
+      if (!isActive()) return;
       setMonitoring(monitor.data);
-      setLoadError('');
-      setUpdatedAt(new Date());
       if (Array.isArray(res.data)) {
         setUsers(res.data.map(normalizeUser));
         setRegisteredUsersCache(res.data.map(normalizeUser));
       }
-    } catch (error) {
-      setLoadError(error.message);
-      toast.error(error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchUsers();
-  }, []);
+  }, 30000, 'system-admin', !actionBusy && !changingAccess);
+  const loadError = refreshError?.message;
 
   const filteredUsers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -188,7 +173,7 @@ export default function UserManagement() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:p-6 lg:p-8">
-      <PageHeader title={t('ดูแลและติดตามระบบ', 'System Administration')} subtitle="SYSTEM ADMIN" badge={<Badge variant="info"><ShieldCheck className="h-3 w-3" />{t('ผู้ดูแลระบบ', 'Administrator')}</Badge>} action={<div className="flex flex-wrap items-center gap-3"><span className="text-xs text-slate-400" role="status">{updatedAt && t(`อัปเดต ${updatedAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`, `Updated ${updatedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`)}</span><Button variant="secondary" onClick={fetchUsers} disabled={isLoading}><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />{t('รีเฟรชข้อมูล', 'Refresh')}</Button></div>} />
+      <PageHeader title={t('ดูแลและติดตามระบบ', 'System Administration')} subtitle="SYSTEM ADMIN" badge={<Badge variant="info"><ShieldCheck className="h-3 w-3" />{t('ผู้ดูแลระบบ', 'Administrator')}</Badge>} action={<div className="flex flex-wrap items-center gap-3"><span className="text-xs text-slate-400">{t('อัปเดตทุก 30 วินาที', 'Updates every 30 seconds')}</span><span className="text-xs text-slate-400" role="status">{updatedAt && t(`อัปเดต ${updatedAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`, `Updated ${updatedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`)}</span><Button variant="secondary" onClick={fetchUsers} disabled={isLoading || actionBusy || changingAccess}><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />{t('รีเฟรชข้อมูล', 'Refresh')}</Button></div>} />
       {loadError && <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{t('อัปเดตข้อมูลไม่สำเร็จ', 'Could not refresh data')}</p><p className="mt-1">{loadError} {updatedAt && t('ข้อมูลที่แสดงเป็นข้อมูลก่อนหน้า', 'Showing previously loaded data.')}</p></div></div>}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <MonitoringStat icon={Users} label={t('ผู้ใช้ทั้งหมด', 'Total users')} value={isLoading && !updatedAt ? '—' : users.length} hint={t(`${activeCount} ปกติ · ${suspendedCount} ระงับ`, `${activeCount} active · ${suspendedCount} suspended`)} onClick={() => { resetFilters(); setActiveTab('users'); }} />
