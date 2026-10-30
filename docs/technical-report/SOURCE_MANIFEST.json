@@ -1,0 +1,808 @@
+{
+  "snapshot_date": "2026-10-30",
+  "git_head": "7c2a27dda7d660a58f1fdc0220fe58f2c15aad1a",
+  "frontend_files": 77,
+  "frontend_named_functions": 307,
+  "backend_main_files": 86,
+  "entity_tables": 18,
+  "rest_endpoints": 54,
+  "scope": "Current local source, not a claim of deployed production parity. Generated artifacts, dependencies, ignored private config and credentials excluded.",
+  "files": [
+    {
+      "path": ".env.example",
+      "sha256": "ea48294966d4467061302a2a43aad5038b3b02c0f717188fec408cc06de8e881"
+    },
+    {
+      "path": "backend/.dockerignore",
+      "sha256": "a2d815b3f7c4aad2d4f6053c11b722e02010a00cae56afa975c22d36b78a3255"
+    },
+    {
+      "path": "backend/.env.example",
+      "sha256": "687de98de4bcc1773703aee9b8a249296d4127f0ead5afd1e9d834ebcb6b76ef"
+    },
+    {
+      "path": "backend/.gitattributes",
+      "sha256": "c9b35b57d4d7611797b0564bcb3d024aeb6f49039d722439d8d423f66aa5b547"
+    },
+    {
+      "path": "backend/.gitignore",
+      "sha256": "6239b648b8aabb5e6a0a962bcdf3296c21d51914bb2c298e4516c521ac7660a4"
+    },
+    {
+      "path": "backend/.mvn/wrapper/maven-wrapper.properties",
+      "sha256": "488e1b3f2e641779d4636abf9390845f901e64607261bc3c0b0bfe4fe96e6706"
+    },
+    {
+      "path": "backend/Dockerfile",
+      "sha256": "cf43f18f2b1301af827f2ebe0abf7595078328bd9dac506e82097cb430495a57"
+    },
+    {
+      "path": "backend/Start-Backend.ps1",
+      "sha256": "9f626cb351e819b38f8027ccb6a1548b1cad20111717de39b549352b23da3348"
+    },
+    {
+      "path": "backend/mvnw",
+      "sha256": "cae96cef89ebea3531221f4ae17c23cf8edf67d00eae8306d4186ae1bbed4d02"
+    },
+    {
+      "path": "backend/mvnw.cmd",
+      "sha256": "4a361e1374a3e5ad6d03e18e9adc0cf181ac5058ac6203b76f0ba3b456b56481"
+    },
+    {
+      "path": "backend/pom.xml",
+      "sha256": "b6a2122462148b1131e7414c24b20c6fbc6c68168adedf4ac182dfb77052db5f"
+    },
+    {
+      "path": "backend/scripts/repair-users-timestamp.sql",
+      "sha256": "701bdd460cd2218141c6ef4538ec78362c10c6c0a7272d7cee457e9eecd277e1"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/MultiRoleApplication.java",
+      "sha256": "3e980e4eb0527e43dadfc80f2e684d7520f1526498dea8708c9422ce421ca8eb"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/config/ApplicationTimeZone.java",
+      "sha256": "39a7427fee33bccad78519e1ee116efd48d4a31876686fe04b709d3a822a9665"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/config/CriteriaLockMigration.java",
+      "sha256": "d0cdd47b1e64c13d3cf413ddb3bb0aad52d682c747a89afb087a176a0d344506"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/AuthController.java",
+      "sha256": "e011dabe4ff52bfcb9a74c36cf84e982f98967fae06e71d451b8966f2d87e3fe"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/CompetitionController.java",
+      "sha256": "3fcc29a50fc89c02878329eb570a27679ea78772c9e08b6c77cbe9164d4778f7"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/CompetitionUserController.java",
+      "sha256": "27dd6017e37c09837d239d446152e5fe55001d7a27e31adc2679f2d67e850f99"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/CriteriaController.java",
+      "sha256": "87d6624197b30b94ea53a4503d2bb24c4b25ca958f01f19e3c5b8f41222e9f34"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/EvaluationController.java",
+      "sha256": "1da7e5ff2a01c6cefc18cc6c55a344ccfbfefcda2e70a375771ba0d88e3df384"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/JudgeAssignmentController.java",
+      "sha256": "e08342ffd7c3ed1297e60fd56681af3a4392f6dad0a4f280d88bf1541e8404bc"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/NotificationController.java",
+      "sha256": "95b67b3ae2c717c26b3765c966ed6e8804a44b87e97e4f75ff3fa1fb2f37535c"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/SystemMonitoringController.java",
+      "sha256": "17e841cf9c5d4752f2060502e6ab6ef6667a360e059d41569ff499dd1997c774"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/TeamController.java",
+      "sha256": "347d3f565ad5a1346f8ef5019d4798331208c4a01a21d109f9c9a45b3376129f"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/TeamGroupController.java",
+      "sha256": "01678917958d64d323794f9eee90737e5886a708840f3e0924ba8fea19e9c863"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/controller/UserController.java",
+      "sha256": "4f329b93745c16117ed3e8d03e8a8feecbe2522559a129df7ea08d4e6ebbf66e"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/dto/ApiDtos.java",
+      "sha256": "37f47389fd1043c5260352cacc70a4edb9a6d432c73e138637fcc478eb64450d"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/dto/AuthResponse.java",
+      "sha256": "efdf97e51db13dc1af96f6f4973689824d1cf3be15a76e451dfed87e560e2f65"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/dto/BatchEvaluationDtos.java",
+      "sha256": "76632137fcd8a9d5e6b527db320687afa7562f78e8062971f3c9d964855e31fa"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/dto/EvaluationRequest.java",
+      "sha256": "2b4d54028a39ae4c8fe3d37f6997c60779dea40bf22b205b6be1b360f0d4d36f"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/dto/LoginRequest.java",
+      "sha256": "1451ca2bc539cbb7adfcc7b4b16ce9c106dcbb1e091ef01f10300ccf12981646"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/dto/RegisterRequest.java",
+      "sha256": "885135377e7bd2d31f47ec0204d53a25f53bf8218f9978cb931cbc5dfdd2ff89"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/dto/UserProfileDto.java",
+      "sha256": "35944879647a9412fba0387530853e3fdadab67ba509412a960a0513ecb0cc2e"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/exception/GlobalExceptionHandler.java",
+      "sha256": "921cfab4c33d27dfd77e74ed8e281172afafd027f4f4cbebb5216b75ad897917"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/Competition.java",
+      "sha256": "c6c19f77912e3e64acaa96f282be5345a60c6123102c643170031019aeb9c337"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/CompetitionUser.java",
+      "sha256": "a56f40ce7b81b579aaafbef8863130edf58a41df0ee003b64d78732aff2b062e"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/CompetitionUserId.java",
+      "sha256": "7902d5a71c38ac2d5fe5ba807db4b2b906132ab304c12f8c3be7fa421252637d"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/Criteria.java",
+      "sha256": "5f2fba147e01145b41745349b7c9c0bc1468c29ce8d12a33ba88eb034d0e1d30"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/DeadlineHistory.java",
+      "sha256": "f54daacf2da144d4b22bc8fbcc5b8808d73e5522fceba2f409d642f9e82d32f7"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/EmailOutbox.java",
+      "sha256": "0979df6eb1daeb4c5ffa9c0eb1e4b5f55d4b00b96ca0767d9dda6692e2e54e61"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/EmailVerificationToken.java",
+      "sha256": "86d88393dba942c32029993f6b58e23391735cb1dcaea5ddda63bb313432312e"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/Evaluation.java",
+      "sha256": "4c36f3c08ccae78d2e21a45de140ee98d81b34e160fcf5fc6500bb15b293aeab"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/EvaluationHistory.java",
+      "sha256": "c911bd1184987afc6fefba9efb4726ee91f89f182a838a93cf0e8120e9022785"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/EvaluationReminder.java",
+      "sha256": "35fbe45c185aaa1e2f1c4dfbdc0197fbc691f416c5dc7b326b51c8a2af56c678"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/JudgeAssignment.java",
+      "sha256": "3292991268c33d0b763b90a86573860bb21f9c2cdb6e2ef42acb0f8f8e3cd5ab"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/Notification.java",
+      "sha256": "68db767236898980a345bcf7d1087fe74596c3e44d9bd93b7629bb06ebaf52bb"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/PasswordResetToken.java",
+      "sha256": "e45fd1ff0d52bc3a0a007d18e162c837c5c2ba357920e9a3fe415c0f60b2a420"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/ProjectActivity.java",
+      "sha256": "5d67a21e62e6aae4509fb49e24bdf82a4376e85bb3cc58fa2bfe30d91e001545"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/Score.java",
+      "sha256": "4b488682ccdac587e34fc55ae183b951d5b3558cf04b0322a06d5f7ff2181dae"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/Team.java",
+      "sha256": "b3f6c4146a47ce07e361fe8ad1426570b56b3842520061c3c1e76b408eb9a7ef"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/TeamGroup.java",
+      "sha256": "c263d3471811048918b761b09f0bfb52bbb521278a14f930aab047fc2a641987"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/TeamGroupMember.java",
+      "sha256": "9eb52875f702e35b4d77bd47801b7b724b6dd32ed7bbb8e67873005772ade0b3"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/TeamGroupMemberId.java",
+      "sha256": "b5f801fa2baf6527a8e58c9921f8118261956bbb0878f0da3a341d1bb43e7d2f"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/model/User.java",
+      "sha256": "1fa8b27bb5424c90e5770431e30b50bdcd89777e3d8721356546a8ba171f57b3"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/CompetitionRepository.java",
+      "sha256": "ead48c2314c656b1685ba7676a1599730a85bdef9847954a86da709be956c24e"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/CompetitionUserRepository.java",
+      "sha256": "b31051bb1a13e2987c34d1c3af187b28478881e71f6b5f600af6117d16004fc8"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/CriteriaRepository.java",
+      "sha256": "125b740add955869cc5e71b3a482fa83cb2f7a2c32493d4c681da45d222768c4"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/DeadlineHistoryRepository.java",
+      "sha256": "61ed5019063b2c542fbaed115c83ced554ea1dc02b78ec3032060c16159b9a2f"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/EmailOutboxRepository.java",
+      "sha256": "0a79f7f0b30a8f75aef2f3612e748eff893c0eb4e06f76b366fccbdc02f73c35"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/EmailVerificationTokenRepository.java",
+      "sha256": "959d8afd9142115c52615705b999de674cdcba288e62320bcdc1c7f3377de4bc"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/EvaluationHistoryRepository.java",
+      "sha256": "c1e3954675727544c867bb870c0ce3014b47913ac4c99879b2234946e76b2253"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/EvaluationReminderRepository.java",
+      "sha256": "4be92604d69ab911c9e06913e256499b329ac922888168b86eee214aa5bd91c2"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/EvaluationRepository.java",
+      "sha256": "95c445250168b7d30c12752977ae1075b4a1bebd8924199a615b79725720af3c"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/JudgeAssignmentRepository.java",
+      "sha256": "202b3724a0a23fb4fc774eb4308c41326acdee6dee705289b15f98f0952ef138"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/NotificationRepository.java",
+      "sha256": "eb8fdc8ecc8e891e6b81cf4c92ee153a9f97ae045c6516361b2c9062f87fc117"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/PasswordResetTokenRepository.java",
+      "sha256": "6dceb585f30862954581ebcae54eaa32f7e2f918f2a9620324e1d022c8080b6b"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/ProjectActivityRepository.java",
+      "sha256": "f2be10f23b6d8436f16ec7f65ee46083893fa67ad2c9bc7041c75c9bf8171b47"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/ScoreRepository.java",
+      "sha256": "2e5607d5f56f5997b993c3d3d7516c29088590e354b0e5e58501784a801cefeb"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/TeamGroupMemberRepository.java",
+      "sha256": "0ee5e477a105815b43699185602a302aaf676a8472b28a6b14da5049f9407082"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/TeamGroupRepository.java",
+      "sha256": "0a7a4eb2678332d358f0c6235d9051bddd28ee8c3983e9f70d8527bcf590894c"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/TeamRepository.java",
+      "sha256": "35e17696ff2f5a1fb71673ff6a6a58306a66f08ca7a14fa226960320ec7bed59"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/repository/UserRepository.java",
+      "sha256": "679d5ca858cfe4fc5b6c9a0f3ddcb42be3591ba91ff28d0e172173960fd4ca72"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/security/JwtAuthenticationFilter.java",
+      "sha256": "3d15d4dc7e3982f66ae0029a4cb167e2f12999e4392c585ca14b03510eccd545"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/security/JwtUtil.java",
+      "sha256": "31b0465b2c3c2e0b8b3a613f0ef5df0dcea4f7316c97f920a6582600d0701bdb"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/security/SecurityConfig.java",
+      "sha256": "86f9058b48ee169896a05e2c5d9674dc9869dc22c73bc531b7b380276ad8e976"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/AccessService.java",
+      "sha256": "8be51ae5661ed7b433e7f6f8c1568b6519e7a81485473a11f674d53d04d6e31c"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/AuthService.java",
+      "sha256": "4016ed48757dce9e625352d0aa86550cf4cc0225da7ad5291d04fda19a791887"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/BatchEvaluationService.java",
+      "sha256": "db6753bb02d4fe40745b009b153ec79a30df5c5874baca8b0f6464d452745739"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/BrevoMailGateway.java",
+      "sha256": "9d5c2ac3716bdd089e448d0ba37dd4805856190c8977bca968bd73aaadb511e9"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/CriteriaPolicy.java",
+      "sha256": "eefe69937533615bc91c8c673cd74dcf9ace0c5320f5f776a10632ee68e1f6a0"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/EmailDeliveryService.java",
+      "sha256": "3b8f1316537a8e9f3b1044ef8bb806bbe3acd01d6fb0bdfac2b8dffc947cd5a1"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/EmailJobs.java",
+      "sha256": "ad5fede5f02f0c6ba3974c299ff511f48d7b232b10a252c2bd3f975c067265b1"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/EmailQueue.java",
+      "sha256": "2c624a0b7386f53d518011afdc4613177f3be926a2d1570dde20ae55fe2b3941"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/EmailTokens.java",
+      "sha256": "7cd7a4ad23c89864a101053cb3616cd4f75aa7712a36cedc4cdb1a9095156b85"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/EmailVerificationService.java",
+      "sha256": "a202388fd481a219953981de56e7714bd401b15ac38463c36b7dcbabf015575d"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/EvaluationHistoryService.java",
+      "sha256": "45a477666f273d2d58699ee5a2817b2d8e523367c18d5d30fc49fa601f346281"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/EvaluationReminderService.java",
+      "sha256": "e4c2d81a73d086e47878bf10959266542f37451095548a78029148ed628650de"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/EvaluationService.java",
+      "sha256": "257ecd19f39cf344eca5b1f8396f3a886a21da6946bbe32651e5492b00ffb6aa"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/LeaderboardService.java",
+      "sha256": "04408dbba2b9434c4830c53efd892369ac760c9650a49ea7f9e8ee45bb20893b"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/MailPayloadCipher.java",
+      "sha256": "530e7b24a26c1bf8bdf8361df6e852a7afc99c9b28cf8622093fcc607de58d01"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/PasswordResetService.java",
+      "sha256": "baa7166e65b7eeb31279f1ea33fc709092d8e5e9f2260891da981cae2bb8e29a"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/ProjectActivityService.java",
+      "sha256": "a92b3706f59882e2af86d7c1defb54ec5fac500b0eaf8e70028a1cfb53c6d167"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/ProjectCreationPolicy.java",
+      "sha256": "1002062fb007f5f64ace83a83b6bbd15eab074dafcc7f9159653b11c45106b21"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/ProjectReadinessService.java",
+      "sha256": "70b8e182bf7394f458f33de224f71efc52d1cf33cbad7f80d9fbfbe21f1c5699"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/ProjectStructurePolicy.java",
+      "sha256": "8453ff69b1d882a172c842cfb9ff9c850d6565e626929d27eef3089764ff4935"
+    },
+    {
+      "path": "backend/src/main/java/org/cesystem/multirole/service/Validation.java",
+      "sha256": "390fa22ea2871a8908db0bfe2387319b96580ad25e99fb9790a1e2bb28a25195"
+    },
+    {
+      "path": "backend/src/main/resources/application-prod.properties",
+      "sha256": "2052d6a2b06149d537b3e4447f68a55530a06e21f7a8537f722c3cbb07161c55"
+    },
+    {
+      "path": "backend/src/main/resources/application.properties",
+      "sha256": "93eb1ced09b8ae80f25b786e3509795cc1ba68eb21ad4c1aa3579eb21f425c96"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/ApiIntegrationTests.java",
+      "sha256": "11540ea07bb749f199d4530be841b538f4e2cce841b26615b9123570e14f3d5c"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/BatchEvaluationTests.java",
+      "sha256": "e62cccd54741d242094d3b7b624a70750b424290f6f81e889c86a9a5d7cb35c7"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/BulkGroupTests.java",
+      "sha256": "d56ada4820ffac289e05d9e4f9e09e5638efdb6f4f26d363d24766eab4b7beb9"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/CriteriaPolicyTests.java",
+      "sha256": "af28ead6bf9ba8b711d97ecfea8bbbb9f9b65a17629ef6514ccb3df93798833a"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/EmailWorkflowTests.java",
+      "sha256": "11760eda6666d4bb2264a45feb331816965d76c20e6e88290d9e96aefb8822f4"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/MultiRoleApplicationTests.java",
+      "sha256": "f975469411d0325233902be91f4cde766c314ef2e9e110bd8bfe5a76f1bc9a19"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/ProjectMonitoringTests.java",
+      "sha256": "385bdef33c1b2398520d42c5db08e7198d001459d5b1173331bc7c1ba6c93212"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/ProjectReadinessTests.java",
+      "sha256": "2786b699ce338069e2ec29ab12a0a828e4bf54defcac60135bfd5c1bebde41eb"
+    },
+    {
+      "path": "backend/src/test/java/org/cesystem/multirole/ProjectStructureTests.java",
+      "sha256": "048ea89d50b9967ee1cd8e9506778464f6175edee1aeda005180226ebc7f9cc9"
+    },
+    {
+      "path": "backend/src/test/resources/application-test.properties",
+      "sha256": "5ecaf16e6411c976fe6ba4f859de55999c3420c382368247bfce85f55af63439"
+    },
+    {
+      "path": "eslint.config.js",
+      "sha256": "0197d9a843aaae267303c4d1ab1a43afad1afacc7646cdf6cf94a5af6b815fb8"
+    },
+    {
+      "path": "index.html",
+      "sha256": "6d5095589f680b0783ddd1d833bdc7ea1b206cd6684bd8b4acc9f582e8e987a2"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "f46f868a06094cdac2cda23a6ff73c890d87ee919cec13ed628561c456fe4961"
+    },
+    {
+      "path": "package.json",
+      "sha256": "f18f43e96a3d3e5f4c5f166f6cd1284bf39fa7ea3c11b4693f440e11345e2283"
+    },
+    {
+      "path": "src/App.css",
+      "sha256": "6e25a776d3e8102da5bacb3cb99f4a5fc662a2e01e6143140671a556d28c3d5c"
+    },
+    {
+      "path": "src/App.jsx",
+      "sha256": "69b8db9d52126c5e68babaad5487a0bfcb1f99774af6b7b9f8a50222dc1ce229"
+    },
+    {
+      "path": "src/api/client.js",
+      "sha256": "97a8d78151f1d90da0421b618e290ad22986f2020507145b5047bb90728109c1"
+    },
+    {
+      "path": "src/api/workspace.js",
+      "sha256": "b160ef9ba6590e1f52b9da00386a0d7cb58feebfa0e499600ef372546fd85957"
+    },
+    {
+      "path": "src/assets/hero.png",
+      "sha256": "881ffbcaafc212e49addad08846a5b82761355fa20624253af3477ba33262c5c"
+    },
+    {
+      "path": "src/assets/react.svg",
+      "sha256": "35ef61ed53b323ae94a16a8ec659b3d0af3880698791133f23b084085ab1c2e5"
+    },
+    {
+      "path": "src/assets/vite.svg",
+      "sha256": "5be21acd42eb7b896e517f4e0f0f11eb5c5d9e54fbbcebe9453f033008fcca6f"
+    },
+    {
+      "path": "src/components/AuthPasswordField.jsx",
+      "sha256": "9ba235e6a956693cf3dfb8c0fa09a5af0bea4a9caa4c7319325e9ff3fad614d9"
+    },
+    {
+      "path": "src/components/BackButton.jsx",
+      "sha256": "b159d355dd0f4b2aecb0067cd593254f38a265d4f5bb2cdb1ae08928a64f09d8"
+    },
+    {
+      "path": "src/components/Badge.jsx",
+      "sha256": "a3f295e4193036a3ec75b4608b525b9987be9d7e7e13dbe3fc83a7f2ff039875"
+    },
+    {
+      "path": "src/components/BatchSubmissionDialog.jsx",
+      "sha256": "05474a91841e9fc8a66ff7f67679eb9c4f7de2e70bfda6d890ed007a2ba88be3"
+    },
+    {
+      "path": "src/components/Button.jsx",
+      "sha256": "76391a9997cdee36f3a6442526c71a512f7e37bc2376654c596b17405a35af5b"
+    },
+    {
+      "path": "src/components/Card.jsx",
+      "sha256": "06525cf91045846da3d6f8809ea6d004d123fd5bcf8bc5370f38be7a848c5630"
+    },
+    {
+      "path": "src/components/ConfirmDialog.jsx",
+      "sha256": "9e86a4bbff81d773ceb048b00ff215473b512aa44b968943123309188246ccfb"
+    },
+    {
+      "path": "src/components/CriteriaModal.jsx",
+      "sha256": "70d3184cf1ecb96b4834d205b08faf2ed8bb5a3a6c1f9214110e2b33433cfc46"
+    },
+    {
+      "path": "src/components/CriteriaScoreInput.jsx",
+      "sha256": "1120ffb9a300a58248eb3cd25e70a70347c92dee224251ecce084c293be17b0d"
+    },
+    {
+      "path": "src/components/DeadlineHistory.jsx",
+      "sha256": "d5a9fa43b4f35cb459e9d8a4160bd72897c6f2ad93d11a0bc91f678a3ab3c807"
+    },
+    {
+      "path": "src/components/EvaluationDeadlineNotice.jsx",
+      "sha256": "da69bef6bae1d1aa7fd434e399ab8efa6f9a4fb13ebd7d47d131a5aa7892bee5"
+    },
+    {
+      "path": "src/components/EvaluationHistory.jsx",
+      "sha256": "5c8807c1507eecab3286c40a9db83c2ca60c2ed2cafd4d96e15d02a690a7f44c"
+    },
+    {
+      "path": "src/components/Input.jsx",
+      "sha256": "9ea4dff623f4709ed0bbc188101d0a13b0f3d9810729ece017daa5c3b0765379"
+    },
+    {
+      "path": "src/components/JudgeAssignModal.jsx",
+      "sha256": "f66d6a56bda959f205d484ac53e7352c7f748c157315c897ed714b3d9235549e"
+    },
+    {
+      "path": "src/components/LanguageSwitcher.jsx",
+      "sha256": "b95c259144f00946f55e9463ba0e4e0af0e39a9518e3a98975b044505ec67555"
+    },
+    {
+      "path": "src/components/MonitoringUI.jsx",
+      "sha256": "5d64335ef80270a5256fd6a4de147e3ae3306b24332616e5f54c8263abb2acc5"
+    },
+    {
+      "path": "src/components/Navbar.jsx",
+      "sha256": "e3eab0d066cae4e674d2d7d1d5e2796890ce5fb6ad8b036857793ad60f714185"
+    },
+    {
+      "path": "src/components/PageHeader.jsx",
+      "sha256": "9269a104284f19ecc63d8ae26f4fd8d99b113a5f40b9aaa231c2843419535a30"
+    },
+    {
+      "path": "src/components/ProjectStructureLock.jsx",
+      "sha256": "06e2edf7c28d41e20f6d19770719b7dd5ebb8c7befab54192bd3bd4778c3cc37"
+    },
+    {
+      "path": "src/components/ProtectedRoute.jsx",
+      "sha256": "ea74d2fae41f332e5192f6b029290b503323390b9449908f43609cb8bf59c86f"
+    },
+    {
+      "path": "src/components/Select.jsx",
+      "sha256": "98bc3f233b9c0c23e65a008104d575136eb95e6baf1a189dd5754abb1b15ba90"
+    },
+    {
+      "path": "src/components/SystemMonitoringOverview.jsx",
+      "sha256": "ec38d039224df63fd8d526bd7c236ef43001cb7cd0f49a417e4db443546f7f5a"
+    },
+    {
+      "path": "src/components/TeamFormModal.jsx",
+      "sha256": "f1b25c35eee9312de017368d0c065d4d9ee16e6384671d01308b8021a33b7164"
+    },
+    {
+      "path": "src/components/TeamGroupManagement.jsx",
+      "sha256": "3f0768b1e9d99e04177f361af547a37f9b34e7b5fcb3d0cf3fc83d3bc65a2482"
+    },
+    {
+      "path": "src/components/TeamImportModal.jsx",
+      "sha256": "ea99a0976632cbe363bf4be0b8942ddf2982cda4d28cfa7ce819d043d580d6b5"
+    },
+    {
+      "path": "src/components/UsageHelp.jsx",
+      "sha256": "3769e47ed98d5181d0142f5a0483a634bef277aba123fc642358a359e23123dd"
+    },
+    {
+      "path": "src/context/AuthContext.jsx",
+      "sha256": "2a8cb5e2b0ac566175591cafa3583ac21c545cf21012a2cb0bfbab2c68f818a0"
+    },
+    {
+      "path": "src/context/LanguageContext.jsx",
+      "sha256": "2db6669835ae8c4defd880eebedc7e26574e07d5cf7b8ac8206d72da8b07b411"
+    },
+    {
+      "path": "src/context/authStore.js",
+      "sha256": "b510dca340f9866e56fa62213e3d43aba4cc5b1013508e160c37283c3bd29e55"
+    },
+    {
+      "path": "src/data/BatchSubmission.js",
+      "sha256": "fe7f7c01265a890291069bf0bfee2b55daed5da2296a338ad6d6ed182c279d5f"
+    },
+    {
+      "path": "src/data/CriteriaStore.js",
+      "sha256": "f962b652c062542d038549966361f5f0b3921114c5b018c06244074fe3ee0b35"
+    },
+    {
+      "path": "src/data/EvaluationStore.js",
+      "sha256": "6e275d094ba313f59ad0561a885c3632bcebe82aaa5156759a0d1750905b1ff2"
+    },
+    {
+      "path": "src/data/GroupStore.js",
+      "sha256": "6aa9233a84d1e2fd6d7677d424bf7ff04deaa194c9bae0671ec5f573f7b43b87"
+    },
+    {
+      "path": "src/data/JudgeIdentity.js",
+      "sha256": "4fe6e943591914cd01166eba6e0c9e56031127b0782e3b0023efcc6194171e23"
+    },
+    {
+      "path": "src/data/JudgeTeamAssignmentStore.js",
+      "sha256": "e34a9005d3fc2128aee74d6ee370e11ac40c4a712c3c0dcd152601df487c0fc9"
+    },
+    {
+      "path": "src/data/NotificationStore.js",
+      "sha256": "05c467111737f9083c61eeb8003f7fdb3301a23531c744526eab302e375e4bee"
+    },
+    {
+      "path": "src/data/ProjectLock.js",
+      "sha256": "b319d5a99888801c331a944024dbac5332029567171dfcb5031e55951e7c4a63"
+    },
+    {
+      "path": "src/data/ProjectReadiness.js",
+      "sha256": "4d537bdbb1c73fcdf7731131fc50eb241cd914050b0d69b0d8952cccb77c99aa"
+    },
+    {
+      "path": "src/data/ProjectStore.js",
+      "sha256": "1270134aa3e82ab995590aa7450040f80482b8aff06327b74426caa0ce2a7729"
+    },
+    {
+      "path": "src/data/Rubric.js",
+      "sha256": "6e7af1b3fc0558608476b529ee1b38fbf108582604b26c5bab5b0bb921763b1e"
+    },
+    {
+      "path": "src/data/Scoring.js",
+      "sha256": "f5ac045117ed1e186a1fb8b1ae4d9653833876b8221fc4142058ab3737a3e005"
+    },
+    {
+      "path": "src/data/TeamImport.js",
+      "sha256": "51f94dd023176ad5de90f24dcc4863d2d4d186a23ae258296636d4d11b0c5f59"
+    },
+    {
+      "path": "src/data/TeamOrdering.js",
+      "sha256": "67ef022a6b3b8ae323c721d6cfade7656034911cf769036a69783b6167fb21c3"
+    },
+    {
+      "path": "src/data/TeamStore.js",
+      "sha256": "19afa0560884500b19eac17498c4543522b495e996781c4c7056bcf6ee5e4f62"
+    },
+    {
+      "path": "src/hooks/useDeadline.js",
+      "sha256": "bc8eb55c06c65bb98e740779b72d79bced1220b850999f9bd1584ca038087ef3"
+    },
+    {
+      "path": "src/hooks/useVisiblePolling.js",
+      "sha256": "2f14b946bf34e7f410e81fb00da5e6615d03971914d7a610c6f0604de9c4bd3f"
+    },
+    {
+      "path": "src/index.css",
+      "sha256": "abf66d0a9c77adf553c38fef8767d3bca95db66c2ad40a459f1d08d127fc4c1d"
+    },
+    {
+      "path": "src/layouts/AppLayout.jsx",
+      "sha256": "5bba1dfc80b303750d67b8a8483f2ce7bae7bca96a1a751c54fb9567208b7833"
+    },
+    {
+      "path": "src/layouts/AuthLayout.jsx",
+      "sha256": "11adc8f9928dad586c459945f1821c6f8eb1ea9d7768362f663f34b9cf3ec555"
+    },
+    {
+      "path": "src/main.jsx",
+      "sha256": "e9f071ef2d04f25fdcd74259c4a03fc5c6972374f5dcbaebf516c4db0bdffecb"
+    },
+    {
+      "path": "src/pages/CreateProject.jsx",
+      "sha256": "17773a1ae5cc7e64d017fe18f3045f2dd8077a337a51cce7e4045ffed7e780f6"
+    },
+    {
+      "path": "src/pages/CriteriaManagement.jsx",
+      "sha256": "63f27886df721eb247b8e465162c4faea50af399d1bb8a00422f7fb2cf4c62c5"
+    },
+    {
+      "path": "src/pages/EvaluationMonitoring.jsx",
+      "sha256": "1ef3e771d4034d6e01aaff02d6c0d4f46160922246d81074e1e31656fd7ec061"
+    },
+    {
+      "path": "src/pages/JudgeEvaluation.jsx",
+      "sha256": "cb350d8ca3453fa4d09f6af335a6611466e3c508309b958178be92fb97af1b8b"
+    },
+    {
+      "path": "src/pages/JudgeMultiEvaluation.jsx",
+      "sha256": "1812b0ea3cbad094ab23857ed2ad33398d27e19410d05fc271ca38c51bd82f77"
+    },
+    {
+      "path": "src/pages/JudgeProjectTeams.jsx",
+      "sha256": "5054b20cbce6fbe1228e3a13fa183a1b8e6c13466600e747eeea6fab3c6972cf"
+    },
+    {
+      "path": "src/pages/JudgeScoreMonitoring.jsx",
+      "sha256": "d1b51ad896e15ba62a3b9436a4038caa32ff443a0702aea91c8947199a3fe62f"
+    },
+    {
+      "path": "src/pages/JudgeTeamAssignments.jsx",
+      "sha256": "1e2f38e1997c42456bafa98a28ef5143b8384849615c728668b08982f2f2b279"
+    },
+    {
+      "path": "src/pages/Login.jsx",
+      "sha256": "4ed761e1006f593b77291e05daff39058cb2f95918bf49ac95b285f74675b593"
+    },
+    {
+      "path": "src/pages/ProjectDashboard.jsx",
+      "sha256": "3a6120cb2c7e135bf135127dea5efedcac6e4702ed1a5c44954939e8eb5c4628"
+    },
+    {
+      "path": "src/pages/ProjectGroups.jsx",
+      "sha256": "af1b866abc63adb134e49c014d10cb85fce13ba0e1a4c074636c5c04ac7fa214"
+    },
+    {
+      "path": "src/pages/ProjectJudge.jsx",
+      "sha256": "75f13232a67fc721c37664f47539d34dd9c2adc35fd07b7d2e324133e3043d97"
+    },
+    {
+      "path": "src/pages/ProjectLeaderboard.jsx",
+      "sha256": "5d5053a859c405ae205223da4ec6f3d2eb144e3728c0e47592178ab16eb4b16b"
+    },
+    {
+      "path": "src/pages/ProjectTeams.jsx",
+      "sha256": "6cda22e6795acc3ac3b5eea45c642226700fe0e002df9823b502740871d6cf41"
+    },
+    {
+      "path": "src/pages/ResetPassword.jsx",
+      "sha256": "343fdec35d3546f4fb743588858453e0667bc943a891822c549901f32da5d43e"
+    },
+    {
+      "path": "src/pages/SignUp.jsx",
+      "sha256": "464ab5d41ffedc1a0fd7c72d9f96c8968d61ed1785637ad1ea785baf83e14938"
+    },
+    {
+      "path": "src/pages/UserManagement.jsx",
+      "sha256": "a355e2a6d671c32d2d3a9aba1f8955be18cf76ed4c80c88c6fa32eed5c2dafdb"
+    },
+    {
+      "path": "src/pages/VerifyEmail.jsx",
+      "sha256": "fafe8155a912b55c872591cc6489f76a498249e9661970369a378621b54521e0"
+    },
+    {
+      "path": "src/pages/WorkSpace.jsx",
+      "sha256": "9c37d0a946fdf626d93e60cdccefd3dec6db29566e2a46003d1d88eb3c7db7a1"
+    },
+    {
+      "path": "src/utils/visiblePolling.js",
+      "sha256": "661e84dc7ea010a985fc5d125fd87338fe4ba7bffeb82dcc6538dccd0f7d37b9"
+    },
+    {
+      "path": "tests/batch-submission.test.js",
+      "sha256": "16ce33989248e06903c6aa980b80e1cd3217edad7c1e8fb4079c6ddddb096a36"
+    },
+    {
+      "path": "tests/group-assignment-stores.test.js",
+      "sha256": "036be66a4d60c10391e4f0bea48c6127938039f70d8ad4d4ac99fede28ca00f9"
+    },
+    {
+      "path": "tests/project-lock.test.js",
+      "sha256": "65ee542c1d0f87ce1509dc426774dcea941f41af0bd81e7be72b4a1369d887e3"
+    },
+    {
+      "path": "tests/project-readiness.test.js",
+      "sha256": "fbf498bd7dfd7e1c5868990531801f4480a599ab6e749390b7cf187d13090b79"
+    },
+    {
+      "path": "tests/rubric.test.js",
+      "sha256": "e4c152040c2300c2a424b883d20c7f742d1c518a4d26a2b024d6f3112d712ffb"
+    },
+    {
+      "path": "tests/team-import.test.js",
+      "sha256": "c102c64589c0febc3a100e06c33950410a149bd20110be401fda81a77b40e2be"
+    },
+    {
+      "path": "tests/team-order-identity.test.js",
+      "sha256": "ba6374ccd3e27b735c12aba5f4b7611fae83f382aa08f24407f049fbd2d46ae0"
+    },
+    {
+      "path": "tests/visiblePolling.test.js",
+      "sha256": "6e81b723378cc77e587df5206748cf3fcb4746dcd170998d3c2963db6df61a48"
+    },
+    {
+      "path": "vercel.json",
+      "sha256": "b84646d64965d5684eb58fa51b780f57194df1f0e2ae5a5b3ffbeb47f763daf1"
+    },
+    {
+      "path": "vite.config.js",
+      "sha256": "1eb5a789ecaf2318de6d1ce364f83d77e35172454e351673ca10f0108a1ac603"
+    }
+  ]
+}
