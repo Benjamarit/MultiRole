@@ -58,9 +58,12 @@ export async function loadWorkspace(user) {
   workspace.user = user;
   const { data } = await api.get('/competitions');
   if (currentGeneration !== generation) return;
-  workspace.projects = [];
-  workspace.details = {};
+  // Keep the current cache visible while background requests are in flight.
   await Promise.all(data.map((p) => loadProject(p.competitionId, user)));
+  if (currentGeneration !== generation) return;
+  const projectIds = new Set(data.map(p => p.competitionId));
+  workspace.projects = workspace.projects.filter(p => projectIds.has(p.id));
+  workspace.details = Object.fromEntries(Object.entries(workspace.details).filter(([id]) => projectIds.has(id)));
   await refreshNotifications();
 }
 

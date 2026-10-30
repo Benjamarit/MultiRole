@@ -1,3 +1,4 @@
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { loadProject } from '../api/workspace';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -43,8 +44,8 @@ export default function EvaluationMonitoring() {
   const { id } = useParams();
   const { t, tDesc } = useLanguage();
 
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const { loading: isRefreshing, updatedAt: lastUpdated, error: refreshError, refresh: handleRefresh } =
+    useVisiblePolling(() => loadProject(id), 15000, id);
   const [notifiedAt, setNotifiedAt] = useState({});
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -158,17 +159,6 @@ export default function EvaluationMonitoring() {
     }
   };
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-        await loadProject(id);
-        setLastUpdated(new Date());
-    } catch (error) {
-      toast.error(error.message);
-    }
-    finally { setIsRefreshing(false); }
-  };
-
   const handleNotify = async (judgeId, judgeEmail, judgeName) => {
     if (notifyingJudgeId) return;
     setNotifyingJudgeId(judgeId);
@@ -217,12 +207,13 @@ export default function EvaluationMonitoring() {
                 : t('รีเฟรชข้อมูล', 'Refresh', { compact: true })}
             </Button>
             <p className="mt-1 text-xs text-slate-400">
-              {t('อัปเดตล่าสุด', 'Last updated', { compact: true })} {formatTime(lastUpdated)}
+              {t('อัปเดตทุก 15 วินาที', 'Updates every 15 seconds')} · {lastUpdated ? formatTime(lastUpdated) : '—'}
             </p>
           </div>
         }
       />
 
+      {refreshError && <p role="status" className="text-sm text-amber-700">{t('อัปเดตไม่สำเร็จ ระบบจะลองใหม่', 'Update failed. Retrying automatically.')}</p>}
       {/* สรุปภาพรวม (Overview Stats) */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card className="border-l-4 border-l-blue-600">

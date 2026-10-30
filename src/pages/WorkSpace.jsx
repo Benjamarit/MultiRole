@@ -1,3 +1,4 @@
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -92,7 +93,8 @@ export default function Workspace() {
   const { t } = useLanguage();
 
   const [deletedProjectIds, setDeletedProjectIds] = useState(() => new Set());
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { loading: isRefreshing, error: refreshError, refresh: refreshWorkspace } =
+    useVisiblePolling(() => refresh(), 30000, user?.id);
   // Store data lives outside React; revision invalidates these snapshots after refresh.
   const myProjects = useMemo(() => getMyProjects(user?.email)
         .filter((project) => !deletedProjectIds.has(project.id))
@@ -211,6 +213,7 @@ export default function Workspace() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 p-6">
+      {refreshError && <p role="status" className="text-sm text-amber-700">{t('อัปเดตไม่สำเร็จ ระบบจะลองใหม่', 'Update failed. Retrying automatically.')}</p>}
       <PageHeader
         title={t(
           `สวัสดี, ${user?.name || 'ผู้ใช้งาน'}`,
@@ -221,12 +224,7 @@ export default function Workspace() {
           <div className="flex gap-2">
           <Button variant="secondary" isLoading={isRefreshing} disabled={isRefreshing} onClick={async () => {
             if (isRefreshing) return;
-            setIsRefreshing(true);
-            try {
-              await refresh();
-              toast.success(t('อัปเดตข้อมูลแล้ว', 'Workspace updated'));
-            } catch (error) { toast.error(error.message); }
-            finally { setIsRefreshing(false); }
+            if (await refreshWorkspace()) toast.success(t('อัปเดตข้อมูลแล้ว', 'Workspace updated'));
           }}>{t('รีเฟรชข้อมูล', 'Refresh')}</Button>
           <Button onClick={() => navigate('/projects/new')}>
             <Plus className="h-4 w-4" />

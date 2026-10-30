@@ -217,3 +217,28 @@ test('a late bulk response cannot restore private cache after logout', async con
   assert.equal(workspace.user, null);
   assert.deepEqual(workspace.details, {});
 });
+
+test('workspace background refresh keeps cached projects visible until requests finish', async () => {
+  await loadWorkspace(user);
+  const previousDetails = workspace.details[id];
+  const adapter = api.defaults.adapter;
+  let release;
+  let reached;
+  const blocked = new Promise(resolve => { reached = resolve; });
+  api.defaults.adapter = async config => {
+    if (config.url === `/competitions/${id}/teams`) {
+      await new Promise(resolve => { release = resolve; reached(); });
+    }
+    return adapter(config);
+  };
+  const pending = loadWorkspace(user);
+  try {
+    await blocked;
+    assert.equal(workspace.projects.some(p => p.id === id), true);
+    assert.equal(workspace.details[id], previousDetails);
+  } finally {
+    release();
+    await pending;
+    api.defaults.adapter = adapter;
+  }
+});

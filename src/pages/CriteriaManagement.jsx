@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   BookOpen,
@@ -76,6 +76,8 @@ export default function CriteriaManagement() {
   // editingRowId เก็บ id ของแถวที่กำลังแก้ไข หรือ NEW_ROW_ID หากเป็นแถวที่เพิ่งกด "+ เพิ่มเกณฑ์ประเมิน"
   const [editingRowId, setEditingRowId] = useState(null);
   const [editRowData, setEditRowData] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
@@ -103,6 +105,7 @@ export default function CriteriaManagement() {
 
   // กดปุ่ม "+ เพิ่มเกณฑ์ประเมิน" -> เพิ่มแถว Inline ในตารางทันที พร้อมตาราง Rubric แยกระดับคะแนน
   const handleAddClick = () => {
+    if (savingRef.current) return;
     if (locked) { toast.error(lockMessage); return; }
     if (totalWeight >= 100) {
       toast.error(
@@ -131,6 +134,7 @@ export default function CriteriaManagement() {
   };
 
   const startEditing = (item) => {
+    if (savingRef.current) return;
     if (locked) { toast.error(lockMessage); return; }
     const resolvedMaxScore = isFixedScoreType(item.type)
       ? getFixedMaxScore(item.type)
@@ -150,6 +154,7 @@ export default function CriteriaManagement() {
   };
 
   const cancelEditing = () => {
+    if (savingRef.current) return;
     setEditingRowId(null);
     setEditRowData(null);
   };
@@ -208,6 +213,7 @@ export default function CriteriaManagement() {
   };
 
   const saveInlineEdit = async () => {
+    if (savingRef.current) return;
     if (locked) { toast.error(lockMessage); return; }
     try {
       if (!editRowData) return;
@@ -264,6 +270,8 @@ export default function CriteriaManagement() {
         return;
       }
 
+      savingRef.current = true;
+      setIsSaving(true);
       const savedCriterion = await saveCriterion(id, {
         ...(isAddingNew ? {} : originalItem),
         name,
@@ -287,6 +295,9 @@ export default function CriteriaManagement() {
       setEditRowData(null);
     } catch (error) {
       await reportWriteError(error);
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -347,7 +358,7 @@ export default function CriteriaManagement() {
         action={
           <Button
             onClick={handleAddClick}
-            disabled={locked || totalWeight >= 100 || editingRowId === NEW_ROW_ID}
+            disabled={isSaving || locked || totalWeight >= 100 || editingRowId === NEW_ROW_ID}
             aria-describedby={locked ? 'criteria-lock-message' : undefined}
           >
             <Plus className="h-4 w-4" />
@@ -420,8 +431,11 @@ export default function CriteriaManagement() {
       </Card>
 
       <Card noPadding>
+        <div role="status" aria-live="polite" className={isSaving ? 'border-b border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700' : 'sr-only'}>
+          {isSaving ? t('กำลังบันทึกเกณฑ์ กรุณารอสักครู่…', 'Saving criterion. Please wait…') : ''}
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left">
+          <table className="w-full border-collapse text-left" aria-busy={isSaving}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-500">
                 <th className="w-1/2 px-6 py-3.5">
@@ -473,6 +487,7 @@ export default function CriteriaManagement() {
                             </label>
                             <input
                               type="text"
+                              disabled={isSaving}
                               autoFocus
                               placeholder={t(
                                 'ระบุชื่อหัวข้อประเมิน เช่น 1. ความคิดริเริ่มสร้างสรรค์...',
@@ -520,6 +535,7 @@ export default function CriteriaManagement() {
                                       ) : (
                                         <input
                                           type="text"
+                                          disabled={isSaving}
                                           value={row.label}
                                           onChange={(e) =>
                                             handleRubricRowChange(
@@ -538,6 +554,7 @@ export default function CriteriaManagement() {
 
                                       <input
                                         type="text"
+                                        disabled={isSaving}
                                         value={row.detail}
                                         onChange={(e) =>
                                           handleRubricRowChange(
@@ -558,6 +575,7 @@ export default function CriteriaManagement() {
                                           1 && (
                                           <button
                                             type="button"
+                                            disabled={isSaving}
                                             onClick={() =>
                                               handleRemoveRubricRow(rIdx)
                                             }
@@ -579,6 +597,7 @@ export default function CriteriaManagement() {
                                 editRowData.type === 'PERCENTAGE') && (
                                 <button
                                   type="button"
+                                  disabled={isSaving}
                                   onClick={handleAddRubricRow}
                                   className="mt-1 inline-flex items-center gap-1 rounded-lg border border-dashed border-blue-300 bg-blue-50/50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100/70"
                                 >
@@ -626,6 +645,7 @@ export default function CriteriaManagement() {
                     <td className="px-6 py-4 align-top">
                       {isEditing ? (
                         <select
+                          disabled={isSaving}
                           className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                           value={editRowData.type}
                           onChange={(e) =>
@@ -657,7 +677,7 @@ export default function CriteriaManagement() {
                               ? SCORING_LIMITS.NUMERIC.max
                               : (getFixedMaxScore(editRowData.type) ?? 1)
                           }
-                          disabled={isFixedScoreType(editRowData.type)}
+                          disabled={isSaving || isFixedScoreType(editRowData.type)}
                           className="w-20 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-center font-mono text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-500"
                           value={
                             isFixedScoreType(editRowData.type)
@@ -681,6 +701,7 @@ export default function CriteriaManagement() {
                           <input
                             type="number"
                             min="1"
+                            disabled={isSaving}
                             max={Math.max(1, maxAllowedForThisRow)}
                             className="w-20 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-center font-mono text-sm font-bold text-blue-700 focus:border-blue-500 focus:outline-none"
                             value={editRowData.weight}
@@ -706,13 +727,14 @@ export default function CriteriaManagement() {
                       <div className="inline-flex items-center gap-1.5">
                         {locked ? <span className="inline-flex items-center gap-1 text-xs text-slate-500"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />{t('ดูอย่างเดียว', 'View only')}</span> : isEditing ? (
                           <>
-                            <Button size="sm" onClick={saveInlineEdit}>
-                              {t('บันทึก', 'Save')}
+                            <Button size="sm" onClick={saveInlineEdit} isLoading={isSaving} disabled={isSaving}>
+                              {isSaving ? t('กำลังบันทึก…', 'Saving…') : t('บันทึก', 'Save')}
                             </Button>
                             <Button
                               variant="secondary"
                               size="sm"
                               onClick={cancelEditing}
+                              disabled={isSaving}
                             >
                               {t('ยกเลิก', 'Cancel')}
                             </Button>
@@ -723,12 +745,14 @@ export default function CriteriaManagement() {
                               variant="secondary"
                               size="sm"
                               onClick={() => startEditing(item)}
+                              disabled={isSaving}
                             >
                               {t('แก้ไข', 'Edit')}
                             </Button>
                             <Button
                               variant="danger"
                               size="sm"
+                              disabled={isSaving}
                               onClick={() => {
                                 setDeleteId(item.id);
                                 setIsConfirmOpen(true);

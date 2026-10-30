@@ -1,3 +1,4 @@
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -415,18 +416,10 @@ export default function Navbar() {
     location.key,
   ]);
 
-  useEffect(() => {
-    let active = true;
-    const update = async () => {
-      try {
-          await refreshNotifications();
-          if (active) setNotifications(getNotificationsByUser(user?.email));
-        } catch { /* A temporary polling error must not interrupt editing. */ }
-      };
-      update();
-      const timer = setInterval(update, 30000);
-      return () => { active = false; clearInterval(timer); };
-    }, [user?.email, isNotifOpen, revision]);
+  useVisiblePolling(async isActive => {
+    await refreshNotifications();
+    if (isActive()) setNotifications(getNotificationsByUser(user?.email));
+  }, 30000, user?.email);
 
     const unreadCount = notifications.filter((notification) => !notification.isRead).length;
     const tabletMoreItems = navigation.items.slice(4);

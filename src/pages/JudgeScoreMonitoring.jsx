@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { useVisiblePolling } from '../hooks/useVisiblePolling';
 import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ChevronDown, ClipboardList, Clock3, FilePenLine, LayoutGrid, MessageSquareText, RefreshCw, ShieldCheck } from 'lucide-react';
 import api from '../api/client';
 import EvaluationHistory from '../components/EvaluationHistory';
@@ -21,30 +21,15 @@ export default function JudgeScoreMonitoring() {
   const { user } = useAuth();
   const { t, lang } = useLanguage();
   const [evaluations, setEvaluations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
   const [sort, setSort] = useState('order');
   const [page, setPage] = useState(1);
-  const [updatedAt, setUpdatedAt] = useState(null);
-  const [, setRevision] = useState(0);
-  const refresh = async () => {
-    setLoading(true);
-    try {
+  const { loading, error: refreshError, updatedAt, refresh } = useVisiblePolling(async isActive => {
       const [response] = await Promise.all([api.get(`/evaluations/competition/${projectId}/mine`), loadProject(projectId)]);
-      setEvaluations(response.data);
-      setRevision(v => v + 1);
-      setError('');
-      setUpdatedAt(new Date());
-    } catch (e) { setError(e.message); toast.error(e.message); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+      if (isActive()) setEvaluations(response.data);
+  }, 15000, projectId);
+  const error = refreshError?.message;
   const project = getProjectById(projectId);
   const data = detail(projectId);
   const assignedIds = new Set(data.assignments.filter(a => a.judgeId === user?.id).map(a => a.teamId));
