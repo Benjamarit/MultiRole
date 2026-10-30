@@ -1,0 +1,12 @@
+/target/
+/.idea/
+/.settings/
+/.classpath
+/.project
+/.factorypath
+/config/*.properties
+.env
+.env.*
+!.env.example
+*.log
+/.mvn/wrapper/maven-wrapper.jar
