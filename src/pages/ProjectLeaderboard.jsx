@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Award,
@@ -6,6 +6,7 @@ import {
   Download,
   FileSpreadsheet,
   Medal,
+  RefreshCw,
   Sparkles,
   Trophy,
 } from 'lucide-react';
@@ -23,6 +24,8 @@ import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getGroupForTeam } from '../data/GroupStore';
 import { getRegisteredUsers } from '../context/authStore';
 import { normalizedScore } from '../data/Scoring';
+import { loadProject } from '../api/workspace';
+import { useAuth } from '../context/AuthContext';
 
 const EMPTY_ASSIGNMENTS = [];
 
@@ -36,6 +39,44 @@ function formatCriterionRawScore(criterion, rawValue) {
 export default function ProjectLeaderboard() {
   const { id } = useParams();
   const { t, tDesc } = useLanguage();
+  const { user } = useAuth();
+  const refreshRef = useRef(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [refreshError, setRefreshError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let inFlight = false;
+    const refresh = async () => {
+      if (!active || inFlight || document.visibilityState === 'hidden') return;
+      inFlight = true;
+      setIsRefreshing(true);
+      try {
+        const updated = await loadProject(id, user);
+        if (active && updated) {
+          setLastUpdated(new Date());
+          setRefreshError(false);
+        }
+      } catch {
+        // Retain the last successful ranking when a background request fails.
+        if (active) setRefreshError(true);
+      } finally {
+        inFlight = false;
+        if (active) setIsRefreshing(false);
+      }
+    };
+    refreshRef.current = refresh;
+    void refresh();
+    const timer = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      refreshRef.current = null;
+    };
+  }, [id, user]);
 
   const project = getProjectById(id);
   const teams = getTeamsByProject(id);
@@ -393,6 +434,23 @@ export default function ProjectLeaderboard() {
           </div>
         }
       />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <div className="space-y-1 text-xs text-slate-500">
+          <p>{t('อัปเดตอัตโนมัติทุก 30 วินาทีขณะเปิดหน้านี้', 'Updates automatically every 30 seconds while this page is visible')}</p>
+          <p role="status" aria-live="polite">
+            {refreshError
+              ? t('อัปเดตไม่สำเร็จ กำลังแสดงข้อมูลเดิม กรุณาลองรีเฟรชอีกครั้ง', 'Update failed. Showing previous data. Please try refreshing again.')
+              : lastUpdated
+                ? `${t('อัปเดตล่าสุด', 'Last updated')} ${lastUpdated.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                : t('กำลังดึงคะแนนล่าสุด…', 'Fetching latest scores…')}
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => refreshRef.current?.()} disabled={isRefreshing} aria-busy={isRefreshing}>
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+          {isRefreshing ? t('กำลังอัปเดต', 'Updating') : t('รีเฟรชคะแนน', 'Refresh scores')}
+        </Button>
+      </div>
 
       {/* โพเดียมแท่นรางวัล 3 ระดับ (Stepped Podium Showcase) */}
       {leaderboard.length > 0 && (
