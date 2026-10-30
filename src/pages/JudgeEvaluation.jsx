@@ -1,6 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import toast from 'react-hot-toast'; // นำเข้าไลบรารี
+import toast from 'react-hot-toast';
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  Save,
+  Send,
+} from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import BackButton from '../components/BackButton';
 import Card from '../components/Card';
@@ -9,72 +17,109 @@ import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
+import { calculateWeightedScore } from '../data/Scoring';
 import {
+  getAssignedTeamIds,
   getProjectById,
   isBeforeEvaluationDeadline,
-  isJudgeAssignedToTeam,
   isProjectReadyForEvaluation,
 } from '../data/ProjectStore';
+import { getTeamsByProject } from '../data/TeamStore';
+import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
 import { useAuth } from '../context/AuthContext';
-import { calculateWeightedScore } from '../data/Scoring';
+import { useLanguage } from '../context/LanguageContext';
 
 function scoreLabel(criterion, value) {
   if (value === null || value === undefined) return null;
   if (criterion.type === 'PASS_FAIL') return value === 1 ? 'Pass' : 'Fail';
-  if (criterion.type === 'STAR') return `${value} / ${criterion.maxScore} ดาว`;
   if (criterion.type === 'PERCENTAGE') return `${value}%`;
-  return `${value} / ${criterion.maxScore}`;
+  return `${value}/${criterion.maxScore}`;
 }
+
+import { useDeadline } from '../hooks/useDeadline';
+import EvaluationDeadlineNotice from '../components/EvaluationDeadlineNotice';
+import { parseRubricLevels } from '../data/Rubric';
 
 export default function JudgeEvaluation() {
   const { projectId, teamId } = useParams();
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const judgeId = user?.id || 'anonymous-judge';
+
   const criteria = getCriteriaByProject(projectId);
   const project = getProjectById(projectId);
-  const team = getTeamsByProject(projectId).find((item) => item.id === Number(teamId));
-  const judgeId = user?.email || 'anonymous-judge';
-  const savedEvaluation = getEvaluation(projectId, teamId, judgeId);
-  const isAssigned = isJudgeAssignedToTeam(projectId, judgeId, teamId);
+  const canEvaluate = isProjectReadyForEvaluation(projectId);
+  const teams = getTeamsByProject(projectId);
+  const assignedTeamIds = getAssignedTeamIds(projectId, judgeId);
+  const team = teams.find((item) => item.id === String(teamId));
+  const isAssigned = assignedTeamIds.includes(String(teamId));
+  const existingEvaluation = getEvaluation(projectId, teamId, judgeId);
+
+  const [scores, setScores] = useState(() => existingEvaluation?.scores || {});
+  const [criteriaComments, setCriteriaComments] = useState(
+    () => existingEvaluation?.criteriaComments || {}
+  );
+  const [comment, setComment] = useState(() => existingEvaluation?.comment || '');
+  const [evaluationStatus, setEvaluationStatus] = useState(
+    () => existingEvaluation?.status || 'DRAFT'
+  );
+  const [submittedAt, setSubmittedAt] = useState(
+    () => existingEvaluation?.submittedAt || null
+  );
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(
+    () => existingEvaluation?.updatedAt || null
+  );
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [collapsedRubricIds, setCollapsedRubricIds] = useState({});
+  const isBeforeDeadline = useDeadline(project);
+  const [isUnlockedForEdit, setIsUnlockedForEdit] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const canEdit = canEvaluate && isBeforeDeadline && isAssigned && !isSaving &&
+    (evaluationStatus !== 'SUBMITTED' || isUnlockedForEdit);
+  const hasChanges = JSON.stringify({ scores, criteriaComments, comment }) !== JSON.stringify({
+    scores: existingEvaluation?.scores || {}, criteriaComments: existingEvaluation?.criteriaComments || {}, comment: existingEvaluation?.comment || '',
+  });
+  const cancelChanges = () => {
+    setScores(existingEvaluation?.scores || {});
+    setCriteriaComments(existingEvaluation?.criteriaComments || {});
+    setComment(existingEvaluation?.comment || '');
+    setIsUnlockedForEdit(false);
+  };
 
   const teamName = team?.name || `ทีม #${teamId}`;
 
-  const [scores, setScores] = useState(() => savedEvaluation?.scores || {});
-  const [criteriaComments, setCriteriaComments] = useState(
-    () => savedEvaluation?.criteriaComments || {}
-  );
-  const [comment, setComment] = useState(() => savedEvaluation?.comment || '');
-  const [evaluationStatus, setEvaluationStatus] = useState(() => savedEvaluation?.status || 'DRAFT');
-  const [submittedAt, setSubmittedAt] = useState(() => savedEvaluation?.submittedAt || null);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(() => savedEvaluation?.updatedAt || null);
-  const canEdit = isAssigned && isBeforeEvaluationDeadline(project);
-  const canEvaluate = isProjectReadyForEvaluation(projectId);
+  const answeredCount = criteria.filter(
+    (c) => scores[c.id] !== undefined && scores[c.id] !== null
+  ).length;
+  const isAllAnswered = answeredCount === criteria.length && criteria.length > 0;
 
-  const allAnswered = useMemo(
-    () => criteria.every((c) => scores[c.id] !== undefined && scores[c.id] !== null),
+  const estimatedTotal = useMemo(
+    () => calculateWeightedScore(criteria, scores).toFixed(1),
     [criteria, scores]
   );
 
-  const estimatedTotal = useMemo(() => {
-    return calculateWeightedScore(criteria, scores).toFixed(1);
-  }, [criteria, scores]);
-
   const handleScoreChange = (criterionId, value) => {
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+    if (!canEdit) return;
     setScores((prev) => ({ ...prev, [criterionId]: value }));
   };
 
   const handleCriterionCommentChange = (criterionId, value) => {
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+    if (!canEdit) return;
     setCriteriaComments((prev) => ({ ...prev, [criterionId]: value }));
   };
 
-  const handleSaveDraft = () => {
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+  const toggleRubric = (criterionId) => {
+    setCollapsedRubricIds((prev) => ({
+      ...prev,
+      [criterionId]: !prev[criterionId],
+    }));
+  };
+
+  const handleSaveDraft = async () => {
+    if (!canEdit || !isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+    setIsSaving(true);
     try {
-      const saved = saveEvaluation({
+      const saved = await saveEvaluation({
         projectId,
         teamId,
         judgeId,
@@ -83,30 +128,40 @@ export default function JudgeEvaluation() {
         criteriaComments,
         comment,
         totalScore: Number(estimatedTotal),
-        status: 'DRAFT',
+        status: evaluationStatus === 'SUBMITTED' ? 'SUBMITTED' : 'DRAFT',
       });
       if (!saved) {
-        toast.error('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้');
+        toast.error(
+          t('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้', 'Evaluation deadline has passed')
+        );
         return;
       }
+      setScores(saved.scores || {});
+      setCriteriaComments(saved.criteriaComments || {});
+      setComment(saved.comment || '');
       setEvaluationStatus(saved.status);
       setSubmittedAt(saved.submittedAt);
+      setIsUnlockedForEdit(false);
       setLastUpdatedAt(saved.updatedAt);
-      toast.success('บันทึกแบบร่างเรียบร้อยแล้ว');
+      toast.success(saved.status === 'SUBMITTED' ? t('บันทึกการแก้ไขคะแนนแล้ว', 'Score changes saved') : t('บันทึกแบบร่างเรียบร้อยแล้ว', 'Draft saved successfully'));
     } catch (error) {
       toast.error(error.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleSubmitClick = () => {
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId)) || !allAnswered) return;
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!canEdit || !isAllAnswered) return;
     setIsConfirmOpen(true);
   };
 
-  const confirmSubmit = () => {
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+  const confirmSubmit = async () => {
+    if (!canEdit || !isAllAnswered || !isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+    setIsSaving(true);
     try {
-      const saved = saveEvaluation({
+      const saved = await saveEvaluation({
         projectId,
         teamId,
         judgeId,
@@ -119,38 +174,55 @@ export default function JudgeEvaluation() {
       });
       if (!saved) {
         setIsConfirmOpen(false);
-        toast.error('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้');
+        toast.error(
+          t('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้', 'Evaluation deadline has passed')
+        );
         return;
       }
+      setScores(saved.scores || {});
+      setCriteriaComments(saved.criteriaComments || {});
+      setComment(saved.comment || '');
       setEvaluationStatus(saved.status);
       setSubmittedAt(saved.submittedAt);
+      setIsUnlockedForEdit(false);
       setLastUpdatedAt(saved.updatedAt);
       setIsConfirmOpen(false);
-      toast.success('ส่งคะแนนเรียบร้อยแล้ว');
+      toast.success(t('ส่งคะแนนเรียบร้อยแล้ว', 'Evaluation submitted successfully'));
     } catch (error) {
       setIsConfirmOpen(false);
       toast.error(error.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   if (!team || !isAssigned) {
     return (
-      <div className="p-6 max-w-3xl mx-auto space-y-6">
-        <BackButton to={`/judge/project/${projectId}/teams`}>กลับไปหน้ารายชื่อทีมที่ต้องประเมิน</BackButton>
-        <Card><p className="text-center text-slate-600">ทีมนี้ไม่ได้รับมอบหมายให้คุณประเมิน</p></Card>
+      <div className="mx-auto max-w-3xl space-y-6 p-6">
+        <BackButton to={`/judge/project/${projectId}/teams`}>
+          {t('กลับไปหน้ารายชื่อทีม', 'Back to Assigned Teams', { compact: true })}
+        </BackButton>
+        <Card>
+          <p className="text-center text-slate-600">
+            {t('ทีมนี้ไม่ได้รับมอบหมายให้คุณประเมิน', 'You are not assigned to evaluate this team')}
+          </p>
+        </Card>
       </div>
     );
   }
 
   if (!canEvaluate) {
     return (
-      <div className="p-6 max-w-3xl mx-auto space-y-6">
+      <div className="mx-auto max-w-3xl space-y-6 p-6">
         <BackButton to={`/judge/project/${projectId}/teams`}>
-          กลับไปหน้ารายชื่อทีมที่ต้องประเมิน
+          {t('กลับไปหน้ารายชื่อทีม', 'Back to Assigned Teams', { compact: true })}
         </BackButton>
-        <Card className="bg-amber-50 border-amber-200">
+        <Card className="border-amber-200 bg-amber-50">
           <p className="text-sm text-amber-700">
-            ยังไม่สามารถประเมินได้ โครงการต้องเปิดรับคะแนนและมี Weight รวมครบ 100%
+            {t(
+              'ยังไม่สามารถประเมินได้ โครงการต้องเปิดรับคะแนนและมี Weight รวมครบ 100%',
+              'Evaluation is not ready yet. The project must be Active with 100% total criteria weight.'
+            )}
           </p>
         </Card>
       </div>
@@ -158,107 +230,189 @@ export default function JudgeEvaluation() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 p-6 pb-44 sm:pb-28">
       <BackButton to={`/judge/project/${projectId}/teams`}>
-        กลับไปหน้ารายชื่อทีมที่ต้องประเมิน
+        {t('กลับไปหน้ารายชื่อทีมที่ต้องประเมิน', 'Back to Assigned Teams', { compact: true })}
       </BackButton>
 
       <PageHeader
-        title={`ประเมิน: ${teamName}`}
-        description={`โครงการ #${projectId} — ให้คะแนนตามเกณฑ์ที่กำหนดไว้ด้านล่าง`}
-        action={
+        title={`${t('ประเมินทีม:', 'Evaluate:', { compact: true })} ${teamName}`}
+        subtitle={project?.name}
+        badge={
           evaluationStatus === 'SUBMITTED' ? (
-            <Badge variant="success">ส่งคะแนนแล้ว</Badge>
+            <Badge variant="success">
+              {t('ส่งคะแนนแล้ว', 'Submitted', { compact: true })}
+            </Badge>
           ) : (
-            <Badge variant="warning">Draft</Badge>
+            <Badge variant="warning">{t('ร่าง', 'Draft')}</Badge>
           )
         }
       />
 
+      <EvaluationDeadlineNotice project={project} isBeforeDeadline={isBeforeDeadline} />
+      {hasChanges && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{t('มีการแก้ไขที่ยังไม่บันทึก คะแนนเดิมยังคงใช้จนกว่าจะบันทึกใหม่', 'You have unsaved changes. Previously submitted scores remain in use until you save.')}</p>}
+
       {(team?.description || team?.link) && (
-        <Card>
+        <Card className="bg-slate-50/70">
           {team.description && (
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{team.description}</p>
+            <p className="whitespace-pre-wrap text-sm text-slate-700">
+              {team.description}
+            </p>
           )}
           {team.link && (
             <a
               href={team.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline break-all"
+              className="mt-2.5 inline-flex items-center gap-1.5 break-all text-xs font-semibold text-blue-600 hover:underline"
             >
-              เปิดดูผลงานของทีมนี้ &rarr;
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              {t('เปิดดูผลงานของทีมนี้', 'Open Team Submission', { compact: true })}
             </a>
           )}
         </Card>
       )}
 
-      {/* คะแนนรวมโดยประมาณ คำนวณจาก weight ของแต่ละเกณฑ์ */}
-      <Card className="bg-blue-50 border-blue-200">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-700">คะแนนรวมโดยประมาณ (ถ่วงน้ำหนักแล้ว)</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              คำนวณจาก weight ของแต่ละเกณฑ์ ค่านี้จะอัปเดตทันทีที่ให้คะแนน
-            </p>
-          </div>
-          <span className="text-3xl font-bold text-blue-700">{estimatedTotal}</span>
-        </div>
-      </Card>
-
+      {/* การ์ดรายการเกณฑ์ประเมินแต่ละข้อ */}
       <div className="space-y-4">
-        {criteria.map((criterion) => (
-          <Card key={criterion.id}>
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="font-semibold text-gray-900">{criterion.name}</p>
-                <p className="text-xs text-gray-500">
-                  {criterion.type} · Weight {criterion.weight}%
-                  {criterion.type !== 'PASS_FAIL' && criterion.type !== 'PERCENTAGE' && ` · เต็ม ${criterion.maxScore}`}
-                </p>
-              </div>
-              {scoreLabel(criterion, scores[criterion.id]) && (
-                <span className="text-sm font-medium text-gray-600">
-                  {scoreLabel(criterion, scores[criterion.id])}
-                </span>
-              )}
-            </div>
-            {criterion.description && (
-              <div className="mb-4 rounded-md bg-gray-50 border border-gray-200 px-3 py-2">
-                <p className="text-xs font-medium text-gray-500 mb-1">คำอธิบายเกณฑ์</p>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{criterion.description}</p>
-              </div>
-            )}
-            <CriterionScoreInput
-              criterion={criterion}
-              value={scores[criterion.id] ?? null}
-              onChange={(value) => handleScoreChange(criterion.id, value)}
-              disabled={!canEdit}
-            />
+        {criteria.map((criterion, idx) => {
+          const currentVal = scores[criterion.id];
+          const isScored = currentVal !== undefined && currentVal !== null;
+          const rubricItems = parseRubricLevels(criterion.description);
+          const isRubricCollapsed = Boolean(collapsedRubricIds[criterion.id]);
 
-            <div className="mt-3">
-              <label
-                htmlFor={`criterion-comment-${criterion.id}`}
-                className="block text-xs font-medium text-gray-500 mb-1"
-              >
-                ความคิดเห็นสำหรับเกณฑ์นี้ (ถ้ามี)
-              </label>
-              <textarea
-                id={`criterion-comment-${criterion.id}`}
-                rows={2}
+          return (
+            <Card
+              key={criterion.id}
+              className={
+                isScored ? 'border-blue-200/90' : 'border-slate-200'
+              }
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+                      {idx + 1}
+                    </span>
+                    <p className="font-bold text-slate-900">{criterion.name}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {criterion.type} · Weight {criterion.weight}%
+                    {criterion.type !== 'PASS_FAIL' &&
+                      criterion.type !== 'PERCENTAGE' &&
+                      ` · ${t('เต็ม', 'Max', { compact: true })} ${criterion.maxScore}`}
+                  </p>
+                </div>
+                {scoreLabel(criterion, currentVal) ? (
+                  <Badge variant="info">{scoreLabel(criterion, currentVal)}</Badge>
+                ) : (
+                  <Badge variant="default">
+                    {t('รอให้คะแนน', 'Unscored', { compact: true })}
+                  </Badge>
+                )}
+              </div>
+
+              {criterion.description && (
+                <div className="mb-4 rounded-xl border border-slate-200/80 bg-slate-50 px-3.5 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+                      <BookOpen className="h-3.5 w-3.5 text-blue-600" />
+                      {t('คำอธิบายเกณฑ์ (Rubric)', 'Scoring Rubric')}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => toggleRubric(criterion.id)}
+                      className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-0.5 text-[11px] font-semibold text-blue-700 shadow-2xs hover:bg-blue-50"
+                    >
+                      {isRubricCollapsed ? (
+                        <>
+                          {t('ดูเกณฑ์ละเอียด', 'Show Rubric')}
+                          <ChevronDown className="h-3 w-3" />
+                        </>
+                      ) : (
+                        <>
+                          {t('ซ่อนเกณฑ์ละเอียด', 'Hide Rubric')}
+                          <ChevronUp className="h-3 w-3" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {!isRubricCollapsed && (
+                    <div className="mt-2.5 space-y-1.5">
+                      {rubricItems.length > 1 ? (
+                        rubricItems.map((item, rIdx) => (
+                          <div
+                            key={rIdx}
+                            className="rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700 shadow-2xs"
+                          >
+                            {item.label ? (
+                              <>
+                                <span className="mr-2 inline-block rounded border border-amber-200 bg-amber-50 px-2 py-0.5 font-bold text-amber-800">
+                                  {item.label}
+                                </span>
+                                <span>{item.detail}</span>
+                              </>
+                            ) : (
+                              <span>{item.detail}</span>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="whitespace-pre-wrap text-sm text-slate-700">
+                          {criterion.description}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <CriterionScoreInput
+                criterion={criterion}
+                value={currentVal ?? null}
+                onChange={(value) => handleScoreChange(criterion.id, value)}
                 disabled={!canEdit}
-                value={criteriaComments[criterion.id] || ''}
-                onChange={(e) => handleCriterionCommentChange(criterion.id, e.target.value)}
-                placeholder={`เหตุผลของคะแนนที่ให้ ${criterion.name}`}
-                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-200"
               />
-            </div>
-          </Card>
-        ))}
+
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <label
+                  htmlFor={`criterion-comment-${criterion.id}`}
+                  className="mb-1.5 block text-xs font-semibold text-slate-600"
+                >
+                  {t(
+                    'ความคิดเห็นสำหรับเกณฑ์นี้ (ไม่บังคับ)',
+                    'Comment for this criterion (Optional)'
+                  )}
+                </label>
+                <textarea
+                  id={`criterion-comment-${criterion.id}`}
+                  rows={2}
+                  disabled={!canEdit}
+                  value={criteriaComments[criterion.id] || ''}
+                  onChange={(e) =>
+                    handleCriterionCommentChange(criterion.id, e.target.value)
+                  }
+                  placeholder={t(
+                    `ระบุเหตุผลหรือข้อสังเกตของหัวข้อ ${criterion.name}...`,
+                    `Notes or rationale for ${criterion.name}...`
+                  )}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-precision-blue focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                />
+              </div>
+            </Card>
+          );
+        })}
 
         <Card>
-          <label htmlFor="evaluation-comment" className="block text-sm font-medium text-gray-700 mb-2">
-            ข้อเสนอแนะเพิ่มเติม (ไม่คิดคะแนน)
+          <label
+            htmlFor="evaluation-comment"
+            className="mb-2 block text-sm font-bold text-slate-800"
+          >
+            {t(
+              'ข้อเสนอแนะภาพรวมถึงทีม',
+              'Overall Feedback (Optional)'
+            )}
           </label>
           <textarea
             id="evaluation-comment"
@@ -266,43 +420,103 @@ export default function JudgeEvaluation() {
             disabled={!canEdit}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="แสดงความคิดเห็นเกี่ยวกับทีมนี้"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-200"
+            placeholder={t(
+              'เขียนคำแนะนำ จุดเด่น หรือสิ่งที่ทีมควรพัฒนาต่อ...',
+              'Share overall strengths, feedback, or areas for improvement...'
+            )}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm focus:border-precision-blue focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
           />
+          {(lastUpdatedAt || submittedAt) && (
+            <p className="mt-2 text-xs text-slate-400">
+              {submittedAt
+                ? `${t('ส่งผลประเมินเมื่อ:', 'Submitted at:')} ${new Date(
+                    submittedAt
+                  ).toLocaleString('th-TH')}`
+                : `${t('บันทึกล่าสุดเมื่อ:', 'Last saved:')} ${new Date(
+                    lastUpdatedAt
+                  ).toLocaleString('th-TH')}`}
+            </p>
+          )}
         </Card>
       </div>
 
-      <div className="flex items-center justify-between pt-2">
-        <div className="text-xs text-gray-400">
-          {lastUpdatedAt && `บันทึกล่าสุด ${new Date(lastUpdatedAt).toLocaleString('th-TH')}`}
-          {submittedAt && evaluationStatus === 'SUBMITTED' && (
-            <p className="text-green-600">ส่งคะแนนเมื่อ {new Date(submittedAt).toLocaleString('th-TH')}</p>
-          )}
-          {!canEdit && (
-            <p className="text-red-600">หมดเขตการประเมินแล้ว ไม่สามารถแก้ไขหรือส่งคะแนนได้</p>
-          )}
-          {canEdit && !allAnswered && (
-            <p className="text-amber-600">กรอกคะแนนให้ครบทุกหัวข้อก่อนส่งคะแนนจริง</p>
-          )}
-        </div>
+      {/* Sticky Floating Summary & Action Bar */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-md">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                {t('คะแนนรวมถ่วงน้ำหนัก', 'Weighted Total')}
+              </p>
+              <p className="font-mono text-2xl font-extrabold text-blue-700">
+                {estimatedTotal}{' '}
+                <span className="text-xs font-normal text-slate-400">/ 100</span>
+              </p>
+            </div>
+            <div className="h-8 w-px bg-slate-200" />
+            <div>
+              <p className="text-xs font-semibold text-slate-700">
+                {t(
+                  `ให้คะแนนแล้ว ${answeredCount}/${criteria.length} เกณฑ์`,
+                  `Scored ${answeredCount}/${criteria.length} criteria`
+                )}
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {!isBeforeDeadline
+                  ? t('หมดเขตประเมิน · ดูคะแนนได้เท่านั้น', 'Deadline passed · Read only')
+                  : evaluationStatus === 'SUBMITTED' && !isUnlockedForEdit
+                    ? t('ส่งผลประเมินแล้ว', 'Evaluation submitted')
+                    : isAllAnswered
+                      ? t('พร้อมบันทึกหรือส่งผลประเมิน', 'Ready to save or submit')
+                      : t('กรุณาให้คะแนนครบทุกเกณฑ์ก่อนกดส่ง', 'Score all criteria to submit')}
+              </p>
+            </div>
+          </div>
 
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleSaveDraft} disabled={!canEdit}>
-            บันทึกแบบร่าง
-          </Button>
-          <Button onClick={handleSubmitClick} disabled={!canEdit || !allAnswered}>
-            ส่งคะแนน
-          </Button>
+          <div className="flex items-center gap-2">
+            {evaluationStatus === 'SUBMITTED' && !isUnlockedForEdit ? (
+              <Button type="button" variant="secondary" disabled={!isBeforeDeadline || !canEvaluate || isSaving} onClick={() => setIsUnlockedForEdit(true)}>{t('แก้ไขคะแนน', 'Edit Scores')}</Button>
+            ) : (
+              <>
+                {isUnlockedForEdit && <Button type="button" variant="secondary" disabled={isSaving} onClick={cancelChanges}>{t('ยกเลิกการแก้ไข', 'Cancel Changes')}</Button>}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleSaveDraft}
+                  disabled={!canEdit || (evaluationStatus === 'SUBMITTED' && !isAllAnswered)}
+                  isLoading={isSaving}
+                >
+                  <Save className="h-4 w-4" />
+                  {evaluationStatus === 'SUBMITTED' ? t('บันทึกการแก้ไข', 'Save Changes') : t('บันทึกร่าง', 'Save Draft')}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!canEdit || !isAllAnswered}
+                >
+                  <Send className="h-4 w-4" />
+                  {evaluationStatus === 'SUBMITTED'
+                    ? t('ส่งคะแนนอีกครั้ง', 'Resubmit Score')
+                    : t('ส่งคะแนน', 'Submit Score')}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       <ConfirmDialog
         isOpen={isConfirmOpen}
-        title="ยืนยันการส่งคะแนน"
-        message={`ยืนยันการส่งคะแนนของ "${teamName}" หรือไม่? คะแนนจะถูกนับเป็นคะแนนทางการ และยังแก้ไข/ส่งใหม่ได้ก่อน Deadline`}
+        isLoading={isSaving}
+        isDanger={false}
+        title={t('ยืนยันการส่งคะแนน', 'Confirm Score Submission')}
+        message={t(
+          `ยืนยันการส่งคะแนนทีม "${teamName}" (รวม ${estimatedTotal}/100) หรือไม่? สามารถแก้ไขคะแนนได้จนถึง deadline ขณะโครงการเปิดรับคะแนน`,
+          `Submit score for "${teamName}" (Total ${estimatedTotal}/100)? Scores can be edited until the deadline while the competition is active.`
+        )}
         onConfirm={confirmSubmit}
         onCancel={() => setIsConfirmOpen(false)}
-        confirmText="ส่งคะแนน"
+        confirmText={t('ยืนยันส่งคะแนน', 'Submit Score')}
       />
     </div>
   );

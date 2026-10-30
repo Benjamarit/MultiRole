@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Mail, Lock, Trophy, ShieldCheck, Award, ArrowLeft, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react';
+import apiClient from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { getRegisteredUsers, updateRegisteredUser } from '../context/authStore';
-
-const SYSTEM_ADMIN = { email: 'admin@example.com', password: '1234', name: 'ดร.สมชาย ใจดี', role: 'SYSTEM_ADMIN' };
+import { useLanguage } from '../context/LanguageContext';
+import AuthLayout from '../layouts/AuthLayout';
+import Button from '../components/Button';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,289 +14,78 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isForgotMode, setIsForgotMode] = useState(false);
-
+  const location = useLocation();
+  const [isForgotMode, setIsForgotMode] = useState(Boolean(location.state?.forgotPassword));
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { t } = useLanguage();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const handleLogin = async event => {
+    event.preventDefault();
+    if (isLoading) return;
     setError('');
-
-    if (!email || !password) {
-      setError('กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน');
+    if (!email.trim() || !password) {
+      setError(t('กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน', 'Please enter both email and password'));
       return;
     }
-
     setIsLoading(true);
     try {
-      // จำลองการดีเลย์โหลดข้อมูลให้ดูสมจริง
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // เช็ค System Admin
-      if (email === SYSTEM_ADMIN.email && password === SYSTEM_ADMIN.password) {
-        const adminUser = { ...SYSTEM_ADMIN };
-        delete adminUser.password;
-        login(adminUser);
-        navigate('/admin/users');
-        return;
-      }
-
-      // เช็คผู้ใช้งานทั่วไป
-      const registeredUsers = getRegisteredUsers();
-      const matchedUser = registeredUsers.find((u) => u.email === email && u.password === password);
-
-      if (matchedUser) {
-        if (matchedUser.status === 'Suspended') {
-          throw new Error('บัญชีนี้ถูกระงับการใช้งาน');
-        }
-        const publicUser = { ...matchedUser };
-        delete publicUser.password;
-        login(publicUser);
-        navigate('/workspace');
-        return;
-      }
-
-      throw new Error('Invalid credentials');
+      const backendUser = await login({ email: email.trim().toLowerCase(), password });
+      navigate(backendUser.role === 'SYSTEM_ADMIN' ? '/admin/users' : '/workspace');
     } catch (err) {
-      setError(err.message === 'บัญชีนี้ถูกระงับการใช้งาน' ? err.message : 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
-    } finally {
-      setIsLoading(false);
-    }
+      if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        navigate('/verify-email', { state: { email: err.response.data.email } });
+        return;
+      }
+      setError(err.message !== 'Invalid credentials' ? err.message : t('อีเมลหรือรหัสผ่านไม่ถูกต้อง', 'Incorrect email or password'));
+    } finally { setIsLoading(false); }
   };
 
-  const handleForgotPassword = async (e) => {
-    e.preventDefault();
+  const handleForgotPassword = async event => {
+    event.preventDefault();
+    if (isLoading) return;
     setError('');
-
-    if (!email) {
-      setError('กรุณากรอกอีเมลที่ต้องการขอรหัสผ่านใหม่');
+    if (!email.trim()) {
+      setError(t('กรุณากรอกอีเมลที่ลงทะเบียนไว้', 'Please enter your registered email'));
       return;
     }
-
     setIsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      
-      const registeredUsers = getRegisteredUsers();
-      const userExists = registeredUsers.find((u) => u.email === email);
-
-      if (userExists) {
-        updateRegisteredUser(email, { resetRequested: true });
-        toast.success('ส่งคำขอสำเร็จ! โปรดติดต่อ System Admin เพื่อรับรหัสผ่านใหม่');
-        setIsForgotMode(false);
-        setPassword('');
-      } else {
-        throw new Error('ไม่พบอีเมลนี้ในระบบ');
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
+      const response = await apiClient.post('/auth/forgot-password', { email: email.trim().toLowerCase() });
+      toast.success(typeof response.data === 'string' ? response.data : response.data.message);
+      setIsForgotMode(false);
+      setPassword('');
+      setShowPassword(false);
+    } catch (err) { setError(err.message); }
+    finally { setIsLoading(false); }
   };
 
-  return (
-    <div className="flex min-h-screen bg-white font-sans">
-      
-      {/* ฝั่งซ้าย: โปสเตอร์ข้อมูล (แสดงเฉพาะจอใหญ่) */}
-      <div className="hidden lg:flex lg:w-1/2 bg-slate-900 relative items-center justify-center overflow-hidden">
-        {/* ลวดลายตารางแบบเป็นทางการ (Corporate Grid Pattern) */}
-        <div 
-          className="absolute inset-0 opacity-10" 
-          style={{ 
-            backgroundImage: 'linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)', 
-            backgroundSize: '40px 40px' 
-          }}
-        ></div>
-        
-        {/* วงกลมประดับพื้นหลัง */}
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600 rounded-full mix-blend-multiply filter blur-[120px] opacity-20 transform translate-x-1/2 -translate-y-1/2"></div>
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-600 rounded-full mix-blend-multiply filter blur-[120px] opacity-20 transform -translate-x-1/2 translate-y-1/2"></div>
+  const changeMode = forgot => {
+    if (isLoading) return;
+    setIsForgotMode(forgot);
+    setError('');
+    setShowPassword(false);
+  };
+  const inputClass = 'w-full rounded-lg border border-slate-200 bg-white py-3 pl-11 text-sm text-slate-900 shadow-2xs transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-50';
+  return <AuthLayout>
+      <section aria-labelledby="login-title" className="mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/50 lg:ml-auto lg:mr-0">
+        <div className="p-6 sm:p-8">
+          <span className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-600"><LockKeyhole className="h-5 w-5" aria-hidden="true" /></span>
+          <h1 id="login-title" className="text-2xl font-bold tracking-tight">{isForgotMode ? t('ลืมรหัสผ่าน', 'Forgot password') : t('เข้าสู่ระบบ', 'Sign in')}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{isForgotMode ? t('กรอกอีเมลที่ลงทะเบียนเพื่อรับลิงก์ตั้งรหัสผ่านใหม่', 'Enter your registered email to receive a password reset link.') : t('กรอกข้อมูลบัญชีเพื่อเข้าใช้งาน', 'Enter your account details to continue.')}</p>
 
-        <div className="relative z-10 p-12 max-w-lg">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 mb-8 shadow-2xl">
-            <Trophy className="w-10 h-10 text-amber-400" strokeWidth={1.5} />
-          </div>
-          
-          <h1 className="text-4xl font-bold text-white mb-6 tracking-tight leading-tight">
-            Competition Evaluation <br/> <span className="text-blue-400">Management System</span>
-          </h1>
-          
-          <p className="text-lg text-slate-300 leading-relaxed mb-10">
-            ระบบบริหารจัดการและประเมินผลการแข่งขันอย่างเป็นทางการ มุ่งเน้นความโปร่งใส แม่นยำ และมีมาตรฐานระดับสากล
-          </p>
+          {error && <div id="login-error" role="alert" className="mt-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p>{error}</p></div>}
 
-          <div className="space-y-5">
-            <div className="flex items-center gap-4 text-slate-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500/20 text-blue-400">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <span className="font-medium">มาตรฐานการประเมินที่โปร่งใสและตรวจสอบได้</span>
-            </div>
-            <div className="flex items-center gap-4 text-slate-200">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500/20 text-blue-400">
-                <Award className="w-5 h-5" />
-              </div>
-              <span className="font-medium">รองรับเกณฑ์การให้คะแนนที่หลากหลายรูปแบบ</span>
-            </div>
-          </div>
+          <form className="mt-6" onSubmit={isForgotMode ? handleForgotPassword : handleLogin} aria-busy={isLoading} aria-describedby={error ? 'login-error' : undefined}>
+            <fieldset disabled={isLoading} className="min-w-0 space-y-5">
+              <legend className="sr-only">{isForgotMode ? t('ขอลิงก์ตั้งรหัสผ่านใหม่', 'Request a password reset link') : t('ข้อมูลเข้าสู่ระบบ', 'Sign-in details')}</legend>
+              <div><label htmlFor="login-email" className="mb-2 block text-sm font-semibold text-slate-700">{t('อีเมล', 'Email')}</label><div className="relative"><Mail className="pointer-events-none absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-400" aria-hidden="true" /><input id="login-email" name="email" type="email" inputMode="email" autoComplete="username" autoCapitalize="none" spellCheck={false} required value={email} onChange={event => setEmail(event.target.value)} placeholder="name@example.com" className={`${inputClass} pr-4`} /></div></div>
+              {!isForgotMode && <div><div className="mb-2 flex items-center justify-between gap-3"><label htmlFor="login-password" className="text-sm font-semibold text-slate-700">{t('รหัสผ่าน', 'Password')}</label><button type="button" onClick={() => changeMode(true)} className="rounded text-xs font-semibold text-blue-700 hover:text-blue-800">{t('ลืมรหัสผ่าน?', 'Forgot password?')}</button></div><div className="relative"><LockKeyhole className="pointer-events-none absolute left-3.5 top-3.5 h-4.5 w-4.5 text-slate-400" aria-hidden="true" /><input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} placeholder={t('กรอกรหัสผ่าน', 'Enter your password')} className={`${inputClass} pr-12`} /><button type="button" onClick={() => setShowPassword(previous => !previous)} aria-label={showPassword ? t('ซ่อนรหัสผ่าน', 'Hide password') : t('แสดงรหัสผ่าน', 'Show password')} aria-pressed={showPassword} className="absolute right-2 top-2 rounded-md p-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-600">{showPassword ? <EyeOff className="h-5 w-5" aria-hidden="true" /> : <Eye className="h-5 w-5" aria-hidden="true" />}</button></div></div>}
+              <Button type="submit" className="w-full py-3" isLoading={isLoading} disabled={isLoading}><span aria-live="polite">{isLoading ? isForgotMode ? t('กำลังส่งลิงก์…', 'Sending link…') : t('กำลังเข้าสู่ระบบ…', 'Signing in…') : isForgotMode ? t('ส่งลิงก์ตั้งรหัสผ่านใหม่', 'Send reset link') : t('เข้าสู่ระบบ', 'Sign in')}</span>{!isLoading && <ArrowRight className="h-4 w-4" aria-hidden="true" />}</Button>
+            </fieldset>
+          </form>
         </div>
-        
-        {/* Footer ฝั่งซ้าย */}
-        <div className="absolute bottom-8 left-12 text-sm text-slate-500">
-          © {new Date().getFullYear()} CE System. All rights reserved.
-        </div>
-      </div>
-
-      {/* ฝั่งขวา: ฟอร์มล็อกอิน */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 bg-slate-50 lg:bg-white relative min-h-screen">
-        <div className="w-full max-w-md space-y-8 my-auto">
-          
-          {/* ส่วนหัวของฟอร์ม */}
-          <div className="text-center lg:text-left">
-            {/* โลโก้สำหรับหน้าจอมือถือ (แสดงเฉพาะตอนที่ฝั่งซ้ายโดนซ่อน) */}
-            <div className="inline-flex lg:hidden items-center justify-center w-16 h-16 rounded-xl bg-slate-900 mb-6 shadow-lg">
-              <Trophy className="w-8 h-8 text-amber-400" strokeWidth={1.5} />
-            </div>
-            <h2 className="text-3xl font-bold text-slate-900 mb-3 tracking-tight">
-              {isForgotMode ? 'รีเซ็ตรหัสผ่าน' : 'เข้าสู่ระบบ (Sign In)'}
-            </h2>
-            <p className="text-sm text-slate-500 leading-relaxed">
-              {isForgotMode
-                ? 'กรุณากรอกอีเมลที่ลงทะเบียนไว้ ระบบจะแจ้งไปยังผู้ดูแลเพื่อดำเนินการออกรหัสผ่านใหม่'
-                : 'กรุณากรอกข้อมูลประจำตัวเพื่อเข้าสู่ระบบบริหารจัดการการแข่งขัน'}
-            </p>
-          </div>
-
-          {/* ข้อความแจ้งเตือน Error */}
-          {error && (
-            <div className="p-4 rounded-lg bg-red-50 border border-red-200 flex items-start gap-3">
-              <div className="flex-1 text-sm text-red-700 font-medium">
-                {error}
-              </div>
-            </div>
-          )}
-
-          {/* ฟอร์มลืมรหัสผ่าน */}
-          {isForgotMode ? (
-            <form className="space-y-5" onSubmit={handleForgotPassword}>
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">อีเมล (Email)</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-slate-400" />
-                  </div>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
-                    placeholder="name@example.com"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-2.5 px-4 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>ส่งคำขอ <ArrowRight className="w-4 h-4" /></>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => { setIsForgotMode(false); setError(''); }}
-                className="w-full py-2 flex items-center justify-center gap-2 text-sm text-slate-500 hover:text-slate-800 font-medium transition-colors mt-2"
-              >
-                <ArrowLeft className="w-4 h-4" /> กลับไปหน้าเข้าสู่ระบบ
-              </button>
-            </form>
-
-          ) : (
-            /* ฟอร์มเข้าสู่ระบบปกติ */
-            <form className="space-y-6" onSubmit={handleLogin}>
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">อีเมล (Email)</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-slate-400" />
-                  </div>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
-                    placeholder="admin@example.com"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold text-slate-700">รหัสผ่าน (Password)</label>
-                  <button
-                    type="button"
-                    onClick={() => { setIsForgotMode(true); setError(''); }}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
-                  >
-                    ลืมรหัสผ่าน?
-                  </button>
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-slate-400" />
-                  </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-11 pr-12 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-shadow"
-                    placeholder="••••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-2.5 px-4 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-colors duration-200 focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed mt-4"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  'เข้าสู่ระบบ (Sign In)'
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* ลิงก์ไปหน้าสมัครสมาชิก */}
-          {!isForgotMode && (
-            <div className="pt-6 text-center border-t border-slate-200">
-              <p className="text-sm text-slate-500">
-                ยังไม่มีบัญชีผู้ใช้?{' '}
-                <Link to="/signup" className="text-blue-600 hover:text-blue-800 font-semibold transition-colors">
-                  ลงทะเบียนที่นี่
-                </Link>
-              </p>
-            </div>
-          )}
-          
-        </div>
-      </div>
-    </div>
-  );
+        <div className="border-t border-slate-100 bg-slate-50/70 px-6 py-4 text-center sm:px-8">{isForgotMode ? <button type="button" disabled={isLoading} onClick={() => changeMode(false)} className="inline-flex items-center gap-2 rounded text-sm font-semibold text-slate-600 hover:text-blue-700 disabled:opacity-50"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t('กลับไปเข้าสู่ระบบ', 'Back to sign in')}</button> : <p className="text-sm text-slate-500">{t('ยังไม่มีบัญชี?', 'New to MultiRole?')} <Link to="/signup" className="ml-1 rounded font-semibold text-blue-700 hover:text-blue-800">{t('สมัครสมาชิก', 'Create an account')}</Link></p>}</div>
+      </section>
+  </AuthLayout>;
 }

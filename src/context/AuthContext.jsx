@@ -1,83 +1,82 @@
-import { createContext, useContext, useState } from 'react';
-import { getRegisteredUsers } from './authStore';
-
+import { createContext, useContext, useEffect, useState } from 'react';
+import apiClient, { TOKEN_STORAGE_KEY } from '../api/client';
+import { clearWorkspace, loadWorkspace, normalizeUser } from '../api/workspace';
+import { setRegisteredUsersCache } from './authStore';
 const AuthContext = createContext(null);
 
-const REGISTERED_USERS_KEY = 'ce_registered_users';
-
-/**
- * ครอบ App ทั้งหมดด้วย <AuthProvider> ที่ระดับบนสุด (เช่นใน main.jsx หรือ App.jsx)
- * เพื่อให้ Navbar/Sidebar และหน้าอื่นๆ รู้ว่าใครล็อกอินอยู่
- *
- * หมายเหตุ (Role ใหม่): user ที่สมัครผ่าน SignUp ไม่มี role ตายตัวติดบัญชี
- * — จะเป็น "Project Admin" ของโปรเจกต์ไหนก็ต่อเมื่อเป็นคนสร้างโปรเจกต์นั้น
- * และเป็น "Judge" ก็ต่อเมื่อถูกโปรเจกต์อื่นเชิญเข้าไป role ในที่นี้จึงเก็บไว้เฉพาะ
- * 'SYSTEM_ADMIN' (บัญชีสำรองไว้ล่วงหน้า ไม่เปิดให้สมัครเอง) กับ 'USER' (ทุกคนที่สมัครเอง)
- *
- * ตอนนี้เก็บลง localStorage แบบง่ายๆ (mock ก่อนต่อ JWT/DB จริง)
- */
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('ce_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const login = (userData) => {
-    // userData: { name, email, role }
-    setUser(userData);
-    localStorage.setItem('ce_user', JSON.stringify(userData));
-    // TODO: ตอนต่อ API จริง เก็บ JWT token จาก response ตรงนี้แทน (เช่น localStorage.setItem('token', ...))
-  };
-
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [revision, setRevision] = useState(0);
   const logout = () => {
+    clearWorkspace();
+    setRegisteredUsersCache([]);
     setUser(null);
+    setLoadError('');
     localStorage.removeItem('ce_user');
-    // TODO: ตอนต่อ API จริง ลบ token ที่เก็บไว้ด้วย
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
   };
-
-  // สมัครสมาชิกใหม่ — เก็บ mock ไว้ใน localStorage แล้ว login ให้อัตโนมัติ
-  // TODO: ตอนต่อ API จริง เปลี่ยนเป็น POST /auth/register แล้วรอ response ก่อนค่อย login
-  const register = ({ name, email, password }) => {
-    const registeredUsers = getRegisteredUsers();
-
-    if (registeredUsers.some((u) => u.email === email)) {
-      throw new Error('อีเมลนี้ถูกใช้สมัครไปแล้ว');
-    }
-
-    const newUser = {
-      id: crypto.randomUUID(),
-      name,
-      email,
-      password,
-      role: 'USER',
-      createdAt: new Date().toISOString(),
-      status: 'Active',
-    };
-    localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify([...registeredUsers, newUser]));
-
-    const publicUser = { ...newUser };
-    delete publicUser.password; // ไม่เก็บ password ไว้ใน session ปัจจุบัน
-    login(publicUser);
-    return publicUser;
+  const hydrate = async () => {
+    const { data } = await apiClient.get('/auth/me');
+    const current = normalizeUser(data);
+    await loadWorkspace(current);
+    const users = await apiClient.get('/users');
+    setRegisteredUsersCache(users.data.map(normalizeUser));
+    setUser(current);
+    return current;
   };
-
+  const restore = async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      if (localStorage.getItem(TOKEN_STORAGE_KEY)) await hydrate();
+      else logout();
+    } catch (error) {
+      if ([401, 403].includes(error.response?.status)) logout();
+      else setLoadError(error.message);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    restore();
+    const expired = () => logout();
+    window.addEventListener('ce:unauthorized', expired);
+    return () => window.removeEventListener('ce:unauthorized', expired);
+    // Bootstrap once; writes and explicit refreshes reload server data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const login = async (credentials) => {
+    clearWorkspace();
+    const { data } = await apiClient.post('/auth/login', credentials);
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    try { return await hydrate(); }
+    catch (error) { logout(); throw error; }
+  };
+  const register = async ({ name, email, password }) => {
+    return apiClient.post('/auth/register', { fullName: name, email: email.trim().toLowerCase(), password });
+  };
+  const refresh = async () => {
+    await loadWorkspace(user);
+    const users = await apiClient.get('/users');
+    setRegisteredUsersCache(users.data.map(normalizeUser));
+    setRevision((value) => value + 1);
+  };
   return (
-    <AuthContext.Provider value={{ user, login, logout, register }}>
-      {children}
+    <AuthContext.Provider value={{ user, loading, login, logout, register, refresh, revision }}>
+      {loading ? <div className="p-8 text-center">กำลังโหลดข้อมูลจากเซิร์ฟเวอร์…</div> : loadError ? (
+        <div className="p-8 text-center" role="alert">
+          <p>{loadError}</p>
+          <button className="m-4 underline" onClick={restore}>ลองอีกครั้ง</button>
+          <button className="m-4 underline" onClick={logout}>กลับไปเข้าสู่ระบบ</button>
+        </div>
+      ) : children}
     </AuthContext.Provider>
   );
 }
-
-// The hook intentionally shares this context module with its provider.
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth ต้องถูกเรียกใช้ภายใน <AuthProvider> เท่านั้น');
-  }
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth ต้องอยู่ภายใน AuthProvider');
+  return context;
 }
