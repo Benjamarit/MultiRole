@@ -29,9 +29,9 @@ import {
   getMyProjects,
   isBeforeEvaluationDeadline,
 } from '../data/ProjectStore';
-import { deleteProjectTeams, getTeamsByProject } from '../data/TeamStore';
-import { deleteProjectCriteria, hasCompleteCriteriaWeights } from '../data/CriteriaStore';
-import { deleteProjectEvaluations, getEvaluation } from '../data/EvaluationStore';
+import { getTeamsByProject } from '../data/TeamStore';
+import { hasCompleteCriteriaWeights } from '../data/CriteriaStore';
+import { getEvaluation } from '../data/EvaluationStore';
 
 const statusVariant = (status) => {
   switch (status) {
@@ -46,11 +46,11 @@ const statusVariant = (status) => {
 
 function getJudgeProgress(project, judgeEmail) {
   const assignments = getJudgeAssignments(project.id);
-  const myAssignment = assignments.find((a) => (a.email || a.id) === judgeEmail);
+  const myAssignment = assignments.find((a) => a.id === judgeEmail);
   const assignedTeamIds = myAssignment ? getAssignedTeamIds(project.id, myAssignment.id) : [];
 
   const eligibleTeams = getTeamsByProject(project.id).filter((team) =>
-    assignedTeamIds.includes(Number(team.id))
+    assignedTeamIds.includes(String(team.id))
   );
   const completed = eligibleTeams.filter(
     (team) => getEvaluation(project.id, team.id, judgeEmail)?.status === 'SUBMITTED'
@@ -88,13 +88,13 @@ function compareByUpcomingDeadline(a, b) {
 
 export default function Workspace() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { t, tDesc } = useLanguage();
+  const { user, refresh, revision } = useAuth();
+  const { t } = useLanguage();
 
   const [deletedProjectIds, setDeletedProjectIds] = useState(() => new Set());
-  const myProjects = useMemo(
-    () =>
-      getMyProjects(user?.email)
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Store data lives outside React; revision invalidates these snapshots after refresh.
+  const myProjects = useMemo(() => getMyProjects(user?.email)
         .filter((project) => !deletedProjectIds.has(project.id))
         .map((project) => {
           const teams = getTeamsByProject(project.id);
@@ -106,18 +106,16 @@ export default function Workspace() {
             judgesCount: judges.length,
             criteriaReady,
           };
-        }),
-    [user?.email, deletedProjectIds]
-  );
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- revision tracks the external server cache.
+        }), [user?.email, deletedProjectIds, revision]);
 
-  const judgingProjects = useMemo(() => {
-    return getJudgingProjects(user?.email)
+  const judgingProjects = useMemo(() => getJudgingProjects(user?.email)
       .filter((project) => !deletedProjectIds.has(project.id))
       .map((project) => ({
         ...project,
-        progress: getJudgeProgress(project, user?.email),
-      }));
-  }, [user?.email, deletedProjectIds]);
+        progress: getJudgeProgress(project, user?.id),
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- revision tracks the external server cache.
+      })), [user?.email, user?.id, deletedProjectIds, revision]);
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'owned' | 'judging'
   const [searchTerm, setSearchTerm] = useState('');
@@ -135,13 +133,10 @@ export default function Workspace() {
     [judgingProjects]
   );
 
-  const confirmDeleteProject = () => {
+  const confirmDeleteProject = async () => {
     if (!projectToDelete) return;
     try {
-      deleteProjectEvaluations(projectToDelete.id);
-      deleteProjectTeams(projectToDelete.id);
-      deleteProjectCriteria(projectToDelete.id);
-      const deleted = deleteProject(projectToDelete.id);
+      const deleted = await deleteProject(projectToDelete.id);
       if (!deleted) {
         toast.error(t('ไม่พบโครงการที่ต้องการลบ', 'Competition not found'));
         return;
@@ -172,7 +167,7 @@ export default function Workspace() {
     list = [...list].sort((a, b) => {
       if (mySortBy === 'deadline-soon') return compareByUpcomingDeadline(a, b);
       if (mySortBy === 'name') return a.name.localeCompare(b.name, 'th');
-      return Number(b.id) - Number(a.id);
+      return String(b.id) - String(a.id);
     });
 
     return list;
@@ -221,15 +216,23 @@ export default function Workspace() {
           `สวัสดี, ${user?.name || 'ผู้ใช้งาน'}`,
           `Welcome, ${user?.name || 'User'}`
         )}
-        description={tDesc(
-          'บริหารจัดการโครงการประกวดที่คุณสร้าง หรือเข้าประเมินให้คะแนนในโครงการที่คุณได้รับเชิญเป็นกรรมการ',
-          'Manage competitions you created as Project Admin or evaluate assigned teams as a Judge.'
-        )}
+        description={t('เลือกโครงการเพื่อเริ่มใช้งาน', 'Choose a competition to get started')}
         action={
+          <div className="flex gap-2">
+          <Button variant="secondary" isLoading={isRefreshing} disabled={isRefreshing} onClick={async () => {
+            if (isRefreshing) return;
+            setIsRefreshing(true);
+            try {
+              await refresh();
+              toast.success(t('อัปเดตข้อมูลแล้ว', 'Workspace updated'));
+            } catch (error) { toast.error(error.message); }
+            finally { setIsRefreshing(false); }
+          }}>{t('รีเฟรชข้อมูล', 'Refresh')}</Button>
           <Button onClick={() => navigate('/projects/new')}>
             <Plus className="h-4 w-4" />
             {t('สร้างโครงการใหม่', 'Create Competition')}
           </Button>
+          </div>
         }
       />
 

@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Login from './pages/Login.jsx';
 import SignUp from './pages/SignUp.jsx';
+import VerifyEmail from './pages/VerifyEmail.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import WorkSpace from './pages/WorkSpace.jsx';
 import CreateProject from './pages/CreateProject.jsx';
@@ -19,6 +20,7 @@ import JudgeProjectTeams from './pages/JudgeProjectTeams.jsx';
 import JudgeEvaluation from './pages/JudgeEvaluation.jsx';
 import ProjectLeaderboard from './pages/ProjectLeaderboard.jsx';
 import JudgeMultiEvaluation from './pages/JudgeMultiEvaluation.jsx';
+import JudgeScoreMonitoring from './pages/JudgeScoreMonitoring.jsx';
 
 function App() {
   return (
@@ -44,6 +46,7 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* ต้องล็อกอินก่อนจึงจะเข้าถึงหน้าภายในระบบได้ทั้งหมด */}
@@ -73,6 +76,7 @@ function App() {
 
               {/* เฉพาะกรรมการที่ได้รับเชิญในโครงการนั้น (Judge) */}
               <Route element={<ProtectedRoute projectRole="JUDGE" />}>
+                <Route path="/judge/project/:projectId/scores" element={<JudgeScoreMonitoring />} />
                 <Route path="/judge/project/:projectId/teams" element={<JudgeProjectTeams />} />
                 <Route
                   path="/judge/project/:projectId/evaluate/:teamId"

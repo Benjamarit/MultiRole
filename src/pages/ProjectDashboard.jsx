@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   Users,
@@ -7,26 +7,32 @@ import {
   BarChart3,
   Trophy,
   CheckCircle2,
+  ChevronDown,
   Circle,
   CalendarClock,
   ArrowRight,
   UserCheck,
   Sparkles,
+  LockKeyhole,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
+import ConfirmDialog from '../components/ConfirmDialog';
+import DeadlineHistory from '../components/DeadlineHistory';
+import ProjectStructureLock from '../components/ProjectStructureLock';
 import toast from 'react-hot-toast';
 import { useLanguage } from '../context/LanguageContext';
-import { getCriteriaByProject, getTotalCriteriaWeight } from '../data/CriteriaStore';
+import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
+import { getProjectSetupReadiness, isActivationDeadlineValid } from '../data/ProjectReadiness';
+import { detail } from '../api/workspace';
 import { getGroupsByProject } from '../data/GroupStore';
 import { getEvaluationsByProject } from '../data/EvaluationStore';
 import {
   getJudgeAssignments,
-  getJudgeIdsAssignedToTeam,
   getProjectById,
   isBeforeEvaluationDeadline,
   updateProjectDetails,
@@ -46,22 +52,36 @@ const statusVariant = (status) => {
 
 export default function ProjectDashboard() {
   const { id } = useParams();
-  const { t, tDesc } = useLanguage();
+  const { t } = useLanguage();
   const [project, setProject] = useState(() => getProjectById(id));
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const criteria = getCriteriaByProject(id);
-  const totalCriteriaWeight = getTotalCriteriaWeight(id);
-  const hasCompleteWeights = criteria.length > 0 && totalCriteriaWeight === 100;
 
   const teams = getTeamsByProject(id);
   const groups = getGroupsByProject(id);
   const judges = getJudgeAssignments(id);
   const evaluations = getEvaluationsByProject(id).filter((e) => e.status === 'SUBMITTED');
 
-  const assignedTeamsCount = teams.filter(
-    (team) => getJudgeIdsAssignedToTeam(id, team.id).length > 0
-  ).length;
-  const allTeamsAssigned = teams.length > 0 && assignedTeamsCount === teams.length;
+  const setup = getProjectSetupReadiness(criteria, teams, judges, detail(id).assignments);
+  const { totalWeight: totalCriteriaWeight, criteriaReady: hasCompleteWeights, assignedTeamsCount, allTeamsAssigned } = setup;
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isSavingDeadline, setIsSavingDeadline] = useState(false);
+  const [pendingDeadline, setPendingDeadline] = useState(null);
+  const [deadlineRevision, setDeadlineRevision] = useState(0);
+  const deadlineValid = isActivationDeadlineValid(project?.evaluationDeadline, clock);
+  const canActivate = setup.ready && deadlineValid;
+  const missing = [
+    !setup.criteriaReady && { text: t('กำหนดเกณฑ์ประเมินให้น้ำหนักรวมครบ 100%', 'Set criteria weights to a total of 100%'), path: `/project/${id}/criteria` },
+    !setup.hasTeams && { text: t('เพิ่มทีมเข้าแข่งขันอย่างน้อย 1 ทีม', 'Add at least one team'), path: `/project/${id}/teams` },
+    !setup.hasJudges && { text: t('เพิ่มกรรมการอย่างน้อย 1 คน', 'Add at least one judge'), path: `/project/${id}/judges` },
+    setup.hasTeams && !setup.allTeamsAssigned && { text: t(`ยังมี ${setup.unassignedTeamsCount} ทีมที่ไม่ได้มอบหมายกรรมการ`, `${setup.unassignedTeamsCount} teams still need an assigned judge`), path: `/project/${id}/assignments` },
+    !deadlineValid && { text: t('กำหนดเวลาปิดรับคะแนนผ่านไปแล้ว กรุณาเปลี่ยนเป็นเวลาในอนาคต', 'The scoring deadline has passed. Set a future deadline.'), path: '#project-evaluation-deadline' },
+  ].filter(Boolean);
 
   // 5 ขั้นตอนตัวช่วยนำทางตั้งค่าโครงการ (Setup Guide / Stepper)
   const setupSteps = [
@@ -91,6 +111,7 @@ export default function ProjectDashboard() {
       title: t('มอบหมายทีมให้กรรมการ', 'Assign Teams to Judges', { compact: true }),
       statusText: `${assignedTeamsCount}/${teams.length} ${t('ทีมมีกรรมการแล้ว', 'teams assigned', { compact: true })}`,
       done: allTeamsAssigned,
+      blocked: !setup.canAssign,
       path: `/project/${id}/assignments`,
     },
     {
@@ -106,6 +127,7 @@ export default function ProjectDashboard() {
   ];
 
   const completedStepsCount = setupSteps.filter((s) => s.done).length;
+  const nextStep = project?.status === 'Active' ? null : setupSteps.find(step => !step.done && !step.blocked);
 
   const projectMenus = [
     {
@@ -113,88 +135,80 @@ export default function ProjectDashboard() {
       path: `/project/${id}/teams`,
       icon: Users,
       stat: `${teams.length} ${t('ทีม', 'Teams', { compact: true })} · ${groups.length} ${t('กลุ่ม', 'Groups', { compact: true })}`,
-      desc: tDesc(
-        'เพิ่มทีม นำเข้าจากไฟล์ Excel และจัดกลุ่มการแข่งขัน',
-        'Add teams, import via Excel, and organize into groups'
-      ),
     },
     {
       title: t('จัดการกรรมการ', 'Manage Judges'),
       path: `/project/${id}/judges`,
       icon: Scale,
       stat: `${judges.length} ${t('คน', 'Judges', { compact: true })}`,
-      desc: tDesc(
-        'เชิญผู้ใช้งานในระบบเข้าร่วมเป็นคณะกรรมการตัดสิน',
-        'Invite registered users to join the judging panel'
-      ),
     },
     {
       title: t('มอบหมายทีมให้กรรมการ', 'Judge-Team Assignments'),
       path: `/project/${id}/assignments`,
       icon: UserCheck,
       stat: `${assignedTeamsCount}/${teams.length} ${t('ทีม', 'Teams Assigned', { compact: true })}`,
-      desc: tDesc(
-        'กำหนดสิทธิ์ว่ากรรมการแต่ละท่านต้องตรวจทีมใดบ้าง',
-        'Assign specific teams to each judge for evaluation'
-      ),
     },
     {
       title: t('เกณฑ์การประเมิน', 'Scoring Criteria'),
       path: `/project/${id}/criteria`,
       icon: ClipboardList,
       stat: `${criteria.length} ${t('เกณฑ์', 'Criteria', { compact: true })} (${totalCriteriaWeight}%)`,
-      desc: tDesc(
-        'ตั้งค่าหัวข้อ รูปแบบคะแนน และค่าน้ำหนักรวมให้ครบ 100%',
-        'Configure dynamic scoring types and weights totaling 100%'
-      ),
     },
     {
       title: t('ติดตามผลการประเมิน', 'Evaluation Monitoring'),
       path: `/project/${id}/evaluations`,
       icon: BarChart3,
       stat: `${evaluations.length} ${t('ผลประเมินที่ส่งแล้ว', 'Submitted', { compact: true })}`,
-      desc: tDesc(
-        'ดูความคืบหน้ารายบุคคล ส่งแจ้งเตือน และดูคะแนนย่อย',
-        'Monitor judge progress, send reminders, and inspect scores'
-      ),
     },
     {
       title: t('สรุปผลจัดอันดับ', 'Leaderboard & Export'),
       path: `/project/${id}/leaderboard`,
       icon: Trophy,
-      stat: t('Podium & CSV', 'Podium & CSV', { compact: true }),
-      desc: tDesc(
-        'ดูแท่นรางวัล Top 3 ตารางอันดับคะแนนเฉลี่ย และดาวน์โหลดไฟล์ CSV',
-        'View Top 3 podium, full rankings, and download CSV results'
-      ),
+      stat: t('อันดับและส่งออก', 'Rankings & export', { compact: true }),
     },
   ];
 
-  const handleToggleStatus = () => {
+  const handleToggleStatus = async () => {
+    if (isUpdatingStatus) return;
     const nextStatus = project.status === 'Active' ? 'Draft' : 'Active';
-    if (!updateProjectStatus(id, nextStatus)) {
-      toast.error(
-        t(
-          'ต้องกำหนดเกณฑ์ประเมินและ Weight รวมให้ครบ 100% ก่อนเปิดรับคะแนน',
-          'Criteria weights must total 100% before activating the competition'
-        )
-      );
+    if (nextStatus === 'Active' && !canActivate) {
+      toast.error(missing.map(item => item.text).join('\n'));
       return;
     }
-    setProject((prev) => ({ ...prev, status: nextStatus }));
-    toast.success(
-      nextStatus === 'Active'
+    setIsUpdatingStatus(true);
+    try {
+      await updateProjectStatus(id, nextStatus);
+      setProject(getProjectById(id));
+      toast.success(nextStatus === 'Active'
         ? t('เปิดรับคะแนนเรียบร้อยแล้ว!', 'Competition is now Active!')
-        : t('เปลี่ยนเป็นโหมดร่าง (ปิดรับคะแนนชั่วคราว)', 'Switched to Draft status')
-    );
+        : t('เปลี่ยนเป็นโหมดร่าง (ปิดรับคะแนนชั่วคราว)', 'Switched to Draft status'));
+    } catch (error) { toast.error(error.message); }
+    finally { setIsUpdatingStatus(false); }
   };
 
-  const handleDeadlineChange = (event) => {
-    const updatedProject = updateProjectDetails(id, {
-      evaluationDeadline: event.target.value || null,
-    });
-    setProject(updatedProject);
-    toast.success(t('อัปเดตกำหนดส่งคะแนนแล้ว', 'Evaluation deadline updated'));
+  const handleDeadlineChange = async value => {
+    if (isSavingDeadline) return;
+    setIsSavingDeadline(true);
+    try {
+      const updatedProject = await updateProjectDetails(id, {
+        evaluationDeadline: value || null,
+      });
+      setProject(updatedProject);
+      setPendingDeadline(null);
+      setDeadlineRevision(v => v + 1);
+      toast.success(t('อัปเดตกำหนดส่งคะแนนแล้ว', 'Evaluation deadline updated'));
+    } catch (error) {
+      toast.error(error.message);
+    } finally { setIsSavingDeadline(false); }
+  };
+
+  const requestDeadlineChange = value => {
+    const next = String(value || '');
+    if (next === (project?.evaluationDeadline || '').slice(0, 16)) {
+      toast.success(t('กำหนดเวลายังเหมือนเดิม', 'The deadline is unchanged'));
+      return;
+    }
+    setPendingDeadline({ value: next, previous: project.evaluationDeadline });
   };
 
   if (!project) {
@@ -213,14 +227,8 @@ export default function ProjectDashboard() {
 
       <PageHeader
         title={project.name}
-        subtitle={project.type || 'Competition Project'}
-        description={
-          project.description ||
-          tDesc(
-            'ตั้งค่าองค์ประกอบของการแข่งขันและติดตามความคืบหน้าการให้คะแนนทั้งหมดได้จากหน้านี้',
-            'Configure competition settings and monitor evaluation progress from this central dashboard.'
-          )
-        }
+        subtitle={project.type}
+        description={project.description}
         badge={
           <Badge variant={statusVariant(project.status)}>
             {project.status === 'Active'
@@ -232,6 +240,9 @@ export default function ProjectDashboard() {
           <Button
             variant={project.status === 'Active' ? 'secondary' : 'primary'}
             onClick={handleToggleStatus}
+            isLoading={isUpdatingStatus}
+            disabled={isUpdatingStatus || (project.status !== 'Active' && !canActivate)}
+            aria-describedby={project.status !== 'Active' && !canActivate ? 'activation-reasons' : undefined}
           >
             {project.status === 'Active'
               ? t('ปิดรับคะแนนชั่วคราว', 'Pause Scoring (Set Draft)', { compact: true })
@@ -242,7 +253,8 @@ export default function ProjectDashboard() {
 
       {/* ตัวช่วยนำทางตั้งค่าโครงการ (Project Setup Guide / Stepper) */}
       <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/70 via-white to-indigo-50/40">
-        <div className="mb-4 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+        <details open={completedStepsCount < setupSteps.length} className="group/setup">
+        <summary className="flex cursor-pointer list-none flex-col justify-between gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-blue-500 sm:flex-row sm:items-center [&::-webkit-details-marker]:hidden">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white shadow-2xs">
               <Sparkles className="h-4 w-4" />
@@ -250,34 +262,29 @@ export default function ProjectDashboard() {
             <div>
               <h2 className="text-base font-bold text-slate-900">
                 {t(
-                  'ตัวช่วยนำทางตั้งค่าโครงการ',
-                  'Competition Setup Guide'
+                  'ตั้งค่าโครงการ',
+                  'Competition setup'
                 )}
               </h2>
-              <p className="text-xs text-slate-600">
-                {t(
-                  'ทำตามขั้นตอนด้านล่างให้ครบถ้วนเพื่อให้กรรมการสามารถเริ่มประเมินคะแนนได้อย่างถูกต้อง',
-                  'Complete these 5 steps to prepare your competition for seamless judge evaluation.'
-                )}
-              </p>
             </div>
           </div>
-          <Badge variant={completedStepsCount === 5 ? 'success' : 'info'}>
+          <div className="flex items-center gap-3"><Badge variant={completedStepsCount === 5 ? 'success' : 'info'}>
             {t(
               `สำเร็จแล้ว ${completedStepsCount}/5 ขั้นตอน`,
               `${completedStepsCount}/5 Completed`
             )}
-          </Badge>
-        </div>
+          </Badge><ChevronDown aria-hidden="true" className="h-4 w-4 text-blue-600 transition-transform group-open/setup:rotate-180 motion-reduce:transition-none" /></div>
+        </summary>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {setupSteps.map((item) => {
+            const locked = item.blocked || (item.step === 5 && !canActivate);
             const content = (
               <div
                 className={`flex h-full flex-col justify-between rounded-xl border p-3.5 transition-all ${
                   item.done
                     ? 'border-emerald-200/90 bg-emerald-50/50'
-                    : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-xs'
+                    : locked ? 'border-slate-200 bg-slate-50 text-slate-400' : nextStep?.step === item.step ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-200' : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-xs'
                 }`}
               >
                 <div>
@@ -287,7 +294,7 @@ export default function ProjectDashboard() {
                     </span>
                     {item.done ? (
                       <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600" />
-                    ) : (
+                    ) : locked ? <LockKeyhole className="h-4.5 w-4.5 text-slate-400" aria-hidden="true" /> : (
                       <Circle className="h-4.5 w-4.5 text-amber-500" />
                     )}
                   </div>
@@ -301,7 +308,7 @@ export default function ProjectDashboard() {
                       item.done ? 'text-emerald-700' : 'text-amber-700'
                     }`}
                   >
-                    {item.statusText}
+                    {locked ? item.step === 5 ? !deadlineValid ? t('กรุณาแก้กำหนดเวลา', 'Update the deadline') : t('ตั้งค่าขั้น 1–4 ให้ครบก่อน', 'Complete steps 1–4 first') : t('ต้องมีทีมและกรรมการก่อน', 'Add teams and judges first') : item.statusText}
                   </span>
                   {item.path && (
                     <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
@@ -310,6 +317,7 @@ export default function ProjectDashboard() {
               </div>
             );
 
+            if (item.blocked) return <div key={item.step} aria-disabled="true">{content}</div>;
             return item.path ? (
               <Link key={item.step} to={item.path} className="block h-full">
                 {content}
@@ -319,69 +327,94 @@ export default function ProjectDashboard() {
                 key={item.step}
                 type="button"
                 onClick={handleToggleStatus}
-                className="block h-full text-left"
+                disabled={project.status === 'Active' || !canActivate || isUpdatingStatus}
+                aria-describedby={!canActivate ? 'activation-reasons' : undefined}
+                className="block h-full text-left disabled:cursor-default"
               >
                 {content}
               </button>
             );
           })}
         </div>
+        {project.status !== 'Active' && <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          {canActivate ? <div><div className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />{t('ตั้งค่าครบแล้ว พร้อมเปิดรับคะแนน', 'Setup complete. Ready to open scoring.')}</div><p className="mt-2 text-xs leading-6 text-slate-500">{project.criteriaLocked ? t('ข้อมูลโครงการและการตั้งค่าถูกล็อกแล้ว แม้อยู่ในช่วงพักรับคะแนน', 'Project details and setup remain locked while scoring is paused.') : t('เมื่อเปิดรับคะแนน ข้อมูลโครงการ ทีม กลุ่ม เกณฑ์ กรรมการ และการมอบหมายจะถูกล็อก รวมถึงช่วงพักรับคะแนน', 'Opening scoring locks project details, teams, groups, criteria, judges and assignments, including while paused.')}</p></div> : <>
+            <p id="activation-reasons" className="text-sm font-semibold text-slate-800">{t('ยังเปิดรับคะแนนไม่ได้ กรุณาตั้งค่าให้ครบ', 'Complete the following before opening scoring')}</p>
+            <ul className="mt-2 space-y-1 text-xs leading-6 text-slate-600">{missing.map(item => <li key={item.path}>{item.text}</li>)}</ul>
+            {setup.ready && !deadlineValid && <Button size="sm" className="mt-3" onClick={() => document.getElementById('project-evaluation-deadline')?.focus()}>{t('แก้ไขกำหนดเวลา', 'Update deadline')}</Button>}
+            {nextStep?.path && <Link to={nextStep.path} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">{t('ทำขั้นตอนถัดไป', 'Continue setup')}<ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></Link>}
+          </>}
+        </div>}
+        </details>
       </Card>
 
       {/* การตั้งค่ากำหนดเวลาส่งคะแนน (Deadline Card) */}
-      <Card className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div className="flex items-start gap-3.5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-            <CalendarClock className="h-5 w-5" />
+      <Card>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:items-start">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+              <CalendarClock className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold text-slate-900">
+                {t('กำหนดเวลาปิดรับคะแนน', 'Evaluation Deadline')}
+              </h2>
+              <p id="deadline-status-description" className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                {project.evaluationDeadline
+                  ? isBeforeEvaluationDeadline(project)
+                    ? t(
+                        `กรรมการแก้ไขและส่งคะแนนได้ถึง ${new Date(project.evaluationDeadline).toLocaleString('th-TH')}`,
+                        `Judges can submit until ${new Date(project.evaluationDeadline).toLocaleString('en-US')}`
+                      )
+                    : t('หมดเขตรับคะแนนแล้ว (ปิดการแก้ไข)', 'Deadline has passed (Read-only)')
+                  : t(
+                      'ไม่ได้กำหนดวันหมดเขต — กรรมการสามารถส่งและแก้ไขคะแนนได้ตลอดขณะที่โครงการเป็น Active',
+                      'No deadline set — Judges can evaluate anytime while the project is Active'
+                    )}
+              </p>
+            </div>
           </div>
-          <div>
-            <label
-              htmlFor="project-evaluation-deadline"
-              className="block text-sm font-bold text-slate-900"
-            >
-              {t('กำหนดเวลาปิดรับคะแนน', 'Evaluation Deadline')}
-            </label>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {project.evaluationDeadline
-                ? isBeforeEvaluationDeadline(project)
-                  ? t(
-                      `กรรมการแก้ไขและส่งคะแนนได้ถึง ${new Date(project.evaluationDeadline).toLocaleString('th-TH')}`,
-                      `Judges can submit until ${new Date(project.evaluationDeadline).toLocaleString('en-US')}`
-                    )
-                  : t('หมดเขตรับคะแนนแล้ว (ปิดการแก้ไข)', 'Deadline has passed (Read-only)')
-                : t(
-                    'ไม่ได้กำหนดวันหมดเขต — กรรมการสามารถส่งและแก้ไขคะแนนได้ตลอดขณะที่โครงการเป็น Active',
-                    'No deadline set — Judges can evaluate anytime while the project is Active'
-                  )}
-            </p>
-          </div>
+          <form aria-label={t('ตั้งค่ากำหนดเวลา', 'Deadline settings')} aria-busy={isSavingDeadline} className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5" onSubmit={event => {
+            event.preventDefault();
+            requestDeadlineChange(new FormData(event.currentTarget).get('deadline'));
+          }}>
+            <div className="min-w-0">
+              <label htmlFor="project-evaluation-deadline" className="mb-2 block text-sm font-semibold text-slate-700">{t('วันและเวลาปิดรับคะแนน', 'Scoring closes on')}</label>
+              <input
+                id="project-evaluation-deadline"
+                name="deadline"
+                type="datetime-local"
+                key={`${project.id}:${project.evaluationDeadline || ''}`}
+                defaultValue={project.evaluationDeadline ? project.evaluationDeadline.slice(0, 16) : ''}
+                disabled={isSavingDeadline}
+                aria-describedby="deadline-status-description"
+                className="min-h-11 w-full min-w-0 max-w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-2xs focus:border-precision-blue focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 sm:flex sm:justify-end">
+              {project.evaluationDeadline && (
+                <Button
+                  type="button"
+                  disabled={isSavingDeadline}
+                  variant="secondary"
+                  className="min-h-11 w-full sm:w-auto sm:min-w-24"
+                  onClick={() => requestDeadlineChange('')}
+                >
+                  {t('ล้างค่า', 'Clear', { compact: true })}
+                </Button>
+              )}
+              <Button type="submit" className={`min-h-11 w-full sm:w-auto sm:min-w-36 ${!project.evaluationDeadline ? 'col-span-2' : ''}`} isLoading={isSavingDeadline} disabled={isSavingDeadline}>{t('บันทึกเวลา', 'Save')}</Button>
+            </div>
+          </form>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            id="project-evaluation-deadline"
-            type="datetime-local"
-            value={
-              project.evaluationDeadline ? project.evaluationDeadline.slice(0, 16) : ''
-            }
-            onChange={handleDeadlineChange}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-2xs focus:border-precision-blue focus:outline-none focus:ring-2 focus:ring-blue-100 sm:w-auto"
-          />
-          {project.evaluationDeadline && (
-            <Button
-              variant="textGray"
-              size="sm"
-              onClick={() => handleDeadlineChange({ target: { value: '' } })}
-            >
-              {t('ล้างค่า', 'Clear', { compact: true })}
-            </Button>
-          )}
-        </div>
+        <DeadlineHistory projectId={id} revision={deadlineRevision} />
       </Card>
 
       {/* เมนูการจัดการทั้ง 6 ส่วน */}
+      <ProjectStructureLock project={project} />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {projectMenus.map((menu) => {
           const Icon = menu.icon;
+          if (menu.icon === UserCheck && !setup.canAssign) return <div key={menu.path} aria-disabled="true"><Card className="h-full border-slate-200 bg-slate-50"><LockKeyhole className="mb-4 h-5 w-5 text-slate-400" aria-hidden="true" /><h3 className="text-base font-bold text-slate-500">{menu.title}</h3><p className="mt-2 text-xs text-slate-500">{t('เพิ่มทีมและกรรมการก่อนมอบหมาย', 'Add teams and judges before assigning')}</p></Card></div>;
           return (
             <Link key={menu.path} to={menu.path} className="group block h-full">
               <Card className="flex h-full flex-col justify-between transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-blue-400 group-hover:shadow-md">
@@ -395,8 +428,7 @@ export default function ProjectDashboard() {
                   <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600">
                     {menu.title}
                   </h3>
-                  <p className="mt-1.5 text-xs leading-5 text-slate-500">{menu.desc}</p>
-                </div>
+                  </div>
                 <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-blue-600">
                   <span>{t('เข้าสู่เมนูนี้', 'Open Module', { compact: true })}</span>
                   <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
@@ -406,6 +438,10 @@ export default function ProjectDashboard() {
           );
         })}
       </div>
+      <ConfirmDialog isOpen={Boolean(pendingDeadline)} isLoading={isSavingDeadline} isDanger={false}
+        title={t('ยืนยันเปลี่ยนกำหนดปิดรับคะแนน', 'Confirm deadline change')}
+        message={t(`เปลี่ยนจาก ${pendingDeadline?.previous ? new Date(pendingDeadline.previous).toLocaleString('th-TH') : 'ไม่กำหนดเวลา'} เป็น ${pendingDeadline?.value ? new Date(pendingDeadline.value).toLocaleString('th-TH') : 'ไม่กำหนดเวลา'} การเปลี่ยนนี้มีผลต่อเวลาที่กรรมการแก้ไขและส่งคะแนนได้ และจะบันทึกประวัติผู้เปลี่ยน`, `Change from ${pendingDeadline?.previous ? new Date(pendingDeadline.previous).toLocaleString('en-GB') : 'No deadline'} to ${pendingDeadline?.value ? new Date(pendingDeadline.value).toLocaleString('en-GB') : 'No deadline'}. This affects when judges may edit and submit scores. The change and actor will be recorded.`)}
+        onConfirm={() => handleDeadlineChange(pendingDeadline.value)} onCancel={() => setPendingDeadline(null)} confirmText={t('ยืนยันเปลี่ยนเวลา', 'Confirm change')} />
     </div>
   );
 }

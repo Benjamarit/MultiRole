@@ -1,34 +1,7 @@
-const REGISTERED_USERS_KEY = 'ce_registered_users';
-
-export function getRegisteredUsers() {
-  try {
-    const stored = localStorage.getItem(REGISTERED_USERS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function setRegisteredUsersCache(users) {
-  try {
-    if (Array.isArray(users)) {
-      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users));
-    }
-  } catch {
-    // ignore storage errors
-  }
-}
-
+let users = [];
+export const getRegisteredUsers = () => users;
+export function setRegisteredUsersCache(value) { users = Array.isArray(value) ? value : []; }
 export function updateRegisteredUser(email, changes) {
-  const users = getRegisteredUsers();
-  const updatedUsers = users.map((user) =>
-    user.email === email ? { ...user, ...changes } : user
-  );
-  localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(updatedUsers));
-  return updatedUsers.find((user) => user.email === email);
+  users = users.map((user) => user.email === email ? { ...user, ...changes } : user);
 }
-
-export function deleteRegisteredUser(email) {
-  const users = getRegisteredUsers().filter((user) => user.email !== email);
-  localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users));
-}
+export function deleteRegisteredUser(email) { users = users.filter((user) => user.email !== email); }

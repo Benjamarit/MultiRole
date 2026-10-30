@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -12,6 +12,8 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { workspace, refreshNotifications } from '../api/workspace';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -69,19 +71,28 @@ function getProjectNavigation(projectId, email, t) {
           path: `/project/${projectId}/leaderboard`,
           section: 'Results',
         },
+        ...(getProjectById(projectId)?.currentRole === 'ADMIN_JUDGE' ? [
+          {
+            label: t('ประเมินทีมของฉัน', 'My Evaluations', { compact: true }),
+            path: `/judge/project/${projectId}/teams`,
+            section: 'Evaluation',
+          },
+          { label: t('คะแนนที่ฉันให้', 'My Scores', { compact: true }), path: `/judge/project/${projectId}/scores`, section: 'Evaluation' },
+        ] : []),
       ],
     };
   }
 
   const judgeProject = getJudgingProjects(email).find(
-    (project) => Number(project.id) === Number(projectId)
+    (project) => String(project.id) === String(projectId)
   );
   if (!judgeProject) return { type: 'none', items: [] };
 
-  const assignedTeams = getAssignedTeamIds(projectId, email);
+  const assignedTeams = getAssignedTeamIds(projectId, workspace.user?.id);
   return {
     type: 'judge',
     items: [
+      { label: t('คะแนนที่ฉันให้', 'My Scores', { compact: true }), path: `/judge/project/${projectId}/scores`, section: 'Evaluation' },
       {
         label: t('ประเมินทีม', 'Evaluate Teams', { compact: true }),
         path: `/judge/project/${projectId}/teams`,
@@ -147,7 +158,7 @@ function ProjectSelector({
         type="button"
         onClick={onToggle}
         className={`group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/90 bg-slate-50/60 text-left shadow-2xs transition-all hover:border-blue-200 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue ${
-          mobile ? 'w-full px-3 py-2.5' : 'ml-4 max-w-[min(36vw,22rem)] px-3 py-1.5'
+          mobile ? 'w-full px-3 py-2.5' : 'w-full max-w-[22rem] px-3 py-1.5'
         }`}
         aria-label="Current competition"
         aria-haspopup="true"
@@ -193,7 +204,7 @@ function ProjectSelector({
           </div>
           <ul className="max-h-72 overflow-y-auto p-1.5">
             {projects.map((entry) => {
-              const isSelected = Number(entry.id) === Number(project.id);
+              const isSelected = String(entry.id) === String(project.id);
               const isOwner = isProjectAdmin(entry.id, userEmail);
               return (
                 <li key={entry.id}>
@@ -243,11 +254,13 @@ function ProjectSelector({
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, refresh, revision } = useAuth();
   const { t } = useLanguage();
   const projectId = getProjectIdFromPath(location.pathname);
-  const project = projectId ? getProjectById(projectId) : null;
-  const routeNavigation = getProjectNavigation(projectId, user?.email, t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- revision tracks the external server cache.
+  const project = useMemo(() => projectId ? getProjectById(projectId) : null, [projectId, revision]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- revision tracks the external server cache.
+  const routeNavigation = useMemo(() => getProjectNavigation(projectId, user?.email, t), [projectId, user?.email, t, revision]);
 
   const navigation =
     user?.role === 'SYSTEM_ADMIN'
@@ -275,14 +288,15 @@ export default function Navbar() {
         : routeNavigation;
 
   const isSystemAdmin = user?.role === 'SYSTEM_ADMIN';
-  const projects = (() => {
+  const projects = useMemo(() => {
     if (isSystemAdmin || !user?.email) return [];
     const unique = new Map();
     [...getMyProjects(user.email), ...getJudgingProjects(user.email)].forEach((entry) => {
-      unique.set(Number(entry.id), entry);
+      unique.set(String(entry.id), entry);
     });
     return [...unique.values()];
-  })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- revision tracks the external server cache.
+  }, [isSystemAdmin, user?.email, revision]);
 
   const displayName = user?.name || t('ผู้ใช้งาน', 'User');
   const roleLabel =
@@ -401,28 +415,56 @@ export default function Navbar() {
     location.key,
   ]);
 
-  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
-  const tabletMoreItems = navigation.items.slice(4);
+  useEffect(() => {
+    let active = true;
+    const update = async () => {
+      try {
+          await refreshNotifications();
+          if (active) setNotifications(getNotificationsByUser(user?.email));
+        } catch { /* A temporary polling error must not interrupt editing. */ }
+      };
+      update();
+      const timer = setInterval(update, 30000);
+      return () => { active = false; clearInterval(timer); };
+    }, [user?.email, isNotifOpen, revision]);
 
-  const handleLogout = () => {
-    closeMenus();
-    logout();
-    navigate('/login');
-  };
+    const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+    const tabletMoreItems = navigation.items.slice(4);
 
-  const handleNotificationClick = (notification) => {
-    if (!notification.isRead && user?.email) {
-      markAsRead(notification.id);
-      setNotifications(getNotificationsByUser(user.email));
+    const handleLogout = () => {
+      closeMenus();
+      logout();
+      navigate('/login');
+    };
+
+    const handleNotificationClick = async (notification) => {
+      try {
+      // Invitations can arrive after sign-in. Hydrate membership before route guards run.
+      if (notification.projectId) await refresh();
+      if (!notification.isRead && user?.email) {
+        await markAsRead(notification.id);
+        setNotifications(getNotificationsByUser(user.email));
+      }
+      updateMenuState({ notifOpen: false });
+      if (notification.projectId) {
+        const destination = isProjectAdmin(notification.projectId, user?.email)
+          ? `/project/${notification.projectId}/dashboard`
+          : `/judge/project/${notification.projectId}/teams`;
+        navigate(destination);
+      }
+    } catch (error) {
+      toast.error(error.message);
     }
-    updateMenuState({ notifOpen: false });
-    if (notification.projectId) navigate(`/judge/project/${notification.projectId}/teams`);
   };
 
-  const handleMarkAllRead = () => {
-    if (!user?.email) return;
-    markAllAsRead(user.email);
-    setNotifications(getNotificationsByUser(user.email));
+  const handleMarkAllRead = async () => {
+    try {
+      if (!user?.email) return;
+      await markAllAsRead(user.email);
+      setNotifications(getNotificationsByUser(user.email));
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
   const navigateToProject = (nextProject) => {
@@ -451,7 +493,7 @@ export default function Navbar() {
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-xs">
             <Trophy className="h-4.5 w-4.5 text-amber-300" />
           </span>
-          <div className="leading-tight">
+          <div className="leading-tight max-[380px]:hidden">
             <span className="block text-base font-bold tracking-tight text-slate-900">
               MultiRole
             </span>
@@ -462,7 +504,7 @@ export default function Navbar() {
         </Link>
 
         {project && projects.length > 0 && (
-          <div className="hidden min-w-0 flex-1 md:block" ref={projectDesktopRef}>
+          <div className="hidden min-w-0 flex-1 pl-4 md:block" ref={projectDesktopRef}>
             <ProjectSelector
               project={project}
               projects={projects}
@@ -487,7 +529,7 @@ export default function Navbar() {
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
           <LanguageSwitcher />
 
-          <div className="relative" ref={notifRef}>
+          <div className="static sm:relative" ref={notifRef}>
             <button
               type="button"
               ref={notifButtonRef}
@@ -519,7 +561,7 @@ export default function Navbar() {
             </button>
             {isNotifOpen && (
               <div
-                className="absolute right-0 top-full z-50 mt-2 w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-surface shadow-xl ring-1 ring-slate-900/5"
+                className="absolute right-4 top-14 z-50 mt-2 w-[calc(100%-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-surface shadow-xl ring-1 ring-slate-900/5 sm:right-0 sm:top-full sm:w-[min(23rem,calc(100vw-2rem))]"
                 role="dialog"
                 aria-label="Notifications"
               >
@@ -845,7 +887,7 @@ export default function Navbar() {
                         onNavigation();
                       }}
                       className={`w-full rounded-lg px-4 py-2.5 text-left text-sm ${
-                        Number(entry.id) === Number(projectId)
+                        String(entry.id) === String(projectId)
                           ? 'bg-blue-50/70 font-semibold text-precision-blue'
                           : 'text-slate-700 hover:bg-slate-50'
                       }`}

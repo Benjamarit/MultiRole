@@ -10,6 +10,7 @@ export default function TeamFormModal({
   isOpen,
   initialTeam,
   existingTeams = [],
+  isSaving = false,
   onSave,
   onClose,
 }) {
@@ -60,7 +61,7 @@ export default function TeamFormModal({
 
   const handleSave = (e) => {
     e?.preventDefault();
-    if (!validate()) return;
+    if (isSaving || !validate()) return;
 
     onSave({
       ...(isEditMode ? { id: initialTeam.id } : {}),
@@ -131,10 +132,10 @@ export default function TeamFormModal({
         </div>
 
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isSaving}>
             {t('ยกเลิก', 'Cancel', { compact: true })}
           </Button>
-          <Button type="submit">
+          <Button type="submit" isLoading={isSaving} disabled={isSaving}>
             {isEditMode
               ? t('บันทึกการแก้ไข', 'Save Changes', { compact: true })
               : t('เพิ่มทีม', 'Add Team', { compact: true })}

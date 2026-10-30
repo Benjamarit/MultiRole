@@ -1,3 +1,5 @@
+import ProjectStructureLock from '../components/ProjectStructureLock';
+import { isProjectStructureLocked } from '../data/ProjectLock';
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Plus, Search, UserCheck } from 'lucide-react';
@@ -27,6 +29,7 @@ export default function ProjectJudges() {
   const { user } = useAuth();
   const { t, tDesc } = useLanguage();
   const project = getProjectById(id);
+  const structureLocked = isProjectStructureLocked(project);
   const authorized = isProjectAdmin(id, user?.email);
   const registeredUsers = getRegisteredUsers();
 
@@ -35,6 +38,8 @@ export default function ProjectJudges() {
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [judgeToRemove, setJudgeToRemove] = useState(null);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const isSelfJudge = assignedJudges.some((judge) => judge.id === user?.id);
 
   const judgeList = useMemo(() => {
     return assignedJudges
@@ -68,13 +73,21 @@ export default function ProjectJudges() {
     return registeredUsers.filter((u) => !assignedEmails.has(u.email));
   }, [assignedJudges, registeredUsers]);
 
-  const handleAssignJudge = (judgeEmail) => {
-    inviteJudgeToProject(id, judgeEmail);
-    setAssignedJudges((prev) => [...prev, { id: judgeEmail, email: judgeEmail }]);
-    setIsAssignOpen(false);
-    toast.success(
-      t(`เชิญ ${judgeEmail} เข้าเป็นกรรมการแล้ว`, `Invited ${judgeEmail} as judge`)
-    );
+  const handleAssignJudge = async (judgeEmail) => {
+    if (isAssigning || structureLocked) return;
+    setIsAssigning(true);
+    try {
+      await inviteJudgeToProject(id, judgeEmail);
+      setAssignedJudges(getJudgeAssignments(id));
+      setIsAssignOpen(false);
+      toast.success(
+        t(`เชิญ ${judgeEmail} เข้าเป็นกรรมการแล้ว`, `Invited ${judgeEmail} as judge`)
+      );
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsAssigning(false);
+    }
   };
 
   const handleRemoveClick = (judge) => {
@@ -82,15 +95,20 @@ export default function ProjectJudges() {
     setIsConfirmOpen(true);
   };
 
-  const confirmRemove = () => {
-    if (judgeToRemove) {
-      removeJudgeAssignment(id, judgeToRemove.id, judgeToRemove.email);
-      setAssignedJudges((prev) =>
-        prev.filter((assignment) => assignment.id !== judgeToRemove.id)
-      );
-      setIsConfirmOpen(false);
-      setJudgeToRemove(null);
-      toast.success(t('นำกรรมการออกจากโครงการแล้ว', 'Judge removed from competition'));
+  const confirmRemove = async () => {
+    if (structureLocked) return;
+    try {
+      if (judgeToRemove) {
+        await removeJudgeAssignment(id, judgeToRemove.id, judgeToRemove.email);
+        setAssignedJudges((prev) =>
+          prev.filter((assignment) => assignment.id !== judgeToRemove.id)
+        );
+        setIsConfirmOpen(false);
+        setJudgeToRemove(null);
+        toast.success(t('นำกรรมการออกจากโครงการแล้ว', 'Judge removed from competition'));
+      }
+    } catch (error) {
+      toast.error(error.message);
     }
   };
 
@@ -120,6 +138,7 @@ export default function ProjectJudges() {
         {t('กลับไปหน้า Dashboard โครงการ', 'Back to Dashboard', { compact: true })}
       </BackButton>
 
+      <ProjectStructureLock project={project} />
       <PageHeader
         title={t('จัดการกรรมการ', 'Judges Management')}
         description={tDesc(
@@ -128,6 +147,15 @@ export default function ProjectJudges() {
         )}
         action={
           <div className="flex flex-wrap gap-2">
+            {isSelfJudge ? (
+              <Button variant="secondary" onClick={() => navigate(`/judge/project/${id}/teams`)}>
+                {t('ไปหน้าประเมินของฉัน', 'My Evaluations')}
+              </Button>
+            ) : (
+              <Button variant="secondary" disabled={isAssigning || structureLocked} onClick={() => handleAssignJudge(user.email)}>
+                {t('เพิ่มตัวเองเป็นกรรมการ', 'Add Myself as Judge')}
+              </Button>
+            )}
             <Button
               variant="secondary"
               onClick={() => navigate(`/project/${id}/assignments`)}
@@ -135,7 +163,7 @@ export default function ProjectJudges() {
               <UserCheck className="h-4 w-4" />
               {t('ไปหน้ามอบหมายทีม', 'Assign Teams', { compact: true })}
             </Button>
-            <Button onClick={() => setIsAssignOpen(true)}>
+            <Button disabled={isAssigning || structureLocked} onClick={() => setIsAssignOpen(true)}>
               <Plus className="h-4 w-4" />
               {t('เพิ่มกรรมการ', 'Invite Judge', { compact: true })}
             </Button>
@@ -186,6 +214,7 @@ export default function ProjectJudges() {
                     <td className="px-6 py-4 font-semibold text-slate-900">
                       <div className="flex items-center gap-2">
                         <span>{judge.name}</span>
+                        {judge.id === user?.id && <Badge variant="info">{t('คุณ', 'You')}</Badge>}
                         {!judge.isRegistered && (
                           <Badge variant="default">Demo / Pre-invited</Badge>
                         )}
@@ -202,6 +231,7 @@ export default function ProjectJudges() {
                       <Button
                         variant="danger"
                         size="sm"
+                        disabled={structureLocked}
                         onClick={() => handleRemoveClick(judge)}
                       >
                         {t('นำออก', 'Remove', { compact: true })}

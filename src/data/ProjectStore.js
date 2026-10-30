@@ -1,266 +1,46 @@
-import { getTeamsByProject } from './TeamStore';
+import api from '../api/client';
+import { workspace, projectPath, loadProject, competitionRequest } from '../api/workspace';
 import { hasCompleteCriteriaWeights } from './CriteriaStore';
-import {
-  getJudgeIdsForTeam,
-  getTeamIdsForJudge,
-  importLegacyJudgeTeamAssignments,
-  removeJudgeTeamAssignments,
-  replaceJudgeTeamAssignments,
-} from './JudgeTeamAssignmentStore';
-
-const PROJECTS_KEY = 'ce_projects';
-
-// demo — ผูกกับอีเมลของ user ที่เคยใช้ทดสอบมาก่อน
-function seedProjects() {
-  const seed = [
-    {
-      id: 1,
-      name: 'การประกวดนวัตกรรม AI 2026',
-      type: 'Technology',
-      description: '',
-      ownerEmail: 'somchai@example.com',
-      ownerName: 'ดร.สมชาย ใจดี',
-      status: 'Active',
-      teamsCount: 10,
-      judgeEmails: ['wichai@example.com', 'suda@example.com'],
-      judgeAssignments: [
-        { id: 'wichai@example.com', email: 'wichai@example.com' },
-        { id: 'suda@example.com', email: 'suda@example.com' },
-      ],
-      evaluationDeadline: null,
-    },
-  ];
-  writeAll(seed);
-  return seed;
+import { getTeamIdsForJudge, getJudgeIdsForTeam, replaceJudgeTeamAssignments } from './JudgeTeamAssignmentStore';
+export const getAllProjects = () => workspace.projects;
+export const getProjectById = (id) => workspace.projects.find((p) => p.id === String(id));
+export const getMyProjects = (email) => workspace.projects.filter((p) => email === workspace.user?.email && ['ADMIN', 'ADMIN_JUDGE'].includes(p.currentRole));
+export const getJudgingProjects = (email) => workspace.projects.filter((p) => email === workspace.user?.email && ['JUDGE', 'ADMIN_JUDGE'].includes(p.currentRole));
+export const isProjectAdmin = (id, email) => Boolean(email === workspace.user?.email && ['ADMIN', 'ADMIN_JUDGE'].includes(getProjectById(id)?.currentRole));
+export const isProjectNameTaken = (name) => workspace.projects.some((p) => p.name.trim().toLowerCase() === name.trim().toLowerCase());
+export const getJudgeAssignments = (id) => getProjectById(id)?.judgeAssignments || [];
+export const getAssignedTeamIds = (id, judgeId) => getTeamIdsForJudge(id, judgeId);
+export const getJudgeIdsAssignedToTeam = (id, teamId) => getJudgeAssignments(id).filter((j) => getJudgeIdsForTeam(id, teamId).includes(j.id));
+export const isJudgeAssignedToTeam = (id, judgeId, teamId) => getAssignedTeamIds(id, judgeId).includes(teamId);
+export const setJudgeAssignedTeams = replaceJudgeTeamAssignments;
+export const isProjectReadyForEvaluation = (id) => getProjectById(id)?.status === 'Active' && hasCompleteCriteriaWeights(id);
+export function isBeforeEvaluationDeadline(p) {
+  return !p?.evaluationDeadline || Date.now() < new Date(p.evaluationDeadline).getTime();
 }
-
-function readAll() {
-  let projects;
-  try {
-    const stored = localStorage.getItem(PROJECTS_KEY);
-    if (!stored) return seedProjects();
-    projects = JSON.parse(stored);
-  } catch {
-    return seedProjects();
-  }
-  const normalizedProjects = projects.map(normalizeProject);
-  const legacyAssignments = projects.flatMap((project) =>
-    (project.judgeAssignments || []).flatMap((assignment) =>
-      (assignment.assignedTeamIds || []).map((teamId) => ({
-        projectId: project.id,
-        judgeId: assignment.id,
-        teamId,
-      }))
-    )
-  );
-  const hasLegacyData = projects.some((project) =>
-    (project.judgeAssignments || []).some((assignment) =>
-      Object.keys(assignment).some((key) => key !== 'id' && key !== 'email')
-    )
-  );
-  if (hasLegacyData) {
-    importLegacyJudgeTeamAssignments(legacyAssignments);
-    writeAll(normalizedProjects);
-  }
-  return normalizedProjects;
+export async function addProject(p) {
+  const { data } = await api.post('/competitions', competitionRequest(p));
+  return loadProject(data.competitionId);
 }
-
-function normalizeProject(project) {
-  const judgeAssignments = (project.judgeAssignments || []).map(({ id, email }) => ({ id, email }));
-  return {
-    ...project,
-    judgeAssignments,
-    evaluationDeadline: project.evaluationDeadline || null,
-  };
-}
-
-function writeAll(projects) {
-  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
-}
-
-export function getAllProjects() {
-  return readAll();
-}
-
-function hasProjectName(projects, name) {
-  const normalizedName = name.trim().toLowerCase();
-  return projects.some(
-    (project) => project.name.trim().toLowerCase() === normalizedName
-  );
-}
-
-export function isProjectNameTaken(name) {
-  return hasProjectName(getAllProjects(), name);
-}
-
-export function deleteProject(projectId) {
-  const numericProjectId = Number(projectId);
-  const projects = readAll();
-  const updatedProjects = projects.filter((project) => Number(project.id) !== numericProjectId);
-  if (updatedProjects.length === projects.length) return false;
-  writeAll(updatedProjects);
+export async function deleteProject(id) {
+  await api.delete(projectPath(id));
+  workspace.projects = workspace.projects.filter((p) => p.id !== id);
+  delete workspace.details[id];
   return true;
 }
-
-// โครงการที่ user คนนี้เป็นเจ้าของ (สร้างเอง = เป็น Project Admin ของโครงการนั้น)
-export function getMyProjects(email) {
-  return readAll().filter((p) => p.ownerEmail === email);
+export async function inviteJudgeToProject(id, email) {
+  await api.post(projectPath(id) + '/members', { email, role: 'JUDGE' });
+  await loadProject(id);
 }
-
-// โครงการที่ user คนนี้ถูกเชิญเข้าไปเป็นกรรมการ
-export function getJudgingProjects(email) {
-  return readAll().filter((p) => (p.judgeEmails || []).includes(email));
+export async function removeJudgeAssignment(id, judgeId) {
+  await api.delete(projectPath(id) + '/members/' + judgeId);
+  await loadProject(id);
 }
-
-// TODO: ตอนต่อ API จริง เปลี่ยนเป็น POST /projects แล้วใช้ response แทนการ generate id เอง
-export function addProject({ name, type, description, ownerEmail, ownerName, evaluationDeadline }) {
-  const projects = readAll();
-  if (hasProjectName(projects, name)) return null;
-
-  const nextId = projects.length > 0 ? Math.max(...projects.map((p) => p.id)) + 1 : 1;
-  const newProject = {
-    id: nextId,
-    name,
-    type,
-    description,
-    ownerEmail,
-    ownerName,
-    status: 'Draft',
-    teamsCount: 0,
-    judgeEmails: [],
-    judgeAssignments: [],
-    evaluationDeadline: evaluationDeadline || null,
-  };
-  writeAll([newProject, ...projects]);
-  return newProject;
-}
-
-// เชิญผู้ใช้งาน (ด้วยอีเมล) เข้าเป็นกรรมการของโครงการ
-// TODO: ตอนต่อ API จริง เปลี่ยนเป็น POST /projects/:id/judges แทน
-export function inviteJudgeToProject(projectId, judgeEmail) {
-  const projects = readAll();
-  const updated = projects.map((p) => {
-    if (p.id !== Number(projectId)) return p;
-    const judgeEmails = p.judgeEmails || [];
-    const assignments = p.judgeAssignments || [];
-    return {
-      ...p,
-      judgeEmails: judgeEmails.includes(judgeEmail) ? judgeEmails : [...judgeEmails, judgeEmail],
-      judgeAssignments: assignments.some((assignment) => (assignment.email || assignment.id) === judgeEmail)
-        ? assignments
-        : [...assignments, { id: judgeEmail, email: judgeEmail }],
-    };
-  });
-  writeAll(updated);
-}
-
-export function getJudgeAssignments(projectId) {
-  return getProjectById(projectId)?.judgeAssignments || [];
-}
-
-export function getAssignedTeamIds(projectId, judgeId) {
-  const assignment = getJudgeAssignments(projectId).find(
-    (item) => String(item.id) === String(judgeId) || String(item.email) === String(judgeId)
-  );
-  return assignment ? getTeamIdsForJudge(projectId, assignment.id) : [];
-}
-
-export function getJudgeIdsAssignedToTeam(projectId, teamId) {
-  const assignmentIds = getJudgeIdsForTeam(projectId, teamId);
-  return getJudgeAssignments(projectId)
-    .filter((assignment) => assignmentIds.includes(String(assignment.id)));
-}
-
-export function isJudgeAssignedToTeam(projectId, judgeId, teamId) {
-  const judgeAssignment = getJudgeAssignments(projectId).find(
-    (assignment) =>
-      String(assignment.id) === String(judgeId) ||
-      String(assignment.email) === String(judgeId)
-  );
-  const teamExists = getTeamsByProject(projectId).some(
-    (team) => Number(team.id) === Number(teamId)
-  );
-  return Boolean(
-    teamExists &&
-    judgeAssignment &&
-    getTeamIdsForJudge(projectId, judgeAssignment.id).includes(Number(teamId))
-  );
-}
-
-export function setJudgeAssignedTeams(projectId, judgeId, teamIds) {
-  const projects = readAll();
-  const project = projects.find((item) => Number(item.id) === Number(projectId));
-  if (!project) throw new Error('ไม่พบโครงการที่ต้องการกำหนดทีม');
-  const assignment = (project.judgeAssignments || []).find(
-    (item) => String(item.id) === String(judgeId) || String(item.email) === String(judgeId)
-  );
-  if (!assignment) throw new Error('กรรมการไม่ได้อยู่ในโครงการนี้');
-
-  const requestedIds = [...new Set(teamIds.map(Number))];
-  const teams = getTeamsByProject(projectId);
-  if (requestedIds.some((teamId) => !teams.some((team) => Number(team.id) === teamId))) {
-    throw new Error('พบทีมที่ไม่ได้อยู่ในโครงการนี้');
-  }
-
-  replaceJudgeTeamAssignments(projectId, assignment.id, requestedIds);
-}
-
-export function removeJudgeAssignment(projectId, judgeId, judgeEmail) {
-  const projects = readAll();
-  const updated = projects.map((project) =>
-    project.id === Number(projectId)
-      ? {
-          ...project,
-          judgeEmails: (project.judgeEmails || []).filter((email) => email !== judgeEmail),
-          judgeAssignments: (project.judgeAssignments || []).filter((assignment) => assignment.id !== judgeId),
-        }
-      : project
-  );
-  removeJudgeTeamAssignments(projectId, judgeId);
-  writeAll(updated);
-}
-
-// TODO: ตอนต่อ API จริง เปลี่ยนเป็น PATCH /projects/:id { status } แทน
-export function updateProjectStatus(projectId, status) {
-  const projects = readAll();
-  const project = projects.find((item) => item.id === Number(projectId));
-  if (!project || (status === 'Active' && !hasCompleteCriteriaWeights(projectId))) {
-    return false;
-  }
-  const updated = projects.map((project) =>
-    project.id === Number(projectId) ? { ...project, status } : project
-  );
-  writeAll(updated);
+export async function updateProjectStatus(id, status) {
+  await api.patch(projectPath(id) + '/status', { status: status.toUpperCase() });
+  await loadProject(id);
   return true;
 }
-
-export function getProjectById(projectId) {
-  return readAll().find((p) => p.id === Number(projectId));
-}
-
-export function isProjectAdmin(projectId, email) {
-  const project = getProjectById(projectId);
-  return Boolean(email && project?.ownerEmail === email);
-}
-
-export function isProjectReadyForEvaluation(projectId) {
-  return getProjectById(projectId)?.status === 'Active' &&
-    hasCompleteCriteriaWeights(projectId);
-}
-
-export function updateProjectDetails(projectId, details) {
-  const projects = readAll();
-  const updated = projects.map((project) =>
-    project.id === Number(projectId)
-      ? normalizeProject({ ...project, ...details })
-      : project
-  );
-  writeAll(updated);
-  return updated.find((project) => project.id === Number(projectId));
-}
-
-export function isBeforeEvaluationDeadline(project) {
-  if (!project?.evaluationDeadline) return true;
-  const deadline = new Date(project.evaluationDeadline).getTime();
-  return Number.isNaN(deadline) || Date.now() < deadline;
+export async function updateProjectDetails(id, details) {
+  await api.put(projectPath(id), competitionRequest({ ...getProjectById(id), ...details }));
+  return loadProject(id);
 }

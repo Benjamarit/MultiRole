@@ -28,13 +28,13 @@ export default function JudgeProjectTeams() {
   const allTeams = getTeamsByProject(projectId);
 
   const assignments = getJudgeAssignments(projectId);
-  const myAssignment = assignments.find((a) => (a.email || a.id) === user?.email);
+  const myAssignment = assignments.find((a) => a.id === user?.id);
   const assignedTeamIds = myAssignment ? getAssignedTeamIds(projectId, myAssignment.id) : [];
 
   const teams = allTeams
-    .filter((team) => assignedTeamIds.includes(Number(team.id)))
+    .filter((team) => assignedTeamIds.includes(String(team.id)))
     .map((team) => {
-      const evaluation = getEvaluation(projectId, team.id, user?.email);
+      const evaluation = getEvaluation(projectId, team.id, user?.id);
       return {
         ...team,
         evaluateStatus: evaluation?.status || 'NOT_STARTED',

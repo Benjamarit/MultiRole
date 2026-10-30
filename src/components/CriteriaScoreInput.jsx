@@ -8,19 +8,20 @@ import { Star } from 'lucide-react';
  *   disabled={boolean}
  * />
  */
-export default function CriterionScoreInput({ criterion, value, onChange, disabled }) {
+export default function CriterionScoreInput({ criterion, value, onChange, disabled, label }) {
+  const fieldLabel = label || `คะแนน ${criterion.name}`;
   switch (criterion.type) {
     case 'STAR':
       return (
-        <div className="flex gap-1" role="radiogroup" aria-label={`ให้คะแนน ${criterion.name}`}>
+        <div className="flex gap-1" role="group" aria-label={fieldLabel}>
           {Array.from({ length: criterion.maxScore }, (_, i) => i + 1).map((star) => (
             <button
               key={star}
               type="button"
               disabled={disabled}
               onClick={() => onChange(star)}
-              aria-label={`${star} ดาว`}
-              aria-pressed={value >= star}
+              aria-label={`${fieldLabel}: ${star} ดาว`}
+              aria-pressed={value === star}
               className="rounded-sm focus-visible:ring-2 focus-visible:ring-precision-blue disabled:cursor-not-allowed"
             >
               <Star
@@ -37,6 +38,8 @@ export default function CriterionScoreInput({ criterion, value, onChange, disabl
       return (
         <input
           type="number"
+          aria-label={fieldLabel}
+          step="0.01"
           min={0}
           max={criterion.maxScore}
           value={value ?? ''}
@@ -57,6 +60,7 @@ export default function CriterionScoreInput({ criterion, value, onChange, disabl
         <div className="flex items-center gap-3">
           <input
             type="range"
+            aria-label={fieldLabel}
             min={0}
             max={100}
             value={value ?? 0}
@@ -77,6 +81,8 @@ export default function CriterionScoreInput({ criterion, value, onChange, disabl
             type="button"
             disabled={disabled}
             onClick={() => onChange(1)}
+            aria-label={`${fieldLabel}: Pass`}
+            aria-pressed={value === 1}
             className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
               value === 1
                 ? 'bg-green-600 text-white border-green-600'
@@ -89,6 +95,8 @@ export default function CriterionScoreInput({ criterion, value, onChange, disabl
             type="button"
             disabled={disabled}
             onClick={() => onChange(0)}
+            aria-label={`${fieldLabel}: Fail`}
+            aria-pressed={value === 0}
             className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
               value === 0
                 ? 'bg-red-600 text-white border-red-600'

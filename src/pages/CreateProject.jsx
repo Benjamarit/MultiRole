@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, CalendarClock, Sparkles } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { addProject, isProjectNameTaken } from '../data/ProjectStore';
 import toast from 'react-hot-toast';
+import api from '../api/client';
 
 export default function CreateProject() {
   const navigate = useNavigate();
@@ -21,6 +22,17 @@ export default function CreateProject() {
   });
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [quota, setQuota] = useState(null);
+  const [quotaError, setQuotaError] = useState('');
+  const loadQuota = async () => {
+    try { const { data } = await api.get('/competitions/creation-quota'); setQuota(data); setQuotaError(''); }
+    catch (error) { setQuotaError(error.message); }
+  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadQuota();
+  }, []);
+
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -42,13 +54,13 @@ export default function CreateProject() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (isSaving || !quota?.allowed || !validate()) return;
 
     setIsSaving(true);
     try {
       await new Promise((resolve) => setTimeout(resolve, 400));
 
-      const project = addProject({
+      const project = await addProject({
         name: form.name.trim(),
         type: '',
         description: '',
@@ -80,6 +92,9 @@ export default function CreateProject() {
         )
       );
       navigate(`/project/${project.id}/dashboard`);
+    } catch (error) {
+      toast.error(error.message);
+      await loadQuota();
     } finally {
       setIsSaving(false);
     }
@@ -99,6 +114,7 @@ export default function CreateProject() {
         )}
       />
 
+      <Card><div className="text-sm text-slate-700" role="status">{quota ? <><p>{t(`มีโครงการ ${quota.owned}/${quota.totalLimit} · สร้างได้ ${quota.burstLimit} ต่อ 10 นาที และ ${quota.dailyLimit} ต่อ 24 ชั่วโมง`, `${quota.owned}/${quota.totalLimit} existing projects · ${quota.burstLimit} per 10 minutes and ${quota.dailyLimit} per 24 hours`)}</p>{!quota.allowed && <p className="mt-2 text-amber-700">{quota.reason}</p>}</> : <p>{quotaError || t('กำลังตรวจสอบโควตา…', 'Checking quota…')}</p>}</div><Button className="mt-3" size="sm" variant="secondary" onClick={loadQuota}>{t('ตรวจสอบโควตาอีกครั้ง', 'Check quota again')}</Button></Card>
       <Card>
         <form className="space-y-5" onSubmit={handleSubmit}>
           <Input
@@ -149,7 +165,7 @@ export default function CreateProject() {
             >
               {t('ยกเลิก', 'Cancel')}
             </Button>
-            <Button type="submit" isLoading={isSaving}>
+            <Button type="submit" isLoading={isSaving} disabled={!quota?.allowed}>
               {isSaving
                 ? t('กำลังสร้าง...', 'Creating...')
                 : t('สร้างและไปหน้าตั้งค่าโครงการ', 'Create & Go to Dashboard')}
@@ -160,4 +176,5 @@ export default function CreateProject() {
       </Card>
     </div>
   );
+  
 }

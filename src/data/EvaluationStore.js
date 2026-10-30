@@ -1,119 +1,35 @@
-import {
-  getProjectById,
-  isBeforeEvaluationDeadline,
-  isProjectReadyForEvaluation,
-  isJudgeAssignedToTeam,
-} from './ProjectStore';
-import { getTeamsByProject } from './TeamStore';
-import { getCriteriaByProject } from './CriteriaStore';
-import { calculateWeightedScore, isValidCriterionScore } from './Scoring';
-
-const EVALUATIONS_KEY = 'ce_project_evaluations';
-
-function readAll() {
-  try {
-    const stored = localStorage.getItem(EVALUATIONS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
+import api from '../api/client';
+import { detail, loadProject, normalizeEvaluation, workspace } from '../api/workspace';
+export const getEvaluationsByProject = (id) => detail(id).evaluations;
+export const getEvaluation = (id, teamId, judgeId) => getEvaluationsByProject(id).find((e) => e.teamId === teamId && e.judgeId === judgeId);
+export async function saveEvaluation(e) {
+  await api.post('/evaluations/save', { competitionId: e.projectId, teamId: e.teamId,
+    comment: e.comment || '', status: e.status,
+    scores: Object.entries(e.scores || {}).filter(([, value]) => value !== null && value !== undefined)
+      .map(([criterionId, scoreValue]) => ({ criterionId, scoreValue, comment: e.criteriaComments?.[criterionId] || '' })) });
+  const { data } = await api.get('/evaluations/competition/' + e.projectId + '/team/' + e.teamId + '/mine');
+  await loadProject(e.projectId);
+  return normalizeEvaluation(data);
 }
 
-function writeAll(evaluations) {
-  localStorage.setItem(EVALUATIONS_KEY, JSON.stringify(evaluations));
-}
-
-function normalizeEvaluation(evaluation) {
-  return {
-    ...evaluation,
-    projectId: Number(evaluation.projectId),
-    teamId: Number(evaluation.teamId),
-    judgeId: String(evaluation.judgeId),
-    status: evaluation.status || 'DRAFT',
-    submittedAt: evaluation.submittedAt || null,
-    updatedAt: evaluation.updatedAt || null,
-  };
-}
-
-export function getEvaluation(projectId, teamId, judgeId) {
-  const evaluation = readAll().find(
-    (evaluation) =>
-      Number(evaluation.projectId) === Number(projectId) &&
-      Number(evaluation.teamId) === Number(teamId) &&
-      String(evaluation.judgeId) === String(judgeId)
-  );
-  return evaluation ? normalizeEvaluation(evaluation) : undefined;
-}
-
-export function getEvaluationsByProject(projectId) {
-  return readAll()
-    .filter((evaluation) => Number(evaluation.projectId) === Number(projectId))
-    .map(normalizeEvaluation);
-}
-
-export function deleteProjectEvaluations(projectId) {
-  const numericProjectId = Number(projectId);
-  writeAll(readAll().filter((evaluation) => Number(evaluation.projectId) !== numericProjectId));
-}
-
-export function saveEvaluation(evaluation) {
-  const project = getProjectById(evaluation.projectId);
-  if (!project) throw new Error('ไม่พบโครงการที่ต้องการบันทึกผลประเมิน');
-  if (!getTeamsByProject(evaluation.projectId).some(
-    (team) => Number(team.id) === Number(evaluation.teamId)
-  )) {
-    throw new Error('ทีมนี้ไม่ได้อยู่ในโครงการที่เลือก');
-  }
-  if (!isJudgeAssignedToTeam(evaluation.projectId, evaluation.judgeId, evaluation.teamId)) {
-    throw new Error('คุณไม่ได้รับมอบหมายให้ประเมินทีมนี้');
-  }
-  if (!isProjectReadyForEvaluation(evaluation.projectId) || !isBeforeEvaluationDeadline(project)) return null;
-  if (!['DRAFT', 'SUBMITTED'].includes(evaluation.status)) {
-    throw new Error('สถานะผลประเมินไม่ถูกต้อง');
-  }
-
-  const criteria = getCriteriaByProject(evaluation.projectId);
-  const scores = evaluation.scores || {};
-  const criterionById = new Map(criteria.map((criterion) => [String(criterion.id), criterion]));
-  for (const [criterionId, value] of Object.entries(scores)) {
-    const criterion = criterionById.get(String(criterionId));
-    if (!criterion) throw new Error('พบคะแนนของเกณฑ์ที่ไม่ได้อยู่ในโครงการนี้');
-    if (!isValidCriterionScore(criterion, value)) {
-      throw new Error(`คะแนนของเกณฑ์ "${criterion.name}" อยู่นอกช่วงที่กำหนด`);
+// One network request. Only confirmed server receipts enter the shared cache.
+export async function submitEvaluationsBatch(projectId, entries) {
+  const actorId = workspace.user?.id;
+  const { data } = await api.post('/evaluations/submit-batch', {
+    competitionId: projectId,
+    teams: entries.map(entry => ({ teamId: entry.teamId, comment: entry.comment || '',
+      scores: Object.entries(entry.scores).filter(([, value]) => value !== null && value !== undefined)
+        .map(([criterionId, scoreValue]) => ({ criterionId, scoreValue, comment: entry.criteriaComments?.[criterionId] || '' })) })),
+  }, { timeout: 60000 });
+  const results = data.results.map(result => ({ ...result,
+    evaluation: result.evaluation ? normalizeEvaluation(result.evaluation) : null }));
+  if (actorId === workspace.user?.id) {
+    const cache = detail(projectId);
+    for (const result of results) {
+      if (['SUBMITTED', 'ALREADY_SUBMITTED'].includes(result.outcome) && result.evaluation) {
+        cache.evaluations = [...cache.evaluations.filter(e => e.id !== result.evaluation.id), result.evaluation];
+      }
     }
   }
-  for (const criterionId of Object.keys(evaluation.criteriaComments || {})) {
-    if (!criterionById.has(String(criterionId))) {
-      throw new Error('พบความคิดเห็นของเกณฑ์ที่ไม่ได้อยู่ในโครงการนี้');
-    }
-  }
-  if (evaluation.status === 'SUBMITTED' && (
-    criteria.length === 0 ||
-    criteria.some((criterion) =>
-      scores[criterion.id] === undefined || scores[criterion.id] === null
-    )
-  )) {
-    throw new Error('กรุณาให้คะแนนครบทุกเกณฑ์ก่อนส่งผลประเมิน');
-  }
-
-  const evaluations = readAll();
-  const existingIndex = evaluations.findIndex(
-    (item) =>
-      Number(item.projectId) === Number(evaluation.projectId) &&
-      Number(item.teamId) === Number(evaluation.teamId) &&
-      String(item.judgeId) === String(evaluation.judgeId)
-  );
-  const savedEvaluation = normalizeEvaluation({
-    ...evaluation,
-    totalScore: calculateWeightedScore(criteria, scores),
-    submittedAt: evaluation.status === 'SUBMITTED' ? evaluation.submittedAt || new Date().toISOString() : null,
-    updatedAt: new Date().toISOString(),
-  });
-  if (existingIndex >= 0) {
-    evaluations[existingIndex] = savedEvaluation;
-  } else {
-    evaluations.push(savedEvaluation);
-  }
-  writeAll(evaluations);
-  return savedEvaluation;
+  return results;
 }

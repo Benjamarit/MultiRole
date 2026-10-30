@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
-  LockOpen,
   Save,
   Send,
 } from 'lucide-react';
@@ -37,43 +36,23 @@ function scoreLabel(criterion, value) {
   return `${value}/${criterion.maxScore}`;
 }
 
-function parseRubricLevels(description) {
-  if (!description || !String(description).trim()) return [];
-  const raw = String(description).trim();
-
-  const segments = raw
-    .split(/(?=[★⭐•])|\r?\n+|(?=\b\d+\s*(?:ดาว|คะแนน|แต้ม|stars?|points?|pts)\s*[:：])/i)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  return segments.map((seg) => {
-    const colonMatch = seg.match(/^([^:：]{1,32})[:：]\s*(.+)$/);
-    if (colonMatch) {
-      return {
-        label: colonMatch[1].trim(),
-        detail: colonMatch[2].trim(),
-      };
-    }
-    return {
-      label: null,
-      detail: seg,
-    };
-  });
-}
+import { useDeadline } from '../hooks/useDeadline';
+import EvaluationDeadlineNotice from '../components/EvaluationDeadlineNotice';
+import { parseRubricLevels } from '../data/Rubric';
 
 export default function JudgeEvaluation() {
   const { projectId, teamId } = useParams();
   const { user } = useAuth();
-  const { t, tDesc } = useLanguage();
-  const judgeId = user?.email || 'anonymous-judge';
+  const { t } = useLanguage();
+  const judgeId = user?.id || 'anonymous-judge';
 
   const criteria = getCriteriaByProject(projectId);
   const project = getProjectById(projectId);
   const canEvaluate = isProjectReadyForEvaluation(projectId);
   const teams = getTeamsByProject(projectId);
   const assignedTeamIds = getAssignedTeamIds(projectId, judgeId);
-  const team = teams.find((item) => item.id === Number(teamId));
-  const isAssigned = assignedTeamIds.includes(Number(teamId));
+  const team = teams.find((item) => item.id === String(teamId));
+  const isAssigned = assignedTeamIds.includes(String(teamId));
   const existingEvaluation = getEvaluation(projectId, teamId, judgeId);
 
   const [scores, setScores] = useState(() => existingEvaluation?.scores || {});
@@ -90,34 +69,22 @@ export default function JudgeEvaluation() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState(
     () => existingEvaluation?.updatedAt || null
   );
-  const [isUnlockedForEdit, setIsUnlockedForEdit] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [collapsedRubricIds, setCollapsedRubricIds] = useState({});
-  const [isBeforeDeadline, setIsBeforeDeadline] = useState(() =>
-    isBeforeEvaluationDeadline(project)
-  );
-
-  useEffect(() => {
-    if (!isBeforeDeadline || !project?.evaluationDeadline) return undefined;
-    const deadline = new Date(project.evaluationDeadline).getTime();
-    if (!Number.isFinite(deadline)) return undefined;
-    let timeoutId;
-    const checkDeadline = () => {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) {
-        setIsBeforeDeadline(false);
-        return;
-      }
-      timeoutId = window.setTimeout(checkDeadline, Math.min(remaining, 2147483647));
-    };
-    checkDeadline();
-    return () => window.clearTimeout(timeoutId);
-  }, [isBeforeDeadline, project?.evaluationDeadline]);
-
-  const canEdit =
-    canEvaluate &&
-    isBeforeDeadline &&
+  const isBeforeDeadline = useDeadline(project);
+  const [isUnlockedForEdit, setIsUnlockedForEdit] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const canEdit = canEvaluate && isBeforeDeadline && isAssigned && !isSaving &&
     (evaluationStatus !== 'SUBMITTED' || isUnlockedForEdit);
+  const hasChanges = JSON.stringify({ scores, criteriaComments, comment }) !== JSON.stringify({
+    scores: existingEvaluation?.scores || {}, criteriaComments: existingEvaluation?.criteriaComments || {}, comment: existingEvaluation?.comment || '',
+  });
+  const cancelChanges = () => {
+    setScores(existingEvaluation?.scores || {});
+    setCriteriaComments(existingEvaluation?.criteriaComments || {});
+    setComment(existingEvaluation?.comment || '');
+    setIsUnlockedForEdit(false);
+  };
 
   const teamName = team?.name || `ทีม #${teamId}`;
 
@@ -148,10 +115,11 @@ export default function JudgeEvaluation() {
     }));
   };
 
-  const handleSaveDraft = () => {
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+  const handleSaveDraft = async () => {
+    if (!canEdit || !isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+    setIsSaving(true);
     try {
-      const saved = saveEvaluation({
+      const saved = await saveEvaluation({
         projectId,
         teamId,
         judgeId,
@@ -160,7 +128,7 @@ export default function JudgeEvaluation() {
         criteriaComments,
         comment,
         totalScore: Number(estimatedTotal),
-        status: 'DRAFT',
+        status: evaluationStatus === 'SUBMITTED' ? 'SUBMITTED' : 'DRAFT',
       });
       if (!saved) {
         toast.error(
@@ -168,12 +136,18 @@ export default function JudgeEvaluation() {
         );
         return;
       }
+      setScores(saved.scores || {});
+      setCriteriaComments(saved.criteriaComments || {});
+      setComment(saved.comment || '');
       setEvaluationStatus(saved.status);
-      setLastUpdatedAt(saved.updatedAt);
+      setSubmittedAt(saved.submittedAt);
       setIsUnlockedForEdit(false);
-      toast.success(t('บันทึกแบบร่างเรียบร้อยแล้ว', 'Draft saved successfully'));
+      setLastUpdatedAt(saved.updatedAt);
+      toast.success(saved.status === 'SUBMITTED' ? t('บันทึกการแก้ไขคะแนนแล้ว', 'Score changes saved') : t('บันทึกแบบร่างเรียบร้อยแล้ว', 'Draft saved successfully'));
     } catch (error) {
       toast.error(error.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -183,10 +157,11 @@ export default function JudgeEvaluation() {
     setIsConfirmOpen(true);
   };
 
-  const confirmSubmit = () => {
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+  const confirmSubmit = async () => {
+    if (!canEdit || !isAllAnswered || !isBeforeEvaluationDeadline(getProjectById(projectId))) return;
+    setIsSaving(true);
     try {
-      const saved = saveEvaluation({
+      const saved = await saveEvaluation({
         projectId,
         teamId,
         judgeId,
@@ -204,14 +179,20 @@ export default function JudgeEvaluation() {
         );
         return;
       }
+      setScores(saved.scores || {});
+      setCriteriaComments(saved.criteriaComments || {});
+      setComment(saved.comment || '');
       setEvaluationStatus(saved.status);
       setSubmittedAt(saved.submittedAt);
+      setIsUnlockedForEdit(false);
       setLastUpdatedAt(saved.updatedAt);
       setIsConfirmOpen(false);
       toast.success(t('ส่งคะแนนเรียบร้อยแล้ว', 'Evaluation submitted successfully'));
     } catch (error) {
       setIsConfirmOpen(false);
       toast.error(error.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -249,17 +230,14 @@ export default function JudgeEvaluation() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6 pb-28">
+    <div className="mx-auto max-w-3xl space-y-6 p-6 pb-44 sm:pb-28">
       <BackButton to={`/judge/project/${projectId}/teams`}>
         {t('กลับไปหน้ารายชื่อทีมที่ต้องประเมิน', 'Back to Assigned Teams', { compact: true })}
       </BackButton>
 
       <PageHeader
         title={`${t('ประเมินทีม:', 'Evaluate:', { compact: true })} ${teamName}`}
-        description={tDesc(
-          `${project?.name || `โครงการ #${projectId}`} — ให้คะแนนและข้อเสนอแนะตามเกณฑ์ด้านล่าง`,
-          `${project?.name || `Competition #${projectId}`} — Score each criterion and provide feedback below.`
-        )}
+        subtitle={project?.name}
         badge={
           evaluationStatus === 'SUBMITTED' ? (
             <Badge variant="success">
@@ -270,6 +248,9 @@ export default function JudgeEvaluation() {
           )
         }
       />
+
+      <EvaluationDeadlineNotice project={project} isBeforeDeadline={isBeforeDeadline} />
+      {hasChanges && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{t('มีการแก้ไขที่ยังไม่บันทึก คะแนนเดิมยังคงใช้จนกว่าจะบันทึกใหม่', 'You have unsaved changes. Previously submitted scores remain in use until you save.')}</p>}
 
       {(team?.description || team?.link) && (
         <Card className="bg-slate-50/70">
@@ -481,34 +462,32 @@ export default function JudgeEvaluation() {
                 )}
               </p>
               <p className="text-[11px] text-slate-500">
-                {isAllAnswered
-                  ? t('พร้อมส่งผลประเมิน', 'Ready to submit')
-                  : t('กรุณาให้คะแนนครบทุกเกณฑ์ก่อนกดส่ง', 'Score all criteria to submit')}
+                {!isBeforeDeadline
+                  ? t('หมดเขตประเมิน · ดูคะแนนได้เท่านั้น', 'Deadline passed · Read only')
+                  : evaluationStatus === 'SUBMITTED' && !isUnlockedForEdit
+                    ? t('ส่งผลประเมินแล้ว', 'Evaluation submitted')
+                    : isAllAnswered
+                      ? t('พร้อมบันทึกหรือส่งผลประเมิน', 'Ready to save or submit')
+                      : t('กรุณาให้คะแนนครบทุกเกณฑ์ก่อนกดส่ง', 'Score all criteria to submit')}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             {evaluationStatus === 'SUBMITTED' && !isUnlockedForEdit ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setIsUnlockedForEdit(true)}
-                disabled={!isBeforeDeadline}
-              >
-                <LockOpen className="h-4 w-4" />
-                {t('ปลดล็อกเพื่อแก้ไข', 'Unlock to Edit')}
-              </Button>
+              <Button type="button" variant="secondary" disabled={!isBeforeDeadline || !canEvaluate || isSaving} onClick={() => setIsUnlockedForEdit(true)}>{t('แก้ไขคะแนน', 'Edit Scores')}</Button>
             ) : (
               <>
+                {isUnlockedForEdit && <Button type="button" variant="secondary" disabled={isSaving} onClick={cancelChanges}>{t('ยกเลิกการแก้ไข', 'Cancel Changes')}</Button>}
                 <Button
                   type="button"
                   variant="secondary"
                   onClick={handleSaveDraft}
-                  disabled={!canEdit}
+                  disabled={!canEdit || (evaluationStatus === 'SUBMITTED' && !isAllAnswered)}
+                  isLoading={isSaving}
                 >
                   <Save className="h-4 w-4" />
-                  {t('บันทึกร่าง', 'Save Draft')}
+                  {evaluationStatus === 'SUBMITTED' ? t('บันทึกการแก้ไข', 'Save Changes') : t('บันทึกร่าง', 'Save Draft')}
                 </Button>
                 <Button
                   type="button"
@@ -528,11 +507,12 @@ export default function JudgeEvaluation() {
 
       <ConfirmDialog
         isOpen={isConfirmOpen}
+        isLoading={isSaving}
         isDanger={false}
         title={t('ยืนยันการส่งคะแนน', 'Confirm Score Submission')}
         message={t(
-          `ยืนยันการส่งคะแนนทีม "${teamName}" (รวม ${estimatedTotal}/100) หรือไม่? หลังส่งแล้วสามารถกดปลดล็อกเพื่อแก้ไขได้ก่อนวันปิดรับคะแนน`,
-          `Submit score for "${teamName}" (Total ${estimatedTotal}/100)? You can unlock and edit before the deadline.`
+          `ยืนยันการส่งคะแนนทีม "${teamName}" (รวม ${estimatedTotal}/100) หรือไม่? สามารถแก้ไขคะแนนได้จนถึง deadline ขณะโครงการเปิดรับคะแนน`,
+          `Submit score for "${teamName}" (Total ${estimatedTotal}/100)? Scores can be edited until the deadline while the competition is active.`
         )}
         onConfirm={confirmSubmit}
         onCancel={() => setIsConfirmOpen(false)}

@@ -49,7 +49,7 @@ export default function ProjectLeaderboard() {
       evaluation.status === 'SUBMITTED' &&
       assignments.some(
         (assignment) =>
-          String(assignment.email || assignment.id) === String(evaluation.judgeId) &&
+          String(assignment.id) === String(evaluation.judgeId) &&
           isJudgeAssignedToTeam(id, assignment.id, evaluation.teamId)
       )
   );
@@ -278,8 +278,8 @@ export default function ProjectLeaderboard() {
         const registeredJudge = userByEmail.get(judgeEmail);
         const evalRecord = allProjectEvaluations.find(
           (e) =>
-            Number(e.teamId) === Number(team.id) &&
-            String(e.judgeId) === String(judgeEmail)
+            String(e.teamId) === String(team.id) &&
+            String(e.judgeId) === String(assignment.id)
         );
 
         const judgeName =

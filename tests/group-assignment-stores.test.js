@@ -2,227 +2,218 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'vite';
 
-class MemoryStorage {
-  values = new Map();
-
-  getItem(key) {
-    return this.values.get(key) ?? null;
+const vite = await createServer({ configFile: false, plugins: [], server: { middlewareMode: true }, appType: 'custom' });
+const { default: api } = await vite.ssrLoadModule('/src/api/client.js');
+const { workspace, loadWorkspace, clearWorkspace } = await vite.ssrLoadModule('/src/api/workspace.js');
+const projects = await vite.ssrLoadModule('/src/data/ProjectStore.js');
+const groups = await vite.ssrLoadModule('/src/data/GroupStore.js');
+const evaluations = await vite.ssrLoadModule('/src/data/EvaluationStore.js');
+const teams = await vite.ssrLoadModule('/src/data/TeamStore.js');
+const criteria = await vite.ssrLoadModule('/src/data/CriteriaStore.js');
+const id = '11111111-1111-4111-8111-111111111111';
+const teamA = '22222222-2222-4222-8222-222222222222';
+const teamB = '33333333-3333-4333-8333-333333333333';
+const judgeId = '44444444-4444-4444-8444-444444444444';
+const criterionId = '55555555-5555-4555-8555-555555555555';
+const groupId = '66666666-6666-4666-8666-666666666666';
+const user = { id: judgeId, name: 'Judge', email: 'judge@test.local', role: 'USER' };
+const requests = [];
+let role = 'JUDGE';
+let failure = false;
+let criterionDescription = '';
+let teamRows = [{ teamId: teamA, teamName: 'A' }, { teamId: teamB, teamName: 'B' }];
+const project = () => ({ competitionId: id, title: 'Competition', status: 'ACTIVE', currentRole: role, ownerEmail: 'owner@test.local', ownerName: 'Owner' });
+const evaluation = { evaluationId: 'evaluation-uuid', competitionId: id, teamId: teamA, judgeId, status: 'DRAFT', totalScore: 80,
+  scores: [{ criterionId, scoreValue: 8, comment: 'Good' }] };
+api.defaults.adapter = async (config) => {
+  requests.push({ method: config.method, url: config.url, body: config.data ? JSON.parse(config.data) : undefined });
+  if (failure) throw new Error('Server unavailable');
+  if (config.method === 'put' && config.url === '/competitions/' + id + '/teams/group') {
+    const body = JSON.parse(config.data);
+    return { data: { movedCount: body.teamIds.length, unchangedCount: 0, groups: [
+      { groupId, groupName: 'Group A', teamIds: body.groupId ? body.teamIds : [] },
+    ] }, status: 200, statusText: 'OK', headers: {}, config };
+  }
+  if (config.method === 'post' && config.url === '/evaluations/submit-batch') {
+    return { data: { results: [
+      { teamId: teamA, outcome: 'SUBMITTED', httpStatus: 200, evaluation: { ...evaluation, status: 'SUBMITTED', totalScore: 90, scores: [{ criterionId, scoreValue: 9, comment: 'Saved' }] } },
+      { teamId: teamB, outcome: 'FAILED', httpStatus: 409, message: 'Deadline passed', evaluation: null },
+    ] }, status: 200, statusText: 'OK', headers: {}, config };
   }
 
-  setItem(key, value) {
-    this.values.set(key, String(value));
+  if (config.method === 'put' && config.url === '/competitions/' + id + '/teams/order') {
+    const { teamIds } = JSON.parse(config.data);
+    teamRows = teamIds.map((teamId, index) => ({ ...teamRows.find((t) => t.teamId === teamId), displayOrder: index + 1 }));
+    return { data: teamRows, status: 200, statusText: 'OK', headers: {}, config };
   }
-
-  removeItem(key) {
-    this.values.delete(key);
+  const criterion = { criterionId, title: 'Quality', description: criterionDescription, scoringType: 'NUMERIC', maxScore: 10, weightPercentage: 100 };
+  if (config.method === 'post' && config.url === '/competitions/' + id + '/criteria') {
+    criterionDescription = JSON.parse(config.data).description;
+    return { data: { ...criterion, description: criterionDescription }, status: 200, statusText: 'OK', headers: {}, config };
   }
+  const paths = {
+    '/competitions': [project()],
+    ['/competitions/' + id]: project(),
+    ['/competitions/' + id + '/teams']: teamRows,
+    ['/competitions/' + id + '/criteria']: [criterion],
+    ['/competitions/' + id + '/groups']: [{ groupId, groupName: 'Group A', teamIds: [teamA] }],
+    ['/competitions/' + id + '/members']: [{ userId: judgeId, email: user.email, fullName: user.name, role: role === 'ADMIN_JUDGE' ? 'ADMIN_JUDGE' : 'JUDGE' }],
+    ['/competitions/' + id + '/assignments']: [{ assignmentId: 'assignment-uuid', judgeId, teamId: teamA }],
+    ['/evaluations/competition/' + id]: [evaluation],
+    ['/evaluations/competition/' + id + '/team/' + teamA + '/mine']: evaluation,
+    '/notifications': [],
+    '/evaluations/save': 'Saved',
+  };
+  assert.ok(config.url in paths, 'Unexpected endpoint: ' + config.url);
+  return { data: paths[config.url], status: 200, statusText: 'OK', headers: {}, config };
+};
 
-  clear() {
-    this.values.clear();
-  }
-}
-
-globalThis.localStorage = new MemoryStorage();
-
-const vite = await createServer({
-  configFile: false,
-  plugins: [],
-  server: { middlewareMode: true },
-  appType: 'custom',
+test('UUIDs distinguish projects, teams, memberships and judge ownership after server hydration', async () => {
+  await loadWorkspace(user);
+  assert.equal(projects.getProjectById(id).name, 'Competition');
+  assert.equal(projects.getProjectById('other-uuid'), undefined);
+  assert.deepEqual(projects.getAssignedTeamIds(id, judgeId), [teamA]);
+  assert.equal(projects.isJudgeAssignedToTeam(id, judgeId, teamA), true);
+  assert.equal(projects.isJudgeAssignedToTeam(id, judgeId, teamB), false);
+  assert.equal(groups.getGroupForTeam(id, teamA).id, groupId);
+  assert.equal(groups.getGroupForTeam(id, teamB), undefined);
+  assert.deepEqual(groups.getTeamIdsInGroup(id, groupId), [teamA]);
+  assert.equal(evaluations.getEvaluation(id, teamA, judgeId).scores[criterionId], 8);
+  assert.equal(evaluations.getEvaluation(id, teamB, judgeId), undefined);
+  assert.equal(requests.some(r => r.url.endsWith('/members')), false, 'Judges cannot request the admin-only members endpoint');
 });
-const groupStore = await vite.ssrLoadModule('/src/data/GroupStore.js');
-const projectStore = await vite.ssrLoadModule('/src/data/ProjectStore.js');
-const assignmentStore = await vite.ssrLoadModule('/src/data/JudgeTeamAssignmentStore.js');
-const teamStore = await vite.ssrLoadModule('/src/data/TeamStore.js');
 
-const {
-  createGroup,
-  deleteGroup,
-  getGroupForTeam,
-  getGroupsByProject,
-  getTeamIdsInGroup,
-  moveTeamToGroup,
-  removeProjectGroups,
-  removeTeamFromGroups,
-  renameGroup,
-} = groupStore;
-const {
-  deleteProject,
-  getAssignedTeamIds,
-  getProjectById,
-  isJudgeAssignedToTeam,
-  removeJudgeAssignment,
-  setJudgeAssignedTeams,
-} = projectStore;
-const {
-  getJudgeIdsForTeam,
-  getTeamIdsForJudge,
-} = assignmentStore;
-const { deleteTeam, getTeamsByProject } = teamStore;
+test('evaluation writes use API score arrays and reload saved server results', async () => {
+  const saved = await evaluations.saveEvaluation({ projectId: id, teamId: teamA, judgeId,
+    status: 'DRAFT', scores: { [criterionId]: 8 }, criteriaComments: { [criterionId]: 'Good' }, totalScore: 999 });
+  const request = requests.find(r => r.url === '/evaluations/save');
+  assert.equal(request.body.competitionId, id);
+  assert.deepEqual(request.body.scores, [{ criterionId, scoreValue: 8, comment: 'Good' }]);
+  assert.equal('totalScore' in request.body, false, 'The server calculates totals');
+  assert.equal(saved.totalScore, 80);
+});
 
-const PROJECT_ID = 42;
+test('failed writes reject and leave the server cache unchanged', async () => {
+  const previous = teams.getTeamsByProject(id);
+  failure = true;
+  await assert.rejects(teams.saveTeam(id, { name: 'Unsaved' }));
+  assert.deepEqual(teams.getTeamsByProject(id), previous);
+  assert.equal(teams.getTeamsByProject(id).some(t => t.name === 'Unsaved'), false);
+  failure = false;
+});
 
-function seedData() {
-  localStorage.clear();
-  localStorage.setItem(
-    'ce_projects',
-    JSON.stringify([
-      {
-        id: PROJECT_ID,
-        name: 'Competition',
-        ownerEmail: 'admin@example.com',
-        judgeEmails: ['judge-a@example.com', 'judge-b@example.com'],
-        judgeAssignments: [
-          { id: 'judge-a@example.com', email: 'judge-a@example.com' },
-          { id: 'judge-b@example.com', email: 'judge-b@example.com' },
-        ],
-      },
-    ])
-  );
-  localStorage.setItem(
-    'ce_project_teams',
-    JSON.stringify([
-      {
-        projectId: PROJECT_ID,
-        teams: [
-          { id: 101, name: 'Team A' },
-          { id: 102, name: 'Team B' },
-        ],
-      },
-    ])
-  );
-}
+test('competition membership role comes from the server and logout clears private data', async () => {
+  role = 'ADMIN';
+  await loadWorkspace(user);
+  assert.equal(projects.isProjectAdmin(id, user.email), true);
+  assert.equal(projects.getMyProjects(user.email).length, 1);
+  assert.equal(projects.getJudgingProjects(user.email).length, 0);
+  clearWorkspace();
+  assert.deepEqual(workspace.projects, []);
+  assert.deepEqual(teams.getTeamsByProject(id), []);
+  assert.equal(workspace.user, null);
+});
 
-test.beforeEach(seedData);
-test.after(() => vite.close());
+test.after(async () => { await vite.close(); });
 
-test('migrates and validates legacy groups, then supports scoped group management', () => {
-  localStorage.setItem(
-    'ce_project_groups',
-    JSON.stringify([
-      {
-        projectId: String(PROJECT_ID),
-        groups: [
-          { id: '7', name: 'North', teamIds: ['101', '102', '999'] },
-          { id: 8, name: 'South', teamIds: [101] },
-        ],
-      },
-      { projectId: 900, groups: [{ id: 1, name: 'Stale', teamIds: [101] }] },
-    ])
-  );
+test('an admin who judges appears in both workspaces and retains admin access', async () => {
+  role = 'ADMIN_JUDGE';
+  await loadWorkspace(user);
+  assert.equal(projects.isProjectAdmin(id, user.email), true);
+  assert.equal(projects.getMyProjects(user.email).length, 1);
+  assert.equal(projects.getJudgingProjects(user.email).length, 1);
+  assert.equal(projects.getJudgeAssignments(id).some((judge) => judge.id === user.id), true);
+  assert.equal(projects.isJudgeAssignedToTeam(id, judgeId, teamA), true);
+});
 
-  assert.deepEqual(getGroupsByProject(PROJECT_ID), [
-    { id: 7, name: 'North' },
-    { id: 8, name: 'South' },
+test('new rubric criteria use server UUIDs and persist multiline descriptions via the API', async () => {
+  const description = '9-10 คะแนน: ครบถ้วน\n0-4 คะแนน: ต้องปรับปรุง';
+  const saved = await criteria.saveCriterion(id, { name: 'Quality', type: 'NUMERIC', maxScore: 10, weight: 100, description });
+  const request = requests.findLast((r) => r.method === 'post' && r.url.endsWith('/criteria'));
+  assert.equal(request.body.description, description);
+  assert.equal('id' in request.body, false);
+  assert.equal(saved.id, criterionId);
+  assert.equal(criteria.getCriteriaByProject(id)[0].description, description);
+});
+
+test('reordering teams persists UUID order and reloads it from the server', async () => {
+  await teams.reorderTeams(id, [teamB, teamA]);
+  assert.deepEqual(teams.getTeamsByProject(id).map((team) => team.id), [teamB, teamA]);
+  await loadWorkspace(user);
+  assert.deepEqual(teams.getTeamsByProject(id).map((team) => team.displayOrder), [1, 2]);
+  const previous = teams.getTeamsByProject(id);
+  failure = true;
+  await assert.rejects(teams.reorderTeams(id, [teamA, teamB]));
+  assert.deepEqual(teams.getTeamsByProject(id), previous);
+  failure = false;
+});
+
+test('deadline locks editing at the exact deadline and permits editing when unset', (context) => {
+  context.mock.method(Date, 'now', () => new Date('2026-10-21T12:00:00Z').getTime());
+  assert.equal(projects.isBeforeEvaluationDeadline({ evaluationDeadline: '2026-10-21T12:00:01Z' }), true);
+  assert.equal(projects.isBeforeEvaluationDeadline({ evaluationDeadline: '2026-10-21T12:00:00Z' }), false);
+  assert.equal(projects.isBeforeEvaluationDeadline({ evaluationDeadline: '2026-10-21T11:59:59Z' }), false);
+  assert.equal(projects.isBeforeEvaluationDeadline({ evaluationDeadline: null }), true);
+});
+
+
+test('batch submission uses one request and accepts only confirmed per-team receipts into the cache', async () => {
+  await loadWorkspace(user);
+  const previous = requests.length;
+  const results = await evaluations.submitEvaluationsBatch(id, [
+    { teamId: teamA, scores: { [criterionId]: 9 }, criteriaComments: { [criterionId]: 'Feedback' }, comment: 'Overall', totalScore: 999, judgeId: 'untrusted' },
+    { teamId: teamB, scores: { [criterionId]: 7 } },
   ]);
-  assert.deepEqual(getTeamIdsInGroup(PROJECT_ID, 7), [101, 102]);
-  assert.equal(getGroupForTeam(PROJECT_ID, 101).id, 7);
-  assert.equal(getGroupForTeam(900, 101), undefined);
-
-  const savedGroups = JSON.parse(localStorage.getItem('ce_project_groups'));
-  assert.deepEqual(savedGroups.memberships, [
-    { projectId: PROJECT_ID, groupId: 7, teamId: 101 },
-    { projectId: PROJECT_ID, groupId: 7, teamId: 102 },
-  ]);
-
-  renameGroup(PROJECT_ID, 7, 'North Division');
-  moveTeamToGroup(PROJECT_ID, 101, 8);
-  assert.equal(getGroupForTeam(PROJECT_ID, 101).id, 8);
-  moveTeamToGroup(PROJECT_ID, 101, '');
-  assert.equal(getGroupForTeam(PROJECT_ID, 101), undefined);
-  assert.throws(() => moveTeamToGroup(PROJECT_ID, 999, 8));
-  assert.throws(() => moveTeamToGroup(PROJECT_ID, 102, 900));
-
-  deleteGroup(PROJECT_ID, 7);
-  assert.equal(getGroupForTeam(PROJECT_ID, 102), undefined);
-  assert.equal(getTeamsByProject(PROJECT_ID).length, 2);
-  createGroup(PROJECT_ID, 'New Group');
-  assert.equal(getGroupsByProject(PROJECT_ID).at(-1).name, 'New Group');
+  const sent = requests.slice(previous);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].url, '/evaluations/submit-batch');
+  assert.deepEqual(sent[0].body, { competitionId: id, teams: [
+    { teamId: teamA, comment: 'Overall', scores: [{ criterionId, scoreValue: 9, comment: 'Feedback' }] },
+    { teamId: teamB, comment: '', scores: [{ criterionId, scoreValue: 7, comment: '' }] },
+  ] });
+  assert.equal(results[1].outcome, 'FAILED');
+  assert.equal(evaluations.getEvaluation(id, teamA, judgeId).status, 'SUBMITTED');
+  assert.equal(evaluations.getEvaluation(id, teamA, judgeId).totalScore, 90);
+  assert.equal(evaluations.getEvaluation(id, teamB, judgeId), undefined);
 });
 
-test('validates judge assignments and removes them when judges or teams are deleted', () => {
-  createGroup(PROJECT_ID, 'Track');
-  moveTeamToGroup(PROJECT_ID, 101, 1);
-  assert.equal(isJudgeAssignedToTeam(PROJECT_ID, 'judge-a@example.com', 101), false);
-
-  setJudgeAssignedTeams(PROJECT_ID, 'judge-a@example.com', [101, 102, 101]);
-  assert.deepEqual(getAssignedTeamIds(PROJECT_ID, 'judge-a@example.com'), [101, 102]);
-  assert.deepEqual(getJudgeIdsForTeam(PROJECT_ID, 101), ['judge-a@example.com']);
-  assert.equal(isJudgeAssignedToTeam(PROJECT_ID, 'judge-a@example.com', 101), true);
-  assert.equal(localStorage.getItem('ce_project_evaluations'), null);
-  assert.throws(() => setJudgeAssignedTeams(PROJECT_ID, 'judge-a@example.com', [999]));
-  assert.deepEqual(getTeamIdsForJudge(PROJECT_ID, 'judge-a@example.com'), [101, 102]);
-
-  deleteTeam(PROJECT_ID, 101);
-  removeTeamFromGroups(PROJECT_ID, 101);
-  assert.deepEqual(getAssignedTeamIds(PROJECT_ID, 'judge-a@example.com'), [102]);
-  assert.equal(getGroupForTeam(PROJECT_ID, 101), undefined);
-
-  assert.equal(
-    removeJudgeAssignment(PROJECT_ID, 'judge-a@example.com', 'judge-a@example.com'),
-    true
-  );
-  assert.deepEqual(getAssignedTeamIds(PROJECT_ID, 'judge-a@example.com'), []);
-  assert.equal(isJudgeAssignedToTeam(PROJECT_ID, 'judge-a@example.com', 102), false);
+test('a lost batch response leaves cached scores unchanged for a safe retry', async () => {
+  const previous = structuredClone(evaluations.getEvaluationsByProject(id));
+  failure = true;
+  try { await assert.rejects(evaluations.submitEvaluationsBatch(id, [{ teamId: teamA, scores: { [criterionId]: 2 } }])); }
+  finally { failure = false; }
+  assert.deepEqual(evaluations.getEvaluationsByProject(id), previous);
 });
 
-test('prunes stale assignments and groups when a competition is deleted', () => {
-  localStorage.setItem(
-    'ce_project_groups',
-    JSON.stringify({
-      groups: [
-        { projectId: PROJECT_ID, id: 1, name: 'Track' },
-        { projectId: 900, id: 1, name: 'Stale' },
-      ],
-      memberships: [
-        { projectId: PROJECT_ID, groupId: 1, teamId: 101 },
-        { projectId: PROJECT_ID, groupId: 1, teamId: 999 },
-      ],
-    })
-  );
-  localStorage.setItem(
-    'ce_judge_team_assignments',
-    JSON.stringify([
-      { projectId: PROJECT_ID, judgeId: 'judge-a@example.com', teamId: 101 },
-      { projectId: PROJECT_ID, judgeId: 'removed@example.com', teamId: 101 },
-      { projectId: PROJECT_ID, judgeId: 'judge-a@example.com', teamId: 999 },
-    ])
-  );
-
-  assert.deepEqual(getAssignedTeamIds(PROJECT_ID, 'judge-a@example.com'), [101]);
-  assert.deepEqual(getTeamIdsForJudge(PROJECT_ID, 'removed@example.com'), []);
-  assert.deepEqual(getTeamIdsInGroup(PROJECT_ID, 1), [101]);
-
-  removeProjectGroups(PROJECT_ID);
-  assert.equal(deleteProject(PROJECT_ID), true);
-  assert.deepEqual(getTeamIdsForJudge(PROJECT_ID, 'judge-a@example.com'), []);
-  assert.deepEqual(JSON.parse(localStorage.getItem('ce_project_groups')), {
-    groups: [],
-    memberships: [],
-  });
+test('bulk grouping makes one request and hydrates memberships from the confirmed response', async () => {
+  await loadWorkspace(user);
+  const previous = requests.length;
+  const receipt = await groups.moveTeamsToGroup(id, [teamA, teamB], groupId);
+  assert.equal(receipt.movedCount, 2);
+  assert.deepEqual(requests.slice(previous), [{ method: 'put', url: '/competitions/' + id + '/teams/group', body: { teamIds: [teamA, teamB], groupId } }]);
+  assert.deepEqual(groups.getTeamIdsInGroup(id, groupId), [teamA, teamB]);
+  await groups.moveTeamsToGroup(id, [teamA, teamB], null);
+  assert.equal(requests.at(-1).body.groupId, null);
+  assert.equal(groups.getGroupForTeam(id, teamA), undefined);
 });
 
-test('does not overwrite unreadable group or assignment data', () => {
-  const invalidGroups = '{invalid';
-  localStorage.setItem('ce_project_groups', invalidGroups);
-  assert.throws(() => getGroupsByProject(PROJECT_ID), /อ่านไม่ได้/);
-  assert.equal(localStorage.getItem('ce_project_groups'), invalidGroups);
-
-  const invalidAssignments = '{invalid';
-  localStorage.setItem('ce_judge_team_assignments', invalidAssignments);
-  assert.throws(() => getTeamIdsForJudge(PROJECT_ID, 'judge-a@example.com'), /อ่านไม่ได้/);
-  assert.equal(localStorage.getItem('ce_judge_team_assignments'), invalidAssignments);
+test('failed bulk grouping preserves cached memberships and teams', async () => {
+  await loadWorkspace(user);
+  const previous = structuredClone(workspace.details[id]);
+  failure = true;
+  try { await assert.rejects(groups.moveTeamsToGroup(id, [teamA, teamB], groupId)); }
+  finally { failure = false; }
+  assert.deepEqual(workspace.details[id], previous);
 });
 
-test('does not seed over unreadable competition or team data', () => {
-  const invalidProjects = '{invalid';
-  localStorage.setItem('ce_projects', invalidProjects);
-  assert.throws(() => getProjectById(PROJECT_ID), /อ่านไม่ได้/);
-  assert.equal(localStorage.getItem('ce_projects'), invalidProjects);
-
-  seedData();
-  const invalidTeams = '{invalid';
-  localStorage.setItem('ce_project_teams', invalidTeams);
-  assert.throws(() => getTeamsByProject(PROJECT_ID), /อ่านไม่ได้/);
-  assert.equal(localStorage.getItem('ce_project_teams'), invalidTeams);
+test('a late bulk response cannot restore private cache after logout', async context => {
+  await loadWorkspace(user);
+  let finish;
+  context.mock.method(api, 'put', () => new Promise(resolve => { finish = resolve; }));
+  const pending = groups.moveTeamsToGroup(id, [teamA, teamB], groupId);
+  clearWorkspace();
+  finish({ data: { movedCount: 2, unchangedCount: 0, groups: [{ groupId, groupName: 'Group A', teamIds: [teamA, teamB] }] } });
+  await pending;
+  assert.equal(workspace.user, null);
+  assert.deepEqual(workspace.details, {});
 });

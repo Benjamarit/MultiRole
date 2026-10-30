@@ -11,6 +11,7 @@ export default function ConfirmDialog({
   confirmText,
   cancelText,
   isDanger = true,
+  isLoading = false,
 }) {
   const { t } = useLanguage();
   if (!isOpen) return null;
@@ -37,10 +38,10 @@ export default function ConfirmDialog({
         </div>
 
         <div className="mt-6 flex justify-end gap-2.5 border-t border-slate-100 pt-4">
-          <Button variant="secondary" onClick={onCancel}>
+          <Button variant="secondary" onClick={onCancel} disabled={isLoading}>
             {cancelText || t('ยกเลิก', 'Cancel', { compact: true })}
           </Button>
-          <Button variant={isDanger ? 'danger' : 'primary'} onClick={onConfirm}>
+          <Button variant={isDanger ? 'danger' : 'primary'} onClick={onConfirm} isLoading={isLoading} disabled={isLoading}>
             {confirmText || t('ยืนยัน', 'Confirm', { compact: true })}
           </Button>
         </div>

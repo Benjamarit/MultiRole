@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   ArrowDown,
@@ -11,7 +11,6 @@ import {
   ChevronUp,
   ExternalLink,
   ListFilter,
-  LockOpen,
   MessageSquarePlus,
   Save,
   Send,
@@ -24,14 +23,18 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
+import BatchSubmissionDialog from '../components/BatchSubmissionDialog';
+import { getBatchSubmissionCandidates } from '../data/BatchSubmission';
+import { isValidCriterionScore } from '../data/Scoring';
 import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getTeamsByProject } from '../data/TeamStore';
-import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
+import { getEvaluation, saveEvaluation, submitEvaluationsBatch } from '../data/EvaluationStore';
 import {
   getAssignedTeamIds,
   getProjectById,
   isBeforeEvaluationDeadline,
+  isProjectReadyForEvaluation,
 } from '../data/ProjectStore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -46,66 +49,28 @@ function normalizedScore(criterion, value) {
  * แยกข้อความคำอธิบายเกณฑ์ (Rubric) ออกเป็นระดับคะแนนย่อยอัตโนมัติ
  * โดยรักษาเครื่องหมาย ★ ให้อยู่คู่กับระดับคะแนน (เช่น "★ 5 ดาว") ไม่แยกออกมาเป็นกล่องเดี่ยว
  */
-function parseRubricLevels(description) {
-  if (!description || !String(description).trim()) return [];
-  const raw = String(description).trim();
-
-  const normalized = raw.replace(
-    /\s*((?:[★⭐•]\s*)?\d+(?:\s*-\s*\d+)?\s*(?:ดาว|คะแนน|แต้ม|stars?|points?|pts)\s*[:：]|[★⭐•]\s+)/gi,
-    '\n$1'
-  );
-
-  const segments = normalized
-    .split(/\r?\n+/)
-    .map((s) => s.trim())
-    .filter((s) => s && !/^[★⭐•\-]+$/.test(s));
-
-  return segments.map((seg) => {
-    const colonMatch = seg.match(/^([^:：]{1,35})[:：]\s*(.+)$/);
-    if (colonMatch) {
-      return {
-        label: colonMatch[1].trim(),
-        detail: colonMatch[2].trim(),
-      };
-    }
-    return {
-      label: null,
-      detail: seg,
-    };
-  });
-}
+import { useDeadline } from '../hooks/useDeadline';
+import EvaluationDeadlineNotice from '../components/EvaluationDeadlineNotice';
+import { parseRubricLevels } from '../data/Rubric';
 
 export default function JudgeMultiEvaluation() {
   const { projectId } = useParams();
   const { user } = useAuth();
-  const { t, tDesc } = useLanguage();
-  const judgeId = user?.email || 'anonymous-judge';
+  const { t } = useLanguage();
+  const judgeId = user?.id || 'anonymous-judge';
 
   const criteria = getCriteriaByProject(projectId);
   const project = getProjectById(projectId);
-  const [canEdit, setCanEdit] = useState(() => isBeforeEvaluationDeadline(project));
-
-  useEffect(() => {
-    if (!canEdit || !project?.evaluationDeadline) return undefined;
-    const deadline = new Date(project.evaluationDeadline).getTime();
-    if (!Number.isFinite(deadline)) return undefined;
-    let timeoutId;
-    const checkDeadline = () => {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) {
-        setCanEdit(false);
-        return;
-      }
-      timeoutId = window.setTimeout(checkDeadline, Math.min(remaining, 2147483647));
-    };
-    checkDeadline();
-    return () => window.clearTimeout(timeoutId);
-  }, [canEdit, project?.evaluationDeadline]);
+  const isBeforeDeadline = useDeadline(project);
+  const canEvaluate = isProjectReadyForEvaluation(projectId);
+  const canEdit = isBeforeDeadline && canEvaluate;
+  const [unlockedTeams, setUnlockedTeams] = useState({});
+  const [savingTeams, setSavingTeams] = useState({});
 
   const allTeams = getTeamsByProject(projectId);
   const assignedTeamIds = getAssignedTeamIds(projectId, judgeId);
   const eligibleTeams = allTeams.filter((team) =>
-    assignedTeamIds.includes(Number(team.id))
+    assignedTeamIds.includes(String(team.id))
   );
 
   // 1. State สำหรับเลือกทีมที่จะแสดงในตาราง
@@ -183,12 +148,22 @@ export default function JudgeMultiEvaluation() {
     return initialStatuses;
   });
 
-  const [unlockedTeams, setUnlockedTeams] = useState({});
   const [confirmTeamId, setConfirmTeamId] = useState(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isBatchOpen, setIsBatchOpen] = useState(false);
+  const [batchSnapshot, setBatchSnapshot] = useState(null);
+  const [batchResults, setBatchResults] = useState(null);
+  const [batchError, setBatchError] = useState('');
+  const [isBatchSubmitting, setIsBatchSubmitting] = useState(false);
+  const batchInFlight = useRef(false);
+  const hasTeamSaves = Object.values(savingTeams).some(Boolean);
+  const savedDraftCount = eligibleTeams.filter(team => statuses[team.id] === 'DRAFT').length;
+  const batchCandidates = getBatchSubmissionCandidates({ teams: eligibleTeams, criteria, statuses,
+    scores: matrixScores, criteriaComments: matrixCriteriaComments, comments, displayedTeamIds: selectedTeamIds });
+
 
   const isTeamEditable = (teamId) =>
-    isBeforeEvaluationDeadline(getProjectById(projectId)) &&
+    canEdit && !isBatchOpen && !isBatchSubmitting && isBeforeEvaluationDeadline(getProjectById(projectId)) && !savingTeams[teamId] &&
     (statuses[teamId] !== 'SUBMITTED' || unlockedTeams[teamId]);
 
   // คำนวณจำนวนข้อที่แต่ละทีมกรอกคะแนนแล้ว และสถานะสีของแต่ละทีม (SUBMITTED | IN_PROGRESS | NOT_STARTED)
@@ -383,14 +358,16 @@ export default function JudgeMultiEvaluation() {
   };
 
   const isTeamAnswered = (teamId) =>
-    criteria.every(
+    criteria.length > 0 && criteria.every(
       (criterion) =>
         matrixScores[teamId]?.[criterion.id] !== undefined &&
-        matrixScores[teamId]?.[criterion.id] !== null
+        matrixScores[teamId]?.[criterion.id] !== null &&
+        isValidCriterionScore(criterion, matrixScores[teamId]?.[criterion.id])
     );
 
   const handleScoreChange = (teamId, criterionId, value) => {
     if (!isTeamEditable(teamId)) return;
+    setBatchResults(null);
 
     setMatrixScores((prev) => ({
       ...prev,
@@ -403,6 +380,7 @@ export default function JudgeMultiEvaluation() {
 
   const handleCriterionCommentChange = (teamId, criterionId, value) => {
     if (!isTeamEditable(teamId)) return;
+    setBatchResults(null);
 
     setMatrixCriteriaComments((prev) => ({
       ...prev,
@@ -423,24 +401,20 @@ export default function JudgeMultiEvaluation() {
 
   const handleCommentChange = (teamId, value) => {
     if (!isTeamEditable(teamId)) return;
+    setBatchResults(null);
     setComments((prev) => ({ ...prev, [teamId]: value }));
   };
 
-  const handleUnlockTeam = (teamId) => {
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) {
-      toast.error(
-        t(
-          'หมดเขตการประเมินแล้ว ไม่สามารถปลดล็อกแก้ไขได้',
-          'Evaluation deadline has passed'
-        )
-      );
-      return;
-    }
-    if (statuses[teamId] !== 'SUBMITTED') return;
-    setUnlockedTeams((prev) => ({ ...prev, [teamId]: true }));
+
+  const cancelTeamChanges = (teamId) => {
+    const saved = getEvaluation(projectId, teamId, judgeId);
+    setMatrixScores((prev) => ({ ...prev, [teamId]: saved?.scores || {} }));
+    setMatrixCriteriaComments((prev) => ({ ...prev, [teamId]: saved?.criteriaComments || {} }));
+    setComments((prev) => ({ ...prev, [teamId]: saved?.comment || '' }));
+    setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
   };
 
-  const handleSaveDraft = (teamId) => {
+  const handleSaveDraft = async (teamId) => {
     if (!isBeforeEvaluationDeadline(getProjectById(projectId))) {
       toast.error(
         t('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้', 'Evaluation deadline has passed')
@@ -448,8 +422,9 @@ export default function JudgeMultiEvaluation() {
       return;
     }
     if (!isTeamEditable(teamId)) return;
+    setSavingTeams((prev) => ({ ...prev, [teamId]: true }));
     try {
-      const saved = saveEvaluation({
+      const saved = await saveEvaluation({
         projectId,
         teamId,
         judgeId,
@@ -458,7 +433,7 @@ export default function JudgeMultiEvaluation() {
         criteriaComments: matrixCriteriaComments[teamId] || {},
         comment: comments[teamId] || '',
         totalScore: Number(teamTotals[teamId]),
-        status: 'DRAFT',
+        status: statuses[teamId] === 'SUBMITTED' ? 'SUBMITTED' : 'DRAFT',
       });
       if (!saved) {
         toast.error(
@@ -466,15 +441,17 @@ export default function JudgeMultiEvaluation() {
         );
         return;
       }
-      setStatuses((prev) => ({ ...prev, [teamId]: 'DRAFT' }));
+      setStatuses((prev) => ({ ...prev, [teamId]: saved.status }));
       setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
-      toast.success(t('บันทึกแบบร่างเรียบร้อยแล้ว', 'Draft saved'));
+      toast.success(saved.status === 'SUBMITTED' ? t('บันทึกการแก้ไขคะแนนแล้ว', 'Score changes saved') : t('บันทึกแบบร่างเรียบร้อยแล้ว', 'Draft saved'));
     } catch (error) {
       toast.error(error.message);
+    } finally {
+      setSavingTeams((prev) => ({ ...prev, [teamId]: false }));
     }
   };
 
-  const confirmSubmit = () => {
+  const confirmSubmit = async () => {
     const teamId = confirmTeamId;
     if (!teamId) return;
     if (!isBeforeEvaluationDeadline(getProjectById(projectId))) {
@@ -486,8 +463,9 @@ export default function JudgeMultiEvaluation() {
       return;
     }
     if (!isTeamEditable(teamId) || !isTeamAnswered(teamId)) return;
+    setSavingTeams((prev) => ({ ...prev, [teamId]: true }));
     try {
-      const saved = saveEvaluation({
+      const saved = await saveEvaluation({
         projectId,
         teamId,
         judgeId,
@@ -506,7 +484,7 @@ export default function JudgeMultiEvaluation() {
         );
         return;
       }
-      setStatuses((prev) => ({ ...prev, [teamId]: 'SUBMITTED' }));
+      setStatuses((prev) => ({ ...prev, [teamId]: saved.status }));
       setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
       setIsConfirmOpen(false);
       setConfirmTeamId(null);
@@ -514,7 +492,57 @@ export default function JudgeMultiEvaluation() {
     } catch (error) {
       setIsConfirmOpen(false);
       toast.error(error.message);
+    } finally {
+      setSavingTeams((prev) => ({ ...prev, [teamId]: false }));
     }
+  };
+
+  const openBatchReview = () => {
+    if (batchInFlight.current || hasTeamSaves || isConfirmOpen) return;
+    setBatchSnapshot(batchCandidates);
+    setBatchResults(null);
+    setBatchError('');
+    setIsBatchOpen(true);
+  };
+  const closeBatch = () => { if (!batchInFlight.current) setIsBatchOpen(false); };
+  const sendBatch = async (retryFailed = false) => {
+    if (batchInFlight.current || hasTeamSaves || !batchSnapshot) return;
+    if (!canEdit || !isBeforeEvaluationDeadline(getProjectById(projectId))) {
+      setBatchError(t('ขณะนี้ไม่เปิดรับคะแนน หรือหมด deadline แล้ว', 'Submissions are closed or the deadline has passed.'));
+      return;
+    }
+    const failedIds = new Set((batchResults || []).filter(result => result.outcome === 'FAILED').map(result => result.teamId));
+    const targets = batchSnapshot.ready.filter(team => !retryFailed || failedIds.has(team.teamId));
+    if (!targets.length) return;
+    batchInFlight.current = true;
+    setIsBatchSubmitting(true);
+    setBatchError('');
+    try {
+      const received = await submitEvaluationsBatch(projectId, targets);
+      const confirmed = received.filter(result => result.evaluation && ['SUBMITTED', 'ALREADY_SUBMITTED'].includes(result.outcome));
+      setStatuses(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.status])) }));
+      setUnlockedTeams(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, false])) }));
+      setMatrixScores(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.scores])) }));
+      setMatrixCriteriaComments(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.criteriaComments])) }));
+      setComments(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.comment || ''])) }));
+      const merged = new Map((batchResults || []).map(result => [result.teamId, result]));
+      received.forEach(result => merged.set(result.teamId, result));
+      targets.forEach(team => { if (!merged.has(team.teamId)) merged.set(team.teamId, { teamId: team.teamId, outcome: 'FAILED', message: t('ยังยืนยันผลไม่ได้ กรุณาลองใหม่', 'Result unconfirmed. Please retry.') }); });
+      setBatchResults(batchSnapshot.ready.filter(team => merged.has(team.teamId)).map(team => merged.get(team.teamId)));
+      if (received.some(result => result.outcome === 'FAILED')) toast.error(t('ส่งได้บางทีม กรุณาตรวจผลรายทีมในหน้าสรุป', 'Some teams failed. Review the per-team results.'));
+      else toast.success(t(`ยืนยันการส่งสำเร็จ ${confirmed.length} ทีม`, `Submission confirmed for ${confirmed.length} teams`));
+    } catch (error) {
+      setBatchError(t(`${error.message} — ยังยืนยันผลการส่งทั้งหมดไม่ได้ คะแนนที่กรอกยังอยู่ ลองส่งซ้ำได้โดยระบบจะไม่ส่งทับทีมที่ส่งแล้ว`, `${error.message} — Some results may be unconfirmed. Your scores are retained. Retrying will not overwrite submitted teams.`));
+    } finally {
+      batchInFlight.current = false;
+      setIsBatchSubmitting(false);
+    }
+  };
+  const fixIncompleteTeam = (team) => {
+    if (batchInFlight.current) return;
+    setIsBatchOpen(false);
+    setSelectedTeamIds([team.id]);
+    setFocusedCriterionId(team.missing[0]?.id || team.invalid[0]?.id || 'all');
   };
 
   return (
@@ -525,22 +553,15 @@ export default function JudgeMultiEvaluation() {
 
       <PageHeader
         title={t('ประเมินเปรียบเทียบหลายทีม', 'Multi-Team Matrix Evaluation')}
-        description={tDesc(
-          `เลือกเกณฑ์ที่ต้องการประเมินก่อน-หลัง และเปรียบเทียบให้คะแนนแต่ละทีมพร้อมกันในตารางเดียว — ${project?.name || `โครงการ #${projectId}`}`,
-          `Select and prioritize criteria to evaluate first, and score multiple teams side by side — ${project?.name || `Competition #${projectId}`}`
-        )}
+        subtitle={project?.name}
       />
 
-      {!canEdit && (
-        <Card className="border-red-200 bg-red-50">
-          <p className="text-sm font-medium text-red-700">
-            {t(
-              'หมดเขตการประเมินแล้ว ไม่สามารถแก้ไขหรือส่งคะแนนได้',
-              'Evaluation deadline has passed. Scores are locked.'
-            )}
-          </p>
-        </Card>
-      )}
+      <EvaluationDeadlineNotice project={project} isBeforeDeadline={isBeforeDeadline} />
+      {eligibleTeams.length > 0 && <Card noPadding><div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Send className="h-4 w-4 text-blue-600" />{t('ส่งคะแนนรวม', 'Submit evaluations together')}</h2><p className="mt-2 text-xs leading-6 text-slate-500">{t(`บันทึกร่าง ${savedDraftCount} ทีม · พร้อมส่ง ${batchCandidates.ready.length} ทีม · ยังไม่พร้อม ${batchCandidates.incomplete.length} ทีม · ส่งแล้ว ${batchCandidates.submitted.length} ทีม`, `${savedDraftCount} saved drafts · ${batchCandidates.ready.length} ready · ${batchCandidates.incomplete.length} incomplete · ${batchCandidates.submitted.length} submitted`)}</p></div><div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={hasTeamSaves || isBatchSubmitting || isConfirmOpen} onClick={openBatchReview}>{t('ตรวจความพร้อม', 'Review readiness')}</Button><Button disabled={!canEdit || !batchCandidates.ready.length || hasTeamSaves || isBatchSubmitting || isConfirmOpen} onClick={openBatchReview}><Send className="h-4 w-4" />{t(`ส่งทีมที่พร้อม (${batchCandidates.ready.length})`, `Submit ready teams (${batchCandidates.ready.length})`)}</Button></div></div></Card>}
+      {batchResults && !isBatchOpen && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3 text-xs text-blue-800"><span>{t(`ผลการส่งล่าสุด: ยืนยันแล้ว ${batchResults.filter(result => result.outcome !== 'FAILED').length} ทีม · ไม่สำเร็จ ${batchResults.filter(result => result.outcome === 'FAILED').length} ทีม`, `Latest submission: ${batchResults.filter(result => result.outcome !== 'FAILED').length} confirmed · ${batchResults.filter(result => result.outcome === 'FAILED').length} failed`)}</span><Button variant="text" size="sm" onClick={() => setIsBatchOpen(true)}>{t('ดูผลรายทีม', 'View results')}</Button></div>}
+
+      {Object.values(unlockedTeams).some(Boolean) && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{t('กำลังแก้ไขคะแนน คะแนนเดิมยังใช้จนกว่าจะบันทึกการแก้ไข', 'Editing scores. Previously submitted scores remain in use until changes are saved.')}</p>}
+      {!canEvaluate && project?.status === 'Active' && <Card>{t('เกณฑ์ยังไม่ครบ 100% กรุณาติดต่อผู้ดูแลโครงการ', 'Criteria weights must total 100%. Contact the competition admin.')}</Card>}
 
       {eligibleTeams.length === 0 ? (
         <Card>
@@ -591,7 +612,7 @@ export default function JudgeMultiEvaluation() {
                 {/* แถบกำกับความหมายของสีพื้นหลังและตัวอักษรตอนไฮไลต์ (Color Legend) */}
                 <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-xs">
                   <span className="font-semibold text-slate-500">
-                    {t('สีเมื่อเลือกทีม (คลิกเพื่อกรอง):', 'Highlight Color Legend:')}
+                    {t('กรองสถานะ:', 'Filter status:')}
                   </span>
 
                   <button
@@ -733,12 +754,12 @@ export default function JudgeMultiEvaluation() {
                   </div>
                 </div>
 
-                <p className="text-xs text-slate-600">
+                <UsageHelp title={t('วิธีเลือกและเรียงเกณฑ์', 'Choose and order criteria')}>
                   {t(
                     'คลิกที่ชื่อเกณฑ์เพื่อโฟกัสประเมินทีละเกณฑ์ หรือกดลูกศร ↑ ↓ เพื่อเลื่อนเกณฑ์ที่อยากประเมินก่อนขึ้นไปไว้แถวบนสุดของตาราง',
                     'Click a criterion to focus on scoring it across all teams, or use ↑ ↓ arrows to reorder which criterion appears first.'
                   )}
-                </p>
+                </UsageHelp>
 
                 {/* รายการเกณฑ์พร้อมปุ่มโฟกัส, ปุ่มติ๊กเลือก และปุ่มเลื่อนลำดับ ↑ ↓ */}
                 <div className="flex max-h-48 flex-col gap-1.5 overflow-y-auto pr-1">
@@ -1040,27 +1061,20 @@ export default function JudgeMultiEvaluation() {
                               )}
                             </div>
                             <div className="mt-3 flex flex-wrap justify-center gap-2">
-                              {statuses[team.id] === 'SUBMITTED' &&
-                              !unlockedTeams[team.id] ? (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => handleUnlockTeam(team.id)}
-                                  disabled={!canEdit}
-                                >
-                                  <LockOpen className="h-3.5 w-3.5" />
-                                  {t('ปลดล็อกแก้ไข', 'Unlock to Edit')}
-                                </Button>
+                              {statuses[team.id] === 'SUBMITTED' && !unlockedTeams[team.id] ? (
+                                <Button size="sm" variant="secondary" disabled={!canEdit || isBatchOpen || isBatchSubmitting || savingTeams[team.id]} onClick={() => setUnlockedTeams((prev) => ({ ...prev, [team.id]: true }))}>{t('แก้ไขคะแนน', 'Edit Scores')}</Button>
                               ) : (
                                 <>
+                                  {unlockedTeams[team.id] && <Button size="sm" variant="secondary" disabled={isBatchOpen || isBatchSubmitting || savingTeams[team.id]} onClick={() => cancelTeamChanges(team.id)}>{t('ยกเลิกการแก้ไข', 'Cancel Changes')}</Button>}
                                   <Button
                                     variant="secondary"
                                     size="sm"
                                     onClick={() => handleSaveDraft(team.id)}
-                                    disabled={!isTeamEditable(team.id)}
+                                    disabled={!isTeamEditable(team.id) || (statuses[team.id] === 'SUBMITTED' && !isTeamAnswered(team.id))}
+                                    isLoading={Boolean(savingTeams[team.id])}
                                   >
                                     <Save className="h-3.5 w-3.5" />
-                                    {t('บันทึกร่าง', 'Save Draft')}
+                                    {statuses[team.id] === 'SUBMITTED' ? t('บันทึกการแก้ไข', 'Save Changes') : t('บันทึกร่าง', 'Save Draft')}
                                   </Button>
                                   <Button
                                     size="sm"
@@ -1204,6 +1218,7 @@ export default function JudgeMultiEvaluation() {
                                 <div className="space-y-2.5">
                                   <CriterionScoreInput
                                     criterion={criterion}
+                                    label={`${t('คะแนน', 'Score')} ${team.name} — ${criterion.name}`}
                                     value={
                                       matrixScores[team.id]?.[criterion.id] ?? null
                                     }
@@ -1232,6 +1247,7 @@ export default function JudgeMultiEvaluation() {
 
                                     {isCommentOpen && (
                                       <textarea
+                                        aria-label={`${t('ความคิดเห็น', 'Feedback')} ${team.name} — ${criterion.name}`}
                                         rows={2}
                                         disabled={!isTeamEditable(team.id)}
                                         value={cellComment}
@@ -1276,6 +1292,7 @@ export default function JudgeMultiEvaluation() {
                           className="border-l border-slate-200 px-6 py-4 align-top"
                         >
                           <textarea
+                            aria-label={`${t('ข้อเสนอแนะภาพรวม', 'Overall feedback')} ${team.name}`}
                             rows={3}
                             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-precision-blue focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
                             placeholder={t(
@@ -1299,8 +1316,10 @@ export default function JudgeMultiEvaluation() {
         </>
       )}
 
+      <BatchSubmissionDialog isOpen={isBatchOpen} snapshot={batchSnapshot} results={batchResults} error={batchError} busy={isBatchSubmitting} canSubmit={canEdit && !hasTeamSaves} onConfirm={() => sendBatch(false)} onRetry={() => sendBatch(true)} onClose={closeBatch} onFixTeam={fixIncompleteTeam} />
       <ConfirmDialog
         isOpen={isConfirmOpen}
+        isLoading={Boolean(savingTeams[confirmTeamId])}
         isDanger={false}
         title={t('ยืนยันการส่งคะแนน', 'Confirm Score Submission')}
         message={t(
@@ -1308,10 +1327,10 @@ export default function JudgeMultiEvaluation() {
             displayedTeams.find((team) => team.id === confirmTeamId)?.name
               ? `ของทีม "${displayedTeams.find((team) => team.id === confirmTeamId).name}"`
               : ''
-          } หรือไม่? สามารถปลดล็อกแก้ไขและส่งใหม่ได้ก่อน Deadline`,
+          } หรือไม่? สามารถแก้ไขคะแนนได้จนถึง deadline ขณะโครงการเปิดรับคะแนน`,
           `Submit score for "${
             displayedTeams.find((team) => team.id === confirmTeamId)?.name || 'this team'
-          }"? You can unlock and update it before the deadline.`
+          }"? Scores can be edited until the deadline while the competition is active.`
         )}
         onConfirm={confirmSubmit}
         onCancel={() => {
@@ -1323,3 +1342,4 @@ export default function JudgeMultiEvaluation() {
     </div>
   );
 }
+import UsageHelp from '../components/UsageHelp';

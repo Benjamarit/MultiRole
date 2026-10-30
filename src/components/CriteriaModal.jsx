@@ -6,6 +6,7 @@ export default function CriteriaModal({
   title,
   children,
   maxWidth = 'max-w-lg',
+  closeDisabled = false,
 }) {
   if (!isOpen) return null;
 
@@ -23,6 +24,7 @@ export default function CriteriaModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={closeDisabled}
             aria-label="ปิดหน้าต่าง / Close"
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-precision-blue"
           >

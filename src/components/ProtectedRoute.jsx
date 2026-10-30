@@ -48,7 +48,7 @@ export default function ProtectedRoute({ allowedRoles, projectRole, children }) 
   } else if (projectRole === 'JUDGE') {
     const projectId = params.projectId;
     const isInvitedJudge = getJudgingProjects(user.email).some(
-      (p) => Number(p.id) === Number(projectId)
+      (p) => String(p.id) === String(projectId)
     );
     if (!isInvitedJudge) {
       return <Navigate to="/workspace" replace />;

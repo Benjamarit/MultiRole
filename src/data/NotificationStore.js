@@ -1,60 +1,15 @@
-// src/data/NotificationStore.js
-const NOTIFICATIONS_KEY = 'ce_notifications';
-
-function readAll() {
-  try {
-    const stored = localStorage.getItem(NOTIFICATIONS_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
+import api from '../api/client';
+import { workspace, refreshNotifications } from '../api/workspace';
+export const getNotificationsByUser = (email) => email === workspace.user?.email ? workspace.notifications : [];
+export async function addNotification(n) {
+  return (await api.post('/notifications', { competitionId: n.projectId, email: n.userId,
+    title: n.title, message: n.message, type: n.type })).data;
 }
-
-function writeAll(notifications) {
-  localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+export async function markAsRead(id) {
+  await api.patch('/notifications/' + id + '/read');
+  await refreshNotifications();
 }
-
-// ดึงการแจ้งเตือนของผู้ใช้แต่ละคน
-export function getNotificationsByUser(email) {
-  if (!email) return [];
-  const all = readAll();
-  // เรียงจากใหม่ไปเก่า
-  return all
-    .filter((n) => n.userId === email)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-}
-
-// สร้างการแจ้งเตือนใหม่
-export function addNotification({ userId, projectId, title, message, type = 'REMINDER' }) {
-  const notifications = readAll();
-  const newNotification = {
-    id: Date.now().toString(),
-    userId,
-    projectId,
-    title,
-    message,
-    type,
-    isRead: false,
-    createdAt: new Date().toISOString(),
-  };
-  writeAll([...notifications, newNotification]);
-  return newNotification;
-}
-
-// ทำเครื่องหมายว่าอ่านแล้ว (1 รายการ)
-export function markAsRead(notificationId) {
-  const notifications = readAll();
-  const updated = notifications.map(n =>
-    n.id === notificationId ? { ...n, isRead: true } : n
-  );
-  writeAll(updated);
-}
-
-// ทำเครื่องหมายว่าอ่านแล้ว (ทั้งหมดของผู้ใช้)
-export function markAllAsRead(email) {
-  const notifications = readAll();
-  const updated = notifications.map(n =>
-    n.userId === email ? { ...n, isRead: true } : n
-  );
-  writeAll(updated);
+export async function markAllAsRead() {
+  await api.patch('/notifications/read-all');
+  await refreshNotifications();
 }

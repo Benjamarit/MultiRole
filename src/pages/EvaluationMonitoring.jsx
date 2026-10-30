@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { loadProject } from '../api/workspace';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { BellRing, CheckCircle2, Eye, RefreshCw, Scale, Users } from 'lucide-react';
+import { BellRing, CheckCircle2, Eye, RefreshCw, Scale, Search, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
 import BackButton from '../components/BackButton';
@@ -15,10 +16,12 @@ import {
   isJudgeAssignedToTeam,
 } from '../data/ProjectStore';
 import { getTeamsByProject } from '../data/TeamStore';
+import { compareTeamNames } from '../data/TeamOrdering';
 import { getEvaluationsByProject } from '../data/EvaluationStore';
 import { getCriteriaByProject } from '../data/CriteriaStore';
 import { getRegisteredUsers } from '../context/authStore';
 import { addNotification } from '../data/NotificationStore';
+import { resolveJudgeIdentity } from '../data/JudgeIdentity';
 
 function formatTime(date) {
   return date.toLocaleTimeString('th-TH', {
@@ -42,9 +45,18 @@ export default function EvaluationMonitoring() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [notifiedJudgeIds, setNotifiedJudgeIds] = useState([]);
+  const [notifiedAt, setNotifiedAt] = useState({});
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  const [notifyingJudgeId, setNotifyingJudgeId] = useState(null);
   const [detailTeam, setDetailTeam] = useState(null);
+  const [teamSearch, setTeamSearch] = useState('');
+  const [teamSort, setTeamSort] = useState('name-asc');
   const project = getProjectById(id);
+  const remindersOpen = project?.status === 'Active' && project?.evaluationDeadline && clock < new Date(project.evaluationDeadline).getTime();
   const registeredUsers = getRegisteredUsers();
   const teams = getTeamsByProject(id);
   const criteria = getCriteriaByProject(id);
@@ -54,7 +66,7 @@ export default function EvaluationMonitoring() {
       evaluation.status === 'SUBMITTED' &&
       assignments.some(
         (assignment) =>
-          String(assignment.email || assignment.id) === String(evaluation.judgeId) &&
+          String(assignment.id) === String(evaluation.judgeId) &&
           isJudgeAssignedToTeam(id, assignment.id, evaluation.teamId)
       )
   );
@@ -65,15 +77,15 @@ export default function EvaluationMonitoring() {
     );
     const assignedTeamIds = getAssignedTeamIds(id, assignment.id);
     const eligibleTeams = teams.filter((team) =>
-      assignedTeamIds.includes(Number(team.id))
+      assignedTeamIds.includes(String(team.id))
     );
     const completed = evaluations.filter(
-      (evaluation) => evaluation.judgeId === String(judge?.email || assignment.id)
+      (evaluation) => evaluation.judgeId === String(assignment.id)
     ).length;
     return {
       id: assignment.id,
-      email: judge?.email || assignment.email || assignment.id,
-      name: judge?.name || `${assignment.email || assignment.id}`,
+      email: judge?.email || assignment.email || '',
+      name: judge?.name || assignment.name || assignment.email || t('ไม่พบชื่อกรรมการ', 'Judge name unavailable'),
       assigned: eligibleTeams.length,
       completed,
       status:
@@ -108,6 +120,15 @@ export default function EvaluationMonitoring() {
     };
   });
 
+  const teamQuery = teamSearch.trim().toLocaleLowerCase('th');
+  const visibleTeamProgress = teamProgress
+    .filter(team => !teamQuery || team.name.toLocaleLowerCase('th').includes(teamQuery))
+    .sort((a, b) => {
+      if (teamSort === 'name-asc') return compareTeamNames(a.name, b.name);
+      if (teamSort === 'name-desc') return compareTeamNames(b.name, a.name);
+      return 0; // Keep the saved team order supplied by the workspace.
+    });
+
   const totalAssignments = teamProgress.reduce((sum, team) => sum + team.totalJudges, 0);
   const completedAssignments = evaluations.length;
   const completionPercent = totalAssignments
@@ -139,26 +160,36 @@ export default function EvaluationMonitoring() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    setLastUpdated(new Date());
-    setIsRefreshing(false);
+    try {
+        await loadProject(id);
+        setLastUpdated(new Date());
+    } catch (error) {
+      toast.error(error.message);
+    }
+    finally { setIsRefreshing(false); }
   };
 
-  const handleNotify = (judgeId, judgeEmail, judgeName) => {
-    addNotification({
-      userId: judgeEmail,
-      projectId: id,
-      title: 'แจ้งเตือนการประเมิน',
-      message: `เรียนคุณ ${judgeName}, โปรดอย่าลืมให้คะแนนผลงานในโครงการ "${project?.name || `โครงการ #${id}`}" เนื่องจากใกล้ถึงกำหนดเวลาแล้วครับ`,
-      type: 'REMINDER',
-    });
-    setNotifiedJudgeIds((prev) => [...prev, judgeId]);
-    toast.success(
-      t(
-        `ส่งการแจ้งเตือนถึง ${judgeName} เรียบร้อยแล้ว`,
-        `Reminder sent to ${judgeName}`
-      )
-    );
+  const handleNotify = async (judgeId, judgeEmail, judgeName) => {
+    if (notifyingJudgeId) return;
+    setNotifyingJudgeId(judgeId);
+    try {
+      await addNotification({
+        userId: judgeEmail,
+        projectId: id,
+        title: 'แจ้งเตือนการประเมิน',
+        message: `เรียนคุณ ${judgeName}, โปรดอย่าลืมให้คะแนนผลงานในโครงการ "${project?.name || `โครงการ #${id}`}" เนื่องจากใกล้ถึงกำหนดเวลาแล้วครับ`,
+        type: 'REMINDER',
+      });
+      setNotifiedAt(previous => ({ ...previous, [judgeId]: Date.now() }));
+      toast.success(
+        t(
+          `แจ้งเตือน ${judgeName} ในเว็บแล้ว และเพิ่มอีเมลเข้าคิวส่ง`,
+          `In-app reminder created for ${judgeName}; email queued`
+        )
+      );
+    } catch (error) {
+      toast.error(error.message);
+    } finally { setNotifyingJudgeId(null); }
   };
 
   return (
@@ -281,7 +312,7 @@ export default function EvaluationMonitoring() {
                     judge.assigned > 0
                       ? Math.round((judge.completed / judge.assigned) * 100)
                       : 0;
-                  const alreadyNotified = notifiedJudgeIds.includes(judge.id);
+                  const alreadyNotified = notifiedAt[judge.id] != null && clock - notifiedAt[judge.id] < 3600000;
                   return (
                     <tr
                       key={judge.id}
@@ -314,8 +345,10 @@ export default function EvaluationMonitoring() {
                         <Button
                           variant="secondary"
                           size="sm"
+                          isLoading={notifyingJudgeId === judge.id}
+                          title={!remindersOpen ? t('กำหนด deadline และเปิดรับคะแนนก่อนส่งเตือน', 'Set a deadline and open scoring before sending reminders') : t('แจ้งเตือนในเว็บและส่งอีเมล เว้นอย่างน้อย 1 ชั่วโมงต่อคน', 'In-app and email reminder. At least 1 hour between reminders per judge.')}
                           disabled={
-                            judge.assigned === 0 || percent === 100 || alreadyNotified
+                            !remindersOpen || Boolean(notifyingJudgeId) || !judge.email || judge.assigned === 0 || percent === 100 || alreadyNotified
                           }
                           onClick={() => handleNotify(judge.id, judge.email, judge.name)}
                         >
@@ -349,10 +382,30 @@ export default function EvaluationMonitoring() {
 
       {/* ตารางความคืบหน้าของทีม */}
       <Card noPadding>
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-6 py-4">
-          <h2 className="text-base font-bold text-slate-900">
-            {t('สถานะรายทีม', 'Team Evaluation Status')}
-          </h2>
+        <div className="space-y-4 border-b border-slate-200 bg-slate-50/70 px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-bold text-slate-900">
+              {t('สถานะรายทีม', 'Team Evaluation Status')}
+            </h2>
+            <p role="status" aria-live="polite" className="text-xs text-slate-500">
+              {t(`${visibleTeamProgress.length} จาก ${teamProgress.length} ทีม`, `${visibleTeamProgress.length} of ${teamProgress.length} teams`)}
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <label htmlFor="monitor-team-search" className="sr-only">{t('ค้นหาชื่อทีม', 'Search team names')}</label>
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" aria-hidden="true" />
+              <input id="monitor-team-search" type="search" value={teamSearch} onChange={event => setTeamSearch(event.target.value)} placeholder={t('ค้นหาชื่อทีม', 'Search team names')} className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+            </div>
+            <div className="sm:w-56">
+              <label htmlFor="monitor-team-sort" className="sr-only">{t('เรียงลำดับทีม', 'Sort teams')}</label>
+              <select id="monitor-team-sort" value={teamSort} onChange={event => setTeamSort(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                <option value="name-asc">{t('ชื่อทีม ก–ฮ / A–Z', 'Team name A–Z')}</option>
+                <option value="name-desc">{t('ชื่อทีมย้อนกลับ', 'Team name Z–A')}</option>
+                <option value="order">{t('ลำดับทีมเดิม', 'Original team order')}</option>
+              </select>
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-left">
@@ -372,8 +425,8 @@ export default function EvaluationMonitoring() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {teamProgress.length > 0 ? (
-                teamProgress.map((team) => (
+              {visibleTeamProgress.length > 0 ? (
+                visibleTeamProgress.map((team) => (
                   <tr
                     key={team.id}
                     className="text-sm transition-colors hover:bg-slate-50/70"
@@ -401,7 +454,10 @@ export default function EvaluationMonitoring() {
               ) : (
                 <tr>
                   <td colSpan="5" className="px-6 py-8 text-center text-sm text-slate-500">
-                    {t('ยังไม่มีทีมในโครงการนี้', 'No teams in this competition yet')}
+                    {teamProgress.length === 0 ? t('ยังไม่มีทีมในโครงการนี้', 'No teams in this competition yet') : <div className="space-y-2">
+                      <p>{t('ไม่พบทีมที่ตรงกับคำค้นหา', 'No teams match your search')}</p>
+                      <Button variant="text" size="sm" onClick={() => setTeamSearch('')}>{t('ล้างคำค้นหา', 'Clear search')}</Button>
+                    </div>}
                   </td>
                 </tr>
               )}
@@ -430,8 +486,8 @@ export default function EvaluationMonitoring() {
                 >
                   <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
                     <div>
-                      <span className="font-bold text-slate-900">{entry.judgeName}</span>
-                      <span className="ml-2 text-xs text-slate-500">({entry.judgeId})</span>
+                      <p className="font-bold text-slate-900">{resolveJudgeIdentity(entry, [], registeredUsers).name || t('ไม่พบชื่อกรรมการ', 'Judge name unavailable')}</p>
+                      <p className="text-xs text-slate-500">{resolveJudgeIdentity(entry, [], registeredUsers).email}</p>
                     </div>
                     <span className="rounded-lg bg-blue-50 px-2.5 py-1 font-mono text-base font-extrabold text-blue-700">
                       {entry.totalScore.toFixed(2)}
@@ -463,6 +519,7 @@ export default function EvaluationMonitoring() {
                     })}
                   </div>
 
+                  <EvaluationHistory key={`${entry.evaluationId || entry.id}-${entry.updatedAt}`} evaluationId={entry.evaluationId || entry.id} />
                   {entry.comment && (
                     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
                       <span className="font-semibold text-slate-900">
@@ -489,3 +546,4 @@ export default function EvaluationMonitoring() {
     </div>
   );
 }
+import EvaluationHistory from '../components/EvaluationHistory';

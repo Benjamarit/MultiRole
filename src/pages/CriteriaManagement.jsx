@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   BookOpen,
+  LockKeyhole,
   CheckCircle2,
   Plus,
   Trash2,
@@ -13,6 +14,8 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { getProjectById } from '../data/ProjectStore';
+import { loadProject } from '../api/workspace';
 import { useLanguage } from '../context/LanguageContext';
 import {
   deleteCriterion,
@@ -39,146 +42,24 @@ const isFixedScoreType = (type) =>
 
 const NEW_ROW_ID = '__NEW_CRITERION__';
 
-/**
- * แยกข้อความคำอธิบายเกณฑ์ (Rubric) ออกเป็นระดับคะแนนย่อยอัตโนมัติ
- */
-function parseRubricLevels(description) {
-  if (!description || !String(description).trim()) return [];
-  const raw = String(description).trim();
-
-  const normalized = raw.replace(
-    /\s*((?:[★⭐•]\s*)?\d+(?:\s*-\s*\d+)?\s*(?:ดาว|คะแนน|แต้ม|stars?|points?|pts)\s*[:：]|[★⭐•]\s+)/gi,
-    '\n$1'
-  );
-
-  const segments = normalized
-    .split(/\r?\n+/)
-    .map((s) => s.trim())
-    .filter((s) => s && !/^[★⭐•\-]+$/.test(s));
-
-  return segments.map((seg) => {
-    const colonMatch = seg.match(/^([^:：]{1,35})[:：]\s*(.+)$/);
-    if (colonMatch) {
-      return {
-        label: colonMatch[1].trim(),
-        detail: colonMatch[2].trim(),
-      };
-    }
-    return {
-      label: null,
-      detail: seg,
-    };
-  });
-}
-
-/**
- * สร้างโครงร่างแถว Rubric มาตรฐานตามประเภทคะแนน (STAR, NUMERIC, PERCENTAGE, PASS_FAIL)
- */
-function buildDefaultRubricRows(type, maxScore = 100) {
-  if (type === 'STAR') {
-    return [
-      { label: '★ 5 ดาว', detail: '', fixedLabel: true },
-      { label: '★ 4 ดาว', detail: '', fixedLabel: true },
-      { label: '★ 3 ดาว', detail: '', fixedLabel: true },
-      { label: '★ 2 ดาว', detail: '', fixedLabel: true },
-      { label: '★ 1 ดาว', detail: '', fixedLabel: true },
-    ];
-  }
-  if (type === 'PASS_FAIL') {
-    return [
-      { label: 'ผ่าน (Pass)', detail: '', fixedLabel: true },
-      { label: 'ไม่ผ่าน (Fail)', detail: '', fixedLabel: true },
-    ];
-  }
-  if (type === 'PERCENTAGE') {
-    return [
-      { label: '80-100%', detail: '', fixedLabel: false },
-      { label: '60-79%', detail: '', fixedLabel: false },
-      { label: '40-59%', detail: '', fixedLabel: false },
-      { label: '0-39%', detail: '', fixedLabel: false },
-    ];
-  }
-  // NUMERIC: คำนวณช่วงคะแนนตาม maxScore อัตโนมัติ
-  const max = Number(maxScore) > 0 ? Number(maxScore) : 100;
-  if (max === 10) {
-    return [
-      { label: '9-10 คะแนน', detail: '', fixedLabel: false },
-      { label: '7-8 คะแนน', detail: '', fixedLabel: false },
-      { label: '5-6 คะแนน', detail: '', fixedLabel: false },
-      { label: '0-4 คะแนน', detail: '', fixedLabel: false },
-    ];
-  }
-  const q3 = Math.round(max * 0.8);
-  const q2 = Math.round(max * 0.6);
-  const q1 = Math.round(max * 0.4);
-  return [
-    { label: `${q3}-${max} คะแนน`, detail: '', fixedLabel: false },
-    { label: `${q2}-${q3 - 1} คะแนน`, detail: '', fixedLabel: false },
-    { label: `${q1}-${q2 - 1} คะแนน`, detail: '', fixedLabel: false },
-    { label: `0-${Math.max(0, q1 - 1)} คะแนน`, detail: '', fixedLabel: false },
-  ];
-}
-
-/**
- * แปลงข้อความ description เดิมกลับมาเป็นรายการแถวสำหรับแก้ไขใน Rubric Builder
- */
-function hydrateRubricRowsFromDescription(type, maxScore, description) {
-  const defaults = buildDefaultRubricRows(type, maxScore);
-  const parsed = parseRubricLevels(description).filter((item) => item.label);
-  if (parsed.length === 0) {
-    return defaults;
-  }
-
-  if (type === 'STAR') {
-    return [5, 4, 3, 2, 1].map((star) => {
-      const matched = parsed.find((p) => p.label.includes(String(star)));
-      return {
-        label: `★ ${star} ดาว`,
-        detail: matched ? matched.detail : '',
-        fixedLabel: true,
-      };
-    });
-  }
-
-  if (type === 'PASS_FAIL') {
-    const passRow = parsed.find(
-      (p) =>
-        p.label.includes('ผ่าน') &&
-        !p.label.includes('ไม่ผ่าน')
-    );
-    const failRow = parsed.find(
-      (p) =>
-        p.label.includes('ไม่ผ่าน') ||
-        p.label.toLowerCase().includes('fail')
-    );
-    if (passRow || failRow) {
-      return [
-        { label: 'ผ่าน (Pass)', detail: passRow ? passRow.detail : '', fixedLabel: true },
-        { label: 'ไม่ผ่าน (Fail)', detail: failRow ? failRow.detail : '', fixedLabel: true },
-      ];
-    }
-  }
-
-  return parsed.map((p) => ({
-    label: p.label,
-    detail: p.detail,
-    fixedLabel: false,
-  }));
-}
-
-/**
- * รวมแถว Rubric ที่กรอกไว้กลับเป็น String เดียวเพื่อบันทึกลงคอลัมน์ description
- */
-function serializeRubricRows(rows) {
-  return (rows || [])
-    .filter((r) => r.detail && String(r.detail).trim())
-    .map((r) => `${(r.label || '').trim()}: ${String(r.detail).trim()}`)
-    .join('\n');
-}
+import { parseRubricLevels, buildDefaultRubricRows, hydrateRubricRowsFromDescription, serializeRubricRows } from '../data/Rubric';
 
 export default function CriteriaManagement() {
   const { id } = useParams();
   const { t, tDesc } = useLanguage();
+  const project = getProjectById(id);
+  const locked = Boolean(project?.criteriaLocked) || ['Active', 'Closed'].includes(project?.status);
+  const lockMessage = t('เกณฑ์ถูกล็อกหลังเปิดรับคะแนนแล้ว ดูข้อมูลได้เท่านั้น', 'Criteria are locked after scoring opens. View only.');
+  const reportWriteError = async error => {
+    if (error.response?.status === 409) {
+      try {
+        await loadProject(id);
+        setCriteria(getCriteriaByProject(id));
+        setEditingRowId(null); setEditRowData(null); setIsConfirmOpen(false);
+      } catch { /* Keep the original write error if refreshing is unavailable. */ }
+    }
+    toast.error(error.message);
+  };
 
   const scoringTypes = useMemo(
     () => [
@@ -200,7 +81,7 @@ export default function CriteriaManagement() {
   const [deleteId, setDeleteId] = useState(null);
 
   const totalWeight = useMemo(() => {
-    return criteria.reduce((sum, item) => sum + Number(item.weight || 0), 0);
+    return criteria.reduce((sum, item) => sum + Math.round(Number(item.weight || 0) * 100), 0) / 100;
   }, [criteria]);
 
   const remainingWeight = 100 - totalWeight;
@@ -222,6 +103,7 @@ export default function CriteriaManagement() {
 
   // กดปุ่ม "+ เพิ่มเกณฑ์ประเมิน" -> เพิ่มแถว Inline ในตารางทันที พร้อมตาราง Rubric แยกระดับคะแนน
   const handleAddClick = () => {
+    if (locked) { toast.error(lockMessage); return; }
     if (totalWeight >= 100) {
       toast.error(
         t(
@@ -249,6 +131,7 @@ export default function CriteriaManagement() {
   };
 
   const startEditing = (item) => {
+    if (locked) { toast.error(lockMessage); return; }
     const resolvedMaxScore = isFixedScoreType(item.type)
       ? getFixedMaxScore(item.type)
       : item.maxScore;
@@ -324,82 +207,87 @@ export default function CriteriaManagement() {
     });
   };
 
-  const saveInlineEdit = () => {
-    if (!editRowData) return;
+  const saveInlineEdit = async () => {
+    if (locked) { toast.error(lockMessage); return; }
+    try {
+      if (!editRowData) return;
 
-    const isAddingNew = editingRowId === NEW_ROW_ID;
-    const name = (editRowData.name || '').trim();
-    const description = serializeRubricRows(editRowData.rubricRows);
-    const weightValue = Number(editRowData.weight);
-    const originalItem = isAddingNew
-      ? null
-      : criteria.find((c) => c.id === editingRowId);
+      const isAddingNew = editingRowId === NEW_ROW_ID;
+      const name = (editRowData.name || '').trim();
+      const description = serializeRubricRows(editRowData.rubricRows);
+      const weightValue = Number(editRowData.weight);
+      const originalItem = isAddingNew
+        ? null
+        : criteria.find((c) => c.id === editingRowId);
 
-    if (!isAddingNew && !originalItem) {
-      toast.error(t('ไม่พบเกณฑ์ประเมินที่ต้องการแก้ไข', 'Criterion not found'));
-      return;
+      if (!isAddingNew && !originalItem) {
+        toast.error(t('ไม่พบเกณฑ์ประเมินที่ต้องการแก้ไข', 'Criterion not found'));
+        return;
+      }
+
+      if (!name) {
+        toast.error(t('กรุณาระบุชื่อหัวข้อประเมิน', 'Please enter a criterion name'));
+        return;
+      }
+
+      const previousRowWeight = isAddingNew ? 0 : Number(originalItem.weight);
+      const newTotalWeight = totalWeight - previousRowWeight + weightValue;
+      const maxAllowedForThisRow = remainingWeight + previousRowWeight;
+
+      if (newTotalWeight > 100) {
+        toast.error(
+          t(
+            `น้ำหนักรวมเกิน 100% (ตั้งค่าได้สูงสุด ${maxAllowedForThisRow}%)`,
+            `Total weight exceeds 100% (max allowed: ${maxAllowedForThisRow}%)`
+          )
+        );
+        return;
+      }
+
+      if (!Number.isInteger(weightValue) || weightValue <= 0) {
+        toast.error(
+          t('กรุณาระบุน้ำหนักเป็นจำนวนเต็มมากกว่า 0', 'Weight must be a positive integer')
+        );
+        return;
+      }
+
+      const fixedMaxScore = getFixedMaxScore(editRowData.type);
+      const maxScore =
+        fixedMaxScore !== null ? fixedMaxScore : Number(editRowData.maxScore);
+
+      if (!validateMaxScore(editRowData.type, maxScore)) {
+        toast.error(
+          editRowData.type === 'NUMERIC'
+            ? t('คะแนนเต็มของ Numeric ต้องอยู่ระหว่าง 1-100', 'Numeric max score must be 1-100')
+            : t('รูปแบบคะแนนที่เลือกมีคะแนนเต็มที่กำหนดไว้แล้ว', 'Invalid max score')
+        );
+        return;
+      }
+
+      const savedCriterion = await saveCriterion(id, {
+        ...(isAddingNew ? {} : originalItem),
+        name,
+        description,
+        type: editRowData.type,
+        weight: weightValue,
+        maxScore,
+      });
+
+      if (isAddingNew) {
+        setCriteria((prev) => [...prev, savedCriterion]);
+        toast.success(t('เพิ่มเกณฑ์ประเมินเรียบร้อย', 'Criterion added'));
+      } else {
+        setCriteria((prev) =>
+          prev.map((item) => (item.id === editingRowId ? savedCriterion : item))
+        );
+        toast.success(t('อัปเดตเกณฑ์ประเมินเรียบร้อย', 'Criterion updated'));
+      }
+
+      setEditingRowId(null);
+      setEditRowData(null);
+    } catch (error) {
+      await reportWriteError(error);
     }
-
-    if (!name) {
-      toast.error(t('กรุณาระบุชื่อหัวข้อประเมิน', 'Please enter a criterion name'));
-      return;
-    }
-
-    const previousRowWeight = isAddingNew ? 0 : Number(originalItem.weight);
-    const newTotalWeight = totalWeight - previousRowWeight + weightValue;
-    const maxAllowedForThisRow = remainingWeight + previousRowWeight;
-
-    if (newTotalWeight > 100) {
-      toast.error(
-        t(
-          `น้ำหนักรวมเกิน 100% (ตั้งค่าได้สูงสุด ${maxAllowedForThisRow}%)`,
-          `Total weight exceeds 100% (max allowed: ${maxAllowedForThisRow}%)`
-        )
-      );
-      return;
-    }
-
-    if (!Number.isInteger(weightValue) || weightValue <= 0) {
-      toast.error(
-        t('กรุณาระบุน้ำหนักเป็นจำนวนเต็มมากกว่า 0', 'Weight must be a positive integer')
-      );
-      return;
-    }
-
-    const fixedMaxScore = getFixedMaxScore(editRowData.type);
-    const maxScore =
-      fixedMaxScore !== null ? fixedMaxScore : Number(editRowData.maxScore);
-
-    if (!validateMaxScore(editRowData.type, maxScore)) {
-      toast.error(
-        editRowData.type === 'NUMERIC'
-          ? t('คะแนนเต็มของ Numeric ต้องอยู่ระหว่าง 1-100', 'Numeric max score must be 1-100')
-          : t('รูปแบบคะแนนที่เลือกมีคะแนนเต็มที่กำหนดไว้แล้ว', 'Invalid max score')
-      );
-      return;
-    }
-
-    const savedCriterion = saveCriterion(id, {
-      ...(isAddingNew ? { id: Date.now() } : originalItem),
-      name,
-      description,
-      type: editRowData.type,
-      weight: weightValue,
-      maxScore,
-    });
-
-    if (isAddingNew) {
-      setCriteria((prev) => [...prev, savedCriterion]);
-      toast.success(t('เพิ่มเกณฑ์ประเมินเรียบร้อย', 'Criterion added'));
-    } else {
-      setCriteria((prev) =>
-        prev.map((item) => (item.id === editingRowId ? savedCriterion : item))
-      );
-      toast.success(t('อัปเดตเกณฑ์ประเมินเรียบร้อย', 'Criterion updated'));
-    }
-
-    setEditingRowId(null);
-    setEditRowData(null);
   };
 
   const handleRowKeyDown = (e) => {
@@ -409,12 +297,17 @@ export default function CriteriaManagement() {
     }
   };
 
-  const confirmDelete = () => {
-    deleteCriterion(id, deleteId);
-    setCriteria((prev) => prev.filter((criterion) => criterion.id !== deleteId));
-    setIsConfirmOpen(false);
-    setDeleteId(null);
-    toast.success(t('ลบเกณฑ์ประเมินเรียบร้อย', 'Criterion deleted'));
+  const confirmDelete = async () => {
+    if (locked) { toast.error(lockMessage); return; }
+    try {
+      await deleteCriterion(id, deleteId);
+      setCriteria((prev) => prev.filter((criterion) => criterion.id !== deleteId));
+      setIsConfirmOpen(false);
+      setDeleteId(null);
+      toast.success(t('ลบเกณฑ์ประเมินเรียบร้อย', 'Criterion deleted'));
+    } catch (error) {
+      await reportWriteError(error);
+    }
   };
 
   const getTypeBadge = (type) => {
@@ -434,11 +327,11 @@ export default function CriteriaManagement() {
 
   // รวมรายการเกณฑ์เดิม เข้ากับแถวใหม่ (ถ้ากำลังกด + เพิ่มเกณฑ์ประเมิน)
   const displayRows = useMemo(() => {
-    if (editingRowId === NEW_ROW_ID && editRowData) {
+    if (!locked && editingRowId === NEW_ROW_ID && editRowData) {
       return [...criteria, editRowData];
     }
     return criteria;
-  }, [criteria, editingRowId, editRowData]);
+  }, [criteria, editingRowId, editRowData, locked]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -447,20 +340,23 @@ export default function CriteriaManagement() {
       </BackButton>
       <PageHeader
         title={t('จัดการเกณฑ์ประเมิน', 'Scoring Criteria Management')}
-        description={tDesc(
+        description={locked ? t('ตรวจสอบหัวข้อและรายละเอียดเกณฑ์ที่ใช้ประเมินโครงการนี้', 'Review the scoring criteria and rubric used for this project.') : tDesc(
           'กำหนดหัวข้อ รูปแบบการให้คะแนน คำอธิบายเกณฑ์ (Rubric) และค่าน้ำหนักรวมให้ครบ 100% สำหรับโครงการนี้',
           'Define evaluation criteria, scoring formats, rubric levels, and weights totaling 100%.'
         )}
         action={
           <Button
             onClick={handleAddClick}
-            disabled={totalWeight >= 100 || editingRowId === NEW_ROW_ID}
+            disabled={locked || totalWeight >= 100 || editingRowId === NEW_ROW_ID}
+            aria-describedby={locked ? 'criteria-lock-message' : undefined}
           >
             <Plus className="h-4 w-4" />
             {t('เพิ่มเกณฑ์ประเมิน', 'Add Criterion')}
           </Button>
         }
       />
+
+      {locked && <div id="criteria-lock-message" role="status" className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden="true" /><div><p className="text-sm font-semibold text-slate-900">{t('เกณฑ์ประเมินถูกล็อกแล้ว', 'Scoring criteria are locked')}</p><p className="mt-1 text-sm leading-6 text-slate-600">{t('โครงการนี้เคยเปิดรับคะแนนแล้ว จึงไม่สามารถเพิ่ม แก้ไข หรือลบเกณฑ์ได้ แม้พักกลับเป็น Draft เพื่อให้ทุกทีมใช้เกณฑ์เดียวกัน', 'Scoring has opened for this project. Criteria cannot be added, edited, or deleted, including while paused, so all teams use the same criteria.')}</p></div></div>}
 
       <Card
         className={`${
@@ -484,8 +380,8 @@ export default function CriteriaManagement() {
             <p className="mt-0.5 text-sm text-slate-600">
               {totalWeight === 100
                 ? t(
-                    'น้ำหนักรวมครบ 100% พอดี โครงการพร้อมเปิดรับการประเมิน',
-                    'Total weight is 100%. Ready for evaluation.'
+                    'น้ำหนักเกณฑ์ประเมินรวมครบ 100% แล้ว',
+                    'Scoring criteria weights total 100%.'
                   )
                 : t(
                     `ยังขาดอีก ${remainingWeight}% เพื่อให้ครบ 100%`,
@@ -551,7 +447,7 @@ export default function CriteriaManagement() {
 
             <tbody className="divide-y divide-slate-100">
               {displayRows.map((item) => {
-                const isEditing = editingRowId === item.id;
+                const isEditing = !locked && editingRowId === item.id;
                 const isNewRow = item.id === NEW_ROW_ID;
                 const maxAllowedForThisRow =
                   remainingWeight + (isNewRow ? 0 : Number(item.weight || 0));
@@ -808,7 +704,7 @@ export default function CriteriaManagement() {
 
                     <td className="px-6 py-4 text-right align-top">
                       <div className="inline-flex items-center gap-1.5">
-                        {isEditing ? (
+                        {locked ? <span className="inline-flex items-center gap-1 text-xs text-slate-500"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />{t('ดูอย่างเดียว', 'View only')}</span> : isEditing ? (
                           <>
                             <Button size="sm" onClick={saveInlineEdit}>
                               {t('บันทึก', 'Save')}
@@ -872,7 +768,7 @@ export default function CriteriaManagement() {
       </Card>
 
       <ConfirmDialog
-        isOpen={isConfirmOpen}
+        isOpen={!locked && isConfirmOpen}
         title={t('ยืนยันการลบเกณฑ์ประเมิน', 'Delete Evaluation Criterion')}
         message={t(
           'คุณแน่ใจหรือไม่ว่าต้องการลบเกณฑ์ประเมินนี้? คะแนนที่กรรมการเคยให้ในเกณฑ์นี้อาจได้รับผลกระทบ',

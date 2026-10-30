@@ -1,116 +1,82 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import apiClient, { TOKEN_STORAGE_KEY } from '../api/client';
-import { getRegisteredUsers, setRegisteredUsersCache } from './authStore';
-
+import { clearWorkspace, loadWorkspace, normalizeUser } from '../api/workspace';
+import { setRegisteredUsersCache } from './authStore';
 const AuthContext = createContext(null);
-const REGISTERED_USERS_KEY = 'ce_registered_users';
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('ce_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  // ซิงค์รายชื่อผู้ใช้จาก Backend เพื่อให้หน้าเชิญกรรมการ (ProjectJudge) เห็นรายชื่อผู้ใช้ในฐานข้อมูลจริง
-  const syncActiveUsersFromBackend = async () => {
-    try {
-      const res = await apiClient.get('/users');
-      if (Array.isArray(res.data)) {
-        setRegisteredUsersCache(res.data);
-      }
-    } catch {
-      // หากยังไม่ได้เปิดเซิร์ฟเวอร์ Spring Boot จะใช้ข้อมูลใน localStorage แทน
-    }
-  };
-
-  useEffect(() => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!token) return;
-    apiClient
-      .get('/auth/me')
-      .then((res) => {
-        if (res.data) {
-          setUser(res.data);
-          localStorage.setItem('ce_user', JSON.stringify(res.data));
-          syncActiveUsersFromBackend();
-        }
-      })
-      .catch((err) => {
-        if (err.response?.status === 401 || err.response?.status === 403) {
-          setUser(null);
-          localStorage.removeItem('ce_user');
-          localStorage.removeItem(TOKEN_STORAGE_KEY);
-        }
-      });
-  }, []);
-
-  const login = (userData, token = null) => {
-    setUser(userData);
-    localStorage.setItem('ce_user', JSON.stringify(userData));
-    if (token) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, token);
-      syncActiveUsersFromBackend();
-    }
-  };
-
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [revision, setRevision] = useState(0);
   const logout = () => {
+    clearWorkspace();
+    setRegisteredUsersCache([]);
     setUser(null);
+    setLoadError('');
     localStorage.removeItem('ce_user');
     localStorage.removeItem(TOKEN_STORAGE_KEY);
   };
-
-  const register = async ({ name, email, password }) => {
-    try {
-      const res = await apiClient.post('/auth/register', { name, email, password });
-      const { token, user: backendUser } = res.data;
-      login(backendUser, token);
-      return backendUser;
-    } catch (err) {
-      // หาก Backend ตอบกลับ Error (เช่น 409 อีเมลซ้ำ) ให้โยนข้อความจาก Backend
-      if (err.response?.data?.message) {
-        throw new Error(err.response.data.message);
-      }
-      // Fallback กรณีไม่ได้รัน Spring Boot Server
-      const registeredUsers = getRegisteredUsers();
-      if (registeredUsers.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-        throw new Error('อีเมลนี้ถูกใช้สมัครไปแล้ว');
-      }
-      const newUser = {
-        id: crypto.randomUUID(),
-        name,
-        email,
-        password,
-        role: 'USER',
-        createdAt: new Date().toISOString(),
-        status: 'Active',
-      };
-      localStorage.setItem(
-        REGISTERED_USERS_KEY,
-        JSON.stringify([...registeredUsers, newUser])
-      );
-      const publicUser = { ...newUser };
-      delete publicUser.password;
-      login(publicUser);
-      return publicUser;
-    }
+  const hydrate = async () => {
+    const { data } = await apiClient.get('/auth/me');
+    const current = normalizeUser(data);
+    await loadWorkspace(current);
+    const users = await apiClient.get('/users');
+    setRegisteredUsersCache(users.data.map(normalizeUser));
+    setUser(current);
+    return current;
   };
-
+  const restore = async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      if (localStorage.getItem(TOKEN_STORAGE_KEY)) await hydrate();
+      else logout();
+    } catch (error) {
+      if ([401, 403].includes(error.response?.status)) logout();
+      else setLoadError(error.message);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    restore();
+    const expired = () => logout();
+    window.addEventListener('ce:unauthorized', expired);
+    return () => window.removeEventListener('ce:unauthorized', expired);
+    // Bootstrap once; writes and explicit refreshes reload server data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const login = async (credentials) => {
+    clearWorkspace();
+    const { data } = await apiClient.post('/auth/login', credentials);
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    try { return await hydrate(); }
+    catch (error) { logout(); throw error; }
+  };
+  const register = async ({ name, email, password }) => {
+    return apiClient.post('/auth/register', { fullName: name, email: email.trim().toLowerCase(), password });
+  };
+  const refresh = async () => {
+    await loadWorkspace(user);
+    const users = await apiClient.get('/users');
+    setRegisteredUsersCache(users.data.map(normalizeUser));
+    setRevision((value) => value + 1);
+  };
   return (
-    <AuthContext.Provider value={{ user, login, logout, register }}>
-      {children}
+    <AuthContext.Provider value={{ user, loading, login, logout, register, refresh, revision }}>
+      {loading ? <div className="p-8 text-center">กำลังโหลดข้อมูลจากเซิร์ฟเวอร์…</div> : loadError ? (
+        <div className="p-8 text-center" role="alert">
+          <p>{loadError}</p>
+          <button className="m-4 underline" onClick={restore}>ลองอีกครั้ง</button>
+          <button className="m-4 underline" onClick={logout}>กลับไปเข้าสู่ระบบ</button>
+        </div>
+      ) : children}
     </AuthContext.Provider>
   );
 }
-
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth ต้องถูกเรียกใช้ภายใน <AuthProvider> เท่านั้น');
-  }
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth ต้องอยู่ภายใน AuthProvider');
+  return context;
 }
