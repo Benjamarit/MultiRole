@@ -18,14 +18,14 @@ import { workspace, refreshNotifications } from '../api/workspace';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
-import { getNotificationsByUser, markAsRead, markAllAsRead } from '../data/NotificationStore';
+import { getNotificationsByUser, markAsRead, markAllAsRead } from '../data/notifications/NotificationStore';
 import {
   getAssignedTeamIds,
   getJudgingProjects,
   getMyProjects,
   getProjectById,
   isProjectAdmin,
-} from '../data/ProjectStore';
+} from '../data/projects/ProjectStore';
 
 function getProjectIdFromPath(pathname) {
   return pathname.match(/^\/(?:project|judge\/project)\/([^/]+)(?:\/|$)/)?.[1] || null;

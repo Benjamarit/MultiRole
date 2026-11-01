@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from 'react';
-import { isBeforeEvaluationDeadline } from '../data/ProjectStore';
+import { isBeforeEvaluationDeadline } from '../data/projects/ProjectStore';
 
 export function useDeadline(project) {
   const [tick, refresh] = useReducer((value) => value + 1, 0);

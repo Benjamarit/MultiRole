@@ -5,7 +5,7 @@ import {
   getJudgingProjects,
   getProjectById,
   isProjectAdmin,
-} from '../data/ProjectStore';
+} from '../data/projects/ProjectStore';
 
 /**
  * ป้องกันการเข้าถึงหน้าภายในระบบโดยไม่ล็อกอิน หรือไม่มีสิทธิ์ในหน้า/โครงการนั้น

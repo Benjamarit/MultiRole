@@ -14,14 +14,14 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { getProjectById } from '../data/ProjectStore';
+import { getProjectById } from '../data/projects/ProjectStore';
 import { loadProject } from '../api/workspace';
 import { useLanguage } from '../context/LanguageContext';
 import {
   deleteCriterion,
   getCriteriaByProject,
   saveCriterion,
-} from '../data/CriteriaStore';
+} from '../data/evaluations/CriteriaStore';
 
 const SCORING_LIMITS = {
   STAR: { min: 1, max: 5 },
@@ -42,7 +42,7 @@ const isFixedScoreType = (type) =>
 
 const NEW_ROW_ID = '__NEW_CRITERION__';
 
-import { parseRubricLevels, buildDefaultRubricRows, hydrateRubricRowsFromDescription, serializeRubricRows } from '../data/Rubric';
+import { parseRubricLevels, buildDefaultRubricRows, hydrateRubricRowsFromDescription, serializeRubricRows } from '../data/evaluations/Rubric';
 
 export default function CriteriaManagement() {
   const { id } = useParams();

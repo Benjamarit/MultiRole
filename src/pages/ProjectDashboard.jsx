@@ -25,19 +25,19 @@ import DeadlineHistory from '../components/DeadlineHistory';
 import ProjectStructureLock from '../components/ProjectStructureLock';
 import toast from 'react-hot-toast';
 import { useLanguage } from '../context/LanguageContext';
-import { getCriteriaByProject } from '../data/CriteriaStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { getProjectSetupReadiness, isActivationDeadlineValid } from '../data/ProjectReadiness';
+import { getCriteriaByProject } from '../data/evaluations/CriteriaStore';
+import { getTeamsByProject } from '../data/teams/TeamStore';
+import { getProjectSetupReadiness, isActivationDeadlineValid } from '../data/projects/ProjectReadiness';
 import { detail } from '../api/workspace';
-import { getGroupsByProject } from '../data/GroupStore';
-import { getEvaluationsByProject } from '../data/EvaluationStore';
+import { getGroupsByProject } from '../data/teams/GroupStore';
+import { getEvaluationsByProject } from '../data/evaluations/EvaluationStore';
 import {
   getJudgeAssignments,
   getProjectById,
   isBeforeEvaluationDeadline,
   updateProjectDetails,
   updateProjectStatus,
-} from '../data/ProjectStore';
+} from '../data/projects/ProjectStore';
 
 const statusVariant = (status) => {
   switch (status) {

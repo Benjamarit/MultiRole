@@ -452,9 +452,9 @@ cache รายชื่อผู้ใช้ฝั่ง browser เพื่�
 | `tDesc` | 39 | เลือกคำอธิบายภาษาไทย/อังกฤษตามโหมดปัจจุบัน |
 | `useLanguage` | 55 | อ่าน LanguageContext และตรวจว่ามี Provider |
 
-## `src/data/BatchSubmission.js`
+## `src/data/evaluations/BatchSubmission.js`
 
-[src/data/BatchSubmission.js](../../src/data/BatchSubmission.js)
+[src/data/evaluations/BatchSubmission.js](../../src/data/evaluations/BatchSubmission.js)
 
 จัดกลุ่มทีมที่พร้อมส่ง/ไม่ครบ/ส่งแล้วจากทุกทีมที่ได้รับมอบหมาย ไม่ขึ้นกับ filter ที่มองเห็น
 
@@ -462,9 +462,9 @@ cache รายชื่อผู้ใช้ฝั่ง browser เพื่�
 | --- | --- | --- |
 | `getBatchSubmissionCandidates` | 4 | ตรวจทุกทีม/ทุกเกณฑ์และคืน ready/incomplete/submitted พร้อม snapshot คะแนนและข้อมูลทีมที่ถูกซ่อนด้วย filter |
 
-## `src/data/CriteriaStore.js`
+## `src/data/evaluations/CriteriaStore.js`
 
-[src/data/CriteriaStore.js](../../src/data/CriteriaStore.js)
+[src/data/evaluations/CriteriaStore.js](../../src/data/evaluations/CriteriaStore.js)
 
 อ่านและเขียนเกณฑ์ผ่าน API แล้วโหลด cache โครงการใหม่
 
@@ -476,9 +476,9 @@ cache รายชื่อผู้ใช้ฝั่ง browser เพื่�
 | `saveCriterion` | 6 | POST หรือ PUT เกณฑ์ จากนั้นโหลดโครงการใหม่และคืนเกณฑ์ที่ normalize แล้ว |
 | `deleteCriterion` | 14 | DELETE เกณฑ์และโหลด cache โครงการใหม่ |
 
-## `src/data/EvaluationStore.js`
+## `src/data/evaluations/EvaluationStore.js`
 
-[src/data/EvaluationStore.js](../../src/data/EvaluationStore.js)
+[src/data/evaluations/EvaluationStore.js](../../src/data/evaluations/EvaluationStore.js)
 
 แปลงคะแนนจาก object ของหน้าจอเป็น score array ส่ง API และนำผลที่เซิร์ฟเวอร์ยืนยันกลับเข้า cache
 
@@ -489,9 +489,9 @@ cache รายชื่อผู้ใช้ฝั่ง browser เพื่�
 | `saveEvaluation` | 5 | ส่งสถานะ/คะแนน/ความคิดเห็น อ่านใบของตนกลับ และ refresh cache; ไม่ส่ง totalScore ให้ Backend เชื่อถือ |
 | `submitEvaluationsBatch` | 16 | ส่งหลายทีมด้วย request เดียว timeout 60 วินาที และใส่เฉพาะใบที่เซิร์ฟเวอร์ยืนยันลง cache ของ session เดิม |
 
-## `src/data/GroupStore.js`
+## `src/data/teams/GroupStore.js`
 
-[src/data/GroupStore.js](../../src/data/GroupStore.js)
+[src/data/teams/GroupStore.js](../../src/data/teams/GroupStore.js)
 
 อ่านกลุ่มและเรียก API เพิ่ม เปลี่ยนชื่อ ย้ายทีมเดี่ยว/หลายทีม และลบกลุ่ม
 
@@ -506,9 +506,9 @@ cache รายชื่อผู้ใช้ฝั่ง browser เพื่�
 | `moveTeamsToGroup` | 18 | ย้ายหลายทีมในคำขอเดียว timeout 30 วินาที แล้วใช้ผลตอบกลับอัปเดต cache |
 | `deleteGroup` | 27 | ลบกลุ่มและโหลดข้อมูลล่าสุด; ไม่ใช่คำสั่งลบทีมในกลุ่ม |
 
-## `src/data/JudgeIdentity.js`
+## `src/data/judges/JudgeIdentity.js`
 
-[src/data/JudgeIdentity.js](../../src/data/JudgeIdentity.js)
+[src/data/judges/JudgeIdentity.js](../../src/data/judges/JudgeIdentity.js)
 
 resolve ชื่อ/อีเมลกรรมการจากข้อมูลใบประเมินหรือสมาชิก ป้องกันแสดง UUID แทนชื่อ
 
@@ -516,9 +516,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | --- | --- | --- |
 | `resolveJudgeIdentity` | 1 | เลือกชื่อ/อีเมลจากข้อมูลใบประเมิน สมาชิก และ fallback โดยไม่ใช้ UUID เป็นชื่อ |
 
-## `src/data/JudgeTeamAssignmentStore.js`
+## `src/data/judges/JudgeTeamAssignmentStore.js`
 
-[src/data/JudgeTeamAssignmentStore.js](../../src/data/JudgeTeamAssignmentStore.js)
+[src/data/judges/JudgeTeamAssignmentStore.js](../../src/data/judges/JudgeTeamAssignmentStore.js)
 
 อ่าน mapping ทีม-กรรมการและเทียบรายการเดิมกับรายการใหม่เพื่อเพิ่ม/ยกเลิก assignment
 
@@ -528,9 +528,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | `getJudgeIdsForTeam` | 4 | หา judgeId ที่ได้รับมอบหมายทีม |
 | `replaceJudgeTeamAssignments` | 5 | เทียบ selection กับ assignment เดิม ลบส่วนที่เอาออกและ POST ส่วนเพิ่ม แล้วโหลดโครงการใน finally |
 
-## `src/data/NotificationStore.js`
+## `src/data/notifications/NotificationStore.js`
 
-[src/data/NotificationStore.js](../../src/data/NotificationStore.js)
+[src/data/notifications/NotificationStore.js](../../src/data/notifications/NotificationStore.js)
 
 อ่านแจ้งเตือนปัจจุบัน สร้าง reminder และทำเครื่องหมายอ่านผ่าน API
 
@@ -541,9 +541,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | `markAsRead` | 8 | PATCH แจ้งเตือนหนึ่งรายการแล้วโหลดรายการใหม่ |
 | `markAllAsRead` | 12 | PATCH อ่านทั้งหมดแล้วโหลดรายการใหม่ |
 
-## `src/data/ProjectLock.js`
+## `src/data/projects/ProjectLock.js`
 
-[src/data/ProjectLock.js](../../src/data/ProjectLock.js)
+[src/data/projects/ProjectLock.js](../../src/data/projects/ProjectLock.js)
 
 กฎ Frontend ว่าโครงสร้างถูกล็อกหรือไม่ โดยดู flag และสถานะโครงการ
 
@@ -551,9 +551,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | --- | --- | --- |
 | `isProjectStructureLocked` | 1 | ตรวจ flag criteriaLocked หรือสถานะ Active/Closed เพื่อปิดการแก้โครงสร้างฝั่ง UI |
 
-## `src/data/ProjectReadiness.js`
+## `src/data/projects/ProjectReadiness.js`
 
-[src/data/ProjectReadiness.js](../../src/data/ProjectReadiness.js)
+[src/data/projects/ProjectReadiness.js](../../src/data/projects/ProjectReadiness.js)
 
 ตรวจรายการเตรียมโครงการ เกณฑ์ครบ 100 ทีม กรรมการ การมอบหมาย และ deadline
 
@@ -562,9 +562,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | `getProjectSetupReadiness` | 1 | ประเมินเกณฑ์ ทีม กรรมการ และความครอบคลุมการมอบหมาย เพื่อแสดงขั้นตอนที่พร้อม/ยังขาด |
 | `isActivationDeadlineValid` | 19 | ตรวจว่า deadline ถ้ามีต้องอยู่ในอนาคตก่อนเปิดรับคะแนน |
 
-## `src/data/ProjectStore.js`
+## `src/data/projects/ProjectStore.js`
 
-[src/data/ProjectStore.js](../../src/data/ProjectStore.js)
+[src/data/projects/ProjectStore.js](../../src/data/projects/ProjectStore.js)
 
 อ่านโครงการตามบทบาท/สมาชิก ประเมินสิทธิ์และช่วงเวลา พร้อมคำขอสร้าง/ลบ/เชิญ/เปลี่ยนสถานะและข้อมูล
 
@@ -589,9 +589,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | `updateProjectStatus` | 38 | PATCH สถานะโครงการและโหลดโครงการล่าสุด |
 | `updateProjectDetails` | 43 | PUT ข้อมูลโครงการ/กำหนดส่งและโหลดข้อมูลล่าสุด |
 
-## `src/data/Rubric.js`
+## `src/data/evaluations/Rubric.js`
 
-[src/data/Rubric.js](../../src/data/Rubric.js)
+[src/data/evaluations/Rubric.js](../../src/data/evaluations/Rubric.js)
 
 แปลงรายละเอียด rubric ระหว่างข้อความที่บันทึกกับแถวระดับคะแนนในฟอร์ม
 
@@ -602,9 +602,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | `hydrateRubricRowsFromDescription` | 23 | นำ description เดิมมาสร้างแถวแก้ไข rubric ให้เหมาะกับ scoring type |
 | `buildDefaultRubricRows` | 33 | สร้างรายการ rubric เริ่มต้นตามประเภทคะแนนและคะแนนเต็ม |
 
-## `src/data/Scoring.js`
+## `src/data/evaluations/Scoring.js`
 
-[src/data/Scoring.js](../../src/data/Scoring.js)
+[src/data/evaluations/Scoring.js](../../src/data/evaluations/Scoring.js)
 
 คำนวณตัวอย่างคะแนนถ่วงน้ำหนักและตรวจช่วงคะแนนฝั่ง Frontend
 
@@ -614,9 +614,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | `calculateWeightedScore` | 6 | รวมคะแนน normalized ตามสัดส่วนน้ำหนักแล้วปัดหนึ่งตำแหน่งเพื่อแสดงผล |
 | `isValidCriterionScore` | 17 | ตรวจค่าตัวเลข ช่วงคะแนน และ PASS_FAIL; ค่า null/undefined อนุญาตสำหรับ draft |
 
-## `src/data/TeamImport.js`
+## `src/data/teams/TeamImport.js`
 
-[src/data/TeamImport.js](../../src/data/TeamImport.js)
+[src/data/teams/TeamImport.js](../../src/data/teams/TeamImport.js)
 
 ตรวจไบต์และโครงสร้าง .xlsx อ่านค่าเซลล์/สูตร/ลิงก์ และแปลงแถวเป็นข้อมูลทีมพร้อมข้อผิดพลาด
 
@@ -629,9 +629,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | `normalizeHeader` | 54 | normalize Unicode และตัดสัญลักษณ์เพื่อจับคู่ชื่อหัวคอลัมน์ |
 | `parseTeamWorksheet` | 61 | หา header ไทย/อังกฤษและตรวจแถว ชื่อ ความยาว error cell และ URL ก่อนทำ preview |
 
-## `src/data/TeamOrdering.js`
+## `src/data/teams/TeamOrdering.js`
 
-[src/data/TeamOrdering.js](../../src/data/TeamOrdering.js)
+[src/data/teams/TeamOrdering.js](../../src/data/teams/TeamOrdering.js)
 
 เรียงชื่อแบบตัวเลขธรรมชาติ ใช้ displayOrder กรอง/เรียงทีม และ helper ย้ายลำดับที่ยังคงอยู่ในโค้ด
 
@@ -643,9 +643,9 @@ resolve ชื่อ/อีเมลกรรมการจากข้อม�
 | `filterAndSortTeams` | 10 | กรองทีมและเรียงตามตัวเลือกที่รับมาโดยรักษาลำดับตามข้อมูล |
 | `moveTeamInOrder` | 30 | สลับตำแหน่งทีมหนึ่งขั้นและคืน permutation ที่ครบทุกทีม; helper ยังมีแต่ UI ปรับลำดับถูกเอาออก |
 
-## `src/data/TeamStore.js`
+## `src/data/teams/TeamStore.js`
 
-[src/data/TeamStore.js](../../src/data/TeamStore.js)
+[src/data/teams/TeamStore.js](../../src/data/teams/TeamStore.js)
 
 CRUD ทีมและ API ลำดับทีม; หน้าจัดกลุ่มปัจจุบันไม่มีปุ่มปรับลำดับ
 

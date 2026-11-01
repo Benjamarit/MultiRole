@@ -24,18 +24,18 @@ import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import BatchSubmissionDialog from '../components/BatchSubmissionDialog';
-import { getBatchSubmissionCandidates } from '../data/BatchSubmission';
-import { isValidCriterionScore } from '../data/Scoring';
+import { getBatchSubmissionCandidates } from '../data/evaluations/BatchSubmission';
+import { isValidCriterionScore } from '../data/evaluations/Scoring';
 import CriterionScoreInput from '../components/CriteriaScoreInput';
-import { getCriteriaByProject } from '../data/CriteriaStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { getEvaluation, saveEvaluation, submitEvaluationsBatch } from '../data/EvaluationStore';
+import { getCriteriaByProject } from '../data/evaluations/CriteriaStore';
+import { getTeamsByProject } from '../data/teams/TeamStore';
+import { getEvaluation, saveEvaluation, submitEvaluationsBatch } from '../data/evaluations/EvaluationStore';
 import {
   getAssignedTeamIds,
   getProjectById,
   isBeforeEvaluationDeadline,
   isProjectReadyForEvaluation,
-} from '../data/ProjectStore';
+} from '../data/projects/ProjectStore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -51,7 +51,7 @@ function normalizedScore(criterion, value) {
  */
 import { useDeadline } from '../hooks/useDeadline';
 import EvaluationDeadlineNotice from '../components/EvaluationDeadlineNotice';
-import { parseRubricLevels } from '../data/Rubric';
+import { parseRubricLevels } from '../data/evaluations/Rubric';
 
 export default function JudgeMultiEvaluation() {
   const { projectId } = useParams();

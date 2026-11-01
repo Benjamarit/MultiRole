@@ -8,7 +8,7 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { addProject, isProjectNameTaken } from '../data/ProjectStore';
+import { addProject, isProjectNameTaken } from '../data/projects/ProjectStore';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 

@@ -16,16 +16,16 @@ import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
 import CriterionScoreInput from '../components/CriteriaScoreInput';
-import { getCriteriaByProject } from '../data/CriteriaStore';
-import { calculateWeightedScore } from '../data/Scoring';
+import { getCriteriaByProject } from '../data/evaluations/CriteriaStore';
+import { calculateWeightedScore } from '../data/evaluations/Scoring';
 import {
   getAssignedTeamIds,
   getProjectById,
   isBeforeEvaluationDeadline,
   isProjectReadyForEvaluation,
-} from '../data/ProjectStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { getEvaluation, saveEvaluation } from '../data/EvaluationStore';
+} from '../data/projects/ProjectStore';
+import { getTeamsByProject } from '../data/teams/TeamStore';
+import { getEvaluation, saveEvaluation } from '../data/evaluations/EvaluationStore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -38,7 +38,7 @@ function scoreLabel(criterion, value) {
 
 import { useDeadline } from '../hooks/useDeadline';
 import EvaluationDeadlineNotice from '../components/EvaluationDeadlineNotice';
-import { parseRubricLevels } from '../data/Rubric';
+import { parseRubricLevels } from '../data/evaluations/Rubric';
 
 export default function JudgeEvaluation() {
   const { projectId, teamId } = useParams();

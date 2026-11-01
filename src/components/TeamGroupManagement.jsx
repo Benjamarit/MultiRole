@@ -7,9 +7,9 @@ import Card from './Card';
 import ConfirmDialog from './ConfirmDialog';
 import { MonitoringEmpty, MonitoringPagination, MonitoringSearch } from './MonitoringUI';
 import { useLanguage } from '../context/LanguageContext';
-import { createGroup, deleteGroup, getGroupForTeam, getGroupsByProject, moveTeamToGroup, moveTeamsToGroup, renameGroup } from '../data/GroupStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { compareTeamNames, orderTeams, filterAndSortTeams } from '../data/TeamOrdering';
+import { createGroup, deleteGroup, getGroupForTeam, getGroupsByProject, moveTeamToGroup, moveTeamsToGroup, renameGroup } from '../data/teams/GroupStore';
+import { getTeamsByProject } from '../data/teams/TeamStore';
+import { compareTeamNames, orderTeams, filterAndSortTeams } from '../data/teams/TeamOrdering';
 
 function SelectionCheckbox({ indeterminate = false, ...props }) {
   const ref = useRef(null);

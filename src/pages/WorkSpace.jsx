@@ -29,10 +29,10 @@ import {
   getJudgingProjects,
   getMyProjects,
   isBeforeEvaluationDeadline,
-} from '../data/ProjectStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { hasCompleteCriteriaWeights } from '../data/CriteriaStore';
-import { getEvaluation } from '../data/EvaluationStore';
+} from '../data/projects/ProjectStore';
+import { getTeamsByProject } from '../data/teams/TeamStore';
+import { hasCompleteCriteriaWeights } from '../data/evaluations/CriteriaStore';
+import { getEvaluation } from '../data/evaluations/EvaluationStore';
 
 const statusVariant = (status) => {
   switch (status) {

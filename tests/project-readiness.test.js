@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getProjectSetupReadiness as ready, isActivationDeadlineValid } from '../src/data/ProjectReadiness.js';
+import { getProjectSetupReadiness as ready, isActivationDeadlineValid } from '../src/data/projects/ProjectReadiness.js';
 
 test('draft setup stays incomplete when empty; teams and judges can be added before criteria', () => {
   assert.equal(ready([], [], [], []).ready, false);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseRubricLevels, hydrateRubricRowsFromDescription, serializeRubricRows, buildDefaultRubricRows } from '../src/data/Rubric.js';
+import { parseRubricLevels, hydrateRubricRowsFromDescription, serializeRubricRows, buildDefaultRubricRows } from '../src/data/evaluations/Rubric.js';
 
 test('editing an existing plain description does not erase it', () => {
   const description = 'พิจารณาความชัดเจนของผลงาน\nและการตอบคำถาม';

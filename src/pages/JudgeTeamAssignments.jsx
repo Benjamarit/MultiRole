@@ -1,5 +1,5 @@
 import ProjectStructureLock from '../components/ProjectStructureLock';
-import { isProjectStructureLocked } from '../data/ProjectLock';
+import { isProjectStructureLocked } from '../data/projects/ProjectLock';
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, CheckCircle2, CheckSquare2, Circle, FolderTree, Plus, RotateCcw, Save, UserCheck, Users } from 'lucide-react';
@@ -17,7 +17,7 @@ import {
   getGroupsByProject,
   getGroupForTeam,
   getTeamIdsInGroup,
-} from '../data/GroupStore';
+} from '../data/teams/GroupStore';
 import {
   getAssignedTeamIds,
   getJudgeAssignments,
@@ -25,8 +25,8 @@ import {
   getProjectById,
   isProjectAdmin,
   setJudgeAssignedTeams,
-} from '../data/ProjectStore';
-import { getTeamsByProject } from '../data/TeamStore';
+} from '../data/projects/ProjectStore';
+import { getTeamsByProject } from '../data/teams/TeamStore';
 import { getRegisteredUsers } from '../context/authStore';
 
 const PAGE_SIZE = 10;

@@ -804,5 +804,26 @@
       "path": "vite.config.js",
       "sha256": "1eb5a789ecaf2318de6d1ce364f83d77e35172454e351673ca10f0108a1ac603"
     }
-  ]
+  ],
+  "path_migration": {
+    "date": "2026-11-01",
+    "note": "files retain their historical snapshot paths and hashes; use this map to locate files after the data-folder reorganization. This is not a new full-source audit.",
+    "paths": {
+      "src/data/ProjectStore.js": "src/data/projects/ProjectStore.js",
+      "src/data/ProjectReadiness.js": "src/data/projects/ProjectReadiness.js",
+      "src/data/ProjectLock.js": "src/data/projects/ProjectLock.js",
+      "src/data/TeamStore.js": "src/data/teams/TeamStore.js",
+      "src/data/GroupStore.js": "src/data/teams/GroupStore.js",
+      "src/data/TeamOrdering.js": "src/data/teams/TeamOrdering.js",
+      "src/data/TeamImport.js": "src/data/teams/TeamImport.js",
+      "src/data/JudgeIdentity.js": "src/data/judges/JudgeIdentity.js",
+      "src/data/JudgeTeamAssignmentStore.js": "src/data/judges/JudgeTeamAssignmentStore.js",
+      "src/data/EvaluationStore.js": "src/data/evaluations/EvaluationStore.js",
+      "src/data/BatchSubmission.js": "src/data/evaluations/BatchSubmission.js",
+      "src/data/Scoring.js": "src/data/evaluations/Scoring.js",
+      "src/data/CriteriaStore.js": "src/data/evaluations/CriteriaStore.js",
+      "src/data/Rubric.js": "src/data/evaluations/Rubric.js",
+      "src/data/NotificationStore.js": "src/data/notifications/NotificationStore.js"
+    }
+  }
 }

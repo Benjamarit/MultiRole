@@ -1,5 +1,5 @@
-import api from '../api/client';
-import { workspace, refreshNotifications } from '../api/workspace';
+import api from '../../api/client';
+import { workspace, refreshNotifications } from '../../api/workspace';
 export const getNotificationsByUser = (email) => email === workspace.user?.email ? workspace.notifications : [];
 export async function addNotification(n) {
   return (await api.post('/notifications', { competitionId: n.projectId, email: n.userId,

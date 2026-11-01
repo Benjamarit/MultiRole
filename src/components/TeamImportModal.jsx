@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import Button from './Button';
 import CriteriaModal from './CriteriaModal';
 import { useLanguage } from '../context/LanguageContext';
-import { parseTeamWorksheet, readTeamWorkbook, teamImportErrorMessage } from '../data/TeamImport';
+import { parseTeamWorksheet, readTeamWorkbook, teamImportErrorMessage } from '../data/teams/TeamImport';
 
 async function downloadTemplate() {
   const { default: ExcelJS } = await import('exceljs');

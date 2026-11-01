@@ -1,7 +1,7 @@
 import { LockKeyhole } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
-import { isProjectStructureLocked } from '../data/ProjectLock';
+import { isProjectStructureLocked } from '../data/projects/ProjectLock';
 
 export default function ProjectStructureLock({ project }) {
   const { t } = useLanguage();

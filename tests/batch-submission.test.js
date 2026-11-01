@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getBatchSubmissionCandidates } from '../src/data/BatchSubmission.js';
+import { getBatchSubmissionCandidates } from '../src/data/evaluations/BatchSubmission.js';
 
 const numeric = { id: 'quality', name: 'Quality', type: 'NUMERIC', maxScore: 10, weight: 80 };
 const pass = { id: 'pass', name: 'Eligibility', type: 'PASS_FAIL', maxScore: 1, weight: 20 };

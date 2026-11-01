@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import ExcelJS from 'exceljs';
-import { parseTeamWorksheet, readTeamWorkbook } from '../src/data/TeamImport.js';
+import { parseTeamWorksheet, readTeamWorkbook } from '../src/data/teams/TeamImport.js';
 
 async function fileFor(workbook) {
   const buffer = await workbook.xlsx.writeBuffer();

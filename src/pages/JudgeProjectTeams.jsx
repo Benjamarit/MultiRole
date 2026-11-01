@@ -11,9 +11,9 @@ import {
   getProjectById,
   isBeforeEvaluationDeadline,
   isProjectReadyForEvaluation,
-} from '../data/ProjectStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { getEvaluation } from '../data/EvaluationStore';
+} from '../data/projects/ProjectStore';
+import { getTeamsByProject } from '../data/teams/TeamStore';
+import { getEvaluation } from '../data/evaluations/EvaluationStore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 

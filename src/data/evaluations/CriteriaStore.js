@@ -1,5 +1,5 @@
-import api from '../api/client';
-import { detail, projectPath, loadProject, normalizeCriterion } from '../api/workspace';
+import api from '../../api/client';
+import { detail, projectPath, loadProject, normalizeCriterion } from '../../api/workspace';
 export const getCriteriaByProject = (id) => detail(id).criteria;
 export const getTotalCriteriaWeight = (id) => getCriteriaByProject(id).reduce((sum, c) => sum + Number(c.weight), 0);
 export const hasCompleteCriteriaWeights = (id) => getCriteriaByProject(id).length > 0 && getTotalCriteriaWeight(id) === 100;

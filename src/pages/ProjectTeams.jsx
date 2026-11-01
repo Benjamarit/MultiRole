@@ -1,5 +1,5 @@
 import ProjectStructureLock from '../components/ProjectStructureLock';
-import { isProjectStructureLocked } from '../data/ProjectLock';
+import { isProjectStructureLocked } from '../data/projects/ProjectLock';
 import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowRight, ExternalLink, FileSpreadsheet, FolderTree, Link2, Pencil, Plus, Trash2, Users } from 'lucide-react';
@@ -14,12 +14,12 @@ import TeamFormModal from '../components/TeamFormModal';
 import TeamImportModal from '../components/TeamImportModal';
 import TeamGroupManagement from '../components/TeamGroupManagement';
 import { MonitoringEmpty, MonitoringPagination, MonitoringSearch, MonitoringStat, MonitoringTabs } from '../components/MonitoringUI';
-import { compareTeamNames } from '../data/TeamOrdering';
+import { compareTeamNames } from '../data/teams/TeamOrdering';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { deleteTeam, getTeamsByProject, saveTeam } from '../data/TeamStore';
-import { getProjectById, isProjectAdmin } from '../data/ProjectStore';
-import { getGroupForTeam, getGroupsByProject } from '../data/GroupStore';
+import { deleteTeam, getTeamsByProject, saveTeam } from '../data/teams/TeamStore';
+import { getProjectById, isProjectAdmin } from '../data/projects/ProjectStore';
+import { getGroupForTeam, getGroupsByProject } from '../data/teams/GroupStore';
 
 export default function ProjectTeams() {
   const { id } = useParams();

@@ -1,5 +1,5 @@
-import api from '../api/client';
-import { detail, projectPath, loadProject, workspace } from '../api/workspace';
+import api from '../../api/client';
+import { detail, projectPath, loadProject, workspace } from '../../api/workspace';
 export const getGroupsByProject = (id) => detail(id).groups;
 export const getGroupForTeam = (id, teamId) => getGroupsByProject(id).find((g) => g.teamIds.includes(String(teamId)));
 export const getTeamIdsInGroup = (id, groupId) => getGroupsByProject(id).find((g) => g.id === String(groupId))?.teamIds || [];

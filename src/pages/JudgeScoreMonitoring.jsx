@@ -7,7 +7,7 @@ import EvaluationHistory from '../components/EvaluationHistory';
 import { detail, loadProject } from '../api/workspace';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { getProjectById } from '../data/ProjectStore';
+import { getProjectById } from '../data/projects/ProjectStore';
 import PageHeader from '../components/PageHeader';
 import BackButton from '../components/BackButton';
 import Card from '../components/Card';

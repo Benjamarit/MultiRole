@@ -1,6 +1,6 @@
 import api from './client';
-import { resolveJudgeIdentity } from '../data/JudgeIdentity';
-import { orderTeams } from '../data/TeamOrdering';
+import { resolveJudgeIdentity } from '../data/judges/JudgeIdentity';
+import { orderTeams } from '../data/teams/TeamOrdering';
 
 // Only server responses enter this cache. IDs remain UUID strings throughout the UI.
 export const workspace = { user: null, projects: [], details: {}, notifications: [] };

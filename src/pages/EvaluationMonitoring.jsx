@@ -15,14 +15,14 @@ import {
   getAssignedTeamIds,
   getProjectById,
   isJudgeAssignedToTeam,
-} from '../data/ProjectStore';
-import { getTeamsByProject } from '../data/TeamStore';
-import { compareTeamNames } from '../data/TeamOrdering';
-import { getEvaluationsByProject } from '../data/EvaluationStore';
-import { getCriteriaByProject } from '../data/CriteriaStore';
+} from '../data/projects/ProjectStore';
+import { getTeamsByProject } from '../data/teams/TeamStore';
+import { compareTeamNames } from '../data/teams/TeamOrdering';
+import { getEvaluationsByProject } from '../data/evaluations/EvaluationStore';
+import { getCriteriaByProject } from '../data/evaluations/CriteriaStore';
 import { getRegisteredUsers } from '../context/authStore';
-import { addNotification } from '../data/NotificationStore';
-import { resolveJudgeIdentity } from '../data/JudgeIdentity';
+import { addNotification } from '../data/notifications/NotificationStore';
+import { resolveJudgeIdentity } from '../data/judges/JudgeIdentity';
 
 function formatTime(date) {
   return date.toLocaleTimeString('th-TH', {

@@ -1,7 +1,7 @@
-import api from '../api/client';
-import { workspace, projectPath, loadProject, competitionRequest } from '../api/workspace';
-import { hasCompleteCriteriaWeights } from './CriteriaStore';
-import { getTeamIdsForJudge, getJudgeIdsForTeam, replaceJudgeTeamAssignments } from './JudgeTeamAssignmentStore';
+import api from '../../api/client';
+import { workspace, projectPath, loadProject, competitionRequest } from '../../api/workspace';
+import { hasCompleteCriteriaWeights } from '../evaluations/CriteriaStore';
+import { getTeamIdsForJudge, getJudgeIdsForTeam, replaceJudgeTeamAssignments } from '../judges/JudgeTeamAssignmentStore';
 export const getAllProjects = () => workspace.projects;
 export const getProjectById = (id) => workspace.projects.find((p) => p.id === String(id));
 export const getMyProjects = (email) => workspace.projects.filter((p) => email === workspace.user?.email && ['ADMIN', 'ADMIN_JUDGE'].includes(p.currentRole));

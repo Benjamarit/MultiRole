@@ -635,30 +635,30 @@ Headers: api-key (secret), accept: application/json, content-type: application/j
 | [src/context/AuthContext.jsx](../../src/context/AuthContext.jsx) (บรรทัด 51) | ``apiClient.post('/auth/login', credentials)`` |
 | [src/context/AuthContext.jsx](../../src/context/AuthContext.jsx) (บรรทัด 57) | ``apiClient.post('/auth/register', { fullName: name, email: email.trim().toLowerCase(), password })`` |
 | [src/context/AuthContext.jsx](../../src/context/AuthContext.jsx) (บรรทัด 61) | ``apiClient.get('/users')`` |
-| [src/data/CriteriaStore.js](../../src/data/CriteriaStore.js) (บรรทัด 8) | ``api[criterion.id ? 'put' : 'post'](criterion.id ? path + '/' + criterion.id : path, { title: criterion.name, description: criterion.description \|\| '', scoringType: criterion.type, maxScore: criterion.maxScore, weightPercentage: criterion.weight })`` |
-| [src/data/CriteriaStore.js](../../src/data/CriteriaStore.js) (บรรทัด 15) | ``api.delete(projectPath(id) + '/criteria/' + criterionId)`` |
-| [src/data/EvaluationStore.js](../../src/data/EvaluationStore.js) (บรรทัด 6) | ``api.post('/evaluations/save', { competitionId: e.projectId, teamId: e.teamId, comment: e.comment \|\| '', status: e.status, scores: Object.entries(e.scores \|\| {}).filter(([, value]) => value !== null && value !== undefined) .map(([criterionId, scoreValue]) => ({ criterionId, scoreValue, comment: e.criteriaComments?.[criterionId] \|\| '' })) })`` |
-| [src/data/EvaluationStore.js](../../src/data/EvaluationStore.js) (บรรทัด 10) | ``api.get('/evaluations/competition/' + e.projectId + '/team/' + e.teamId + '/mine')`` |
-| [src/data/EvaluationStore.js](../../src/data/EvaluationStore.js) (บรรทัด 18) | ``api.post('/evaluations/submit-batch', { competitionId: projectId, teams: entries.map(entry => ({ teamId: entry.teamId, comment: entry.comment \|\| '', scores: Object.entries(entry.scores).filter(([, value]) => value !== null && value !== undefined) .map(([criterionId, scoreValue]) => ({ criterionId, scoreValue, comment: entry.criteriaComments?.[criterionId] \|\| '' })) })), }, { timeout: 60000 })`` |
-| [src/data/GroupStore.js](../../src/data/GroupStore.js) (บรรทัด 7) | ``api.post(projectPath(id) + '/groups', { groupName: name.trim() })`` |
-| [src/data/GroupStore.js](../../src/data/GroupStore.js) (บรรทัด 11) | ``api.put(projectPath(id) + '/groups/' + groupId, { groupName: name.trim() })`` |
-| [src/data/GroupStore.js](../../src/data/GroupStore.js) (บรรทัด 15) | ``api.put(projectPath(id) + '/teams/' + teamId + '/group', { groupId: groupId \|\| null })`` |
-| [src/data/GroupStore.js](../../src/data/GroupStore.js) (บรรทัด 21) | ``api.put(projectPath(id) + '/teams/group', { teamIds, groupId: groupId \|\| null }, { timeout: 30000 })`` |
-| [src/data/GroupStore.js](../../src/data/GroupStore.js) (บรรทัด 28) | ``api.delete(projectPath(id) + '/groups/' + groupId)`` |
-| [src/data/JudgeTeamAssignmentStore.js](../../src/data/JudgeTeamAssignmentStore.js) (บรรทัด 10) | ``api.delete(path + '/' + a.assignmentId)`` |
-| [src/data/JudgeTeamAssignmentStore.js](../../src/data/JudgeTeamAssignmentStore.js) (บรรทัด 12) | ``api.post(path, { judgeId, teamId })`` |
-| [src/data/NotificationStore.js](../../src/data/NotificationStore.js) (บรรทัด 5) | ``api.post('/notifications', { competitionId: n.projectId, email: n.userId, title: n.title, message: n.message, type: n.type })`` |
-| [src/data/NotificationStore.js](../../src/data/NotificationStore.js) (บรรทัด 9) | ``api.patch('/notifications/' + id + '/read')`` |
-| [src/data/NotificationStore.js](../../src/data/NotificationStore.js) (บรรทัด 13) | ``api.patch('/notifications/read-all')`` |
-| [src/data/ProjectStore.js](../../src/data/ProjectStore.js) (บรรทัด 21) | ``api.post('/competitions', competitionRequest(p))`` |
-| [src/data/ProjectStore.js](../../src/data/ProjectStore.js) (บรรทัด 25) | ``api.delete(projectPath(id))`` |
-| [src/data/ProjectStore.js](../../src/data/ProjectStore.js) (บรรทัด 31) | ``api.post(projectPath(id) + '/members', { email, role: 'JUDGE' })`` |
-| [src/data/ProjectStore.js](../../src/data/ProjectStore.js) (บรรทัด 35) | ``api.delete(projectPath(id) + '/members/' + judgeId)`` |
-| [src/data/ProjectStore.js](../../src/data/ProjectStore.js) (บรรทัด 39) | ``api.patch(projectPath(id) + '/status', { status: status.toUpperCase() })`` |
-| [src/data/ProjectStore.js](../../src/data/ProjectStore.js) (บรรทัด 44) | ``api.put(projectPath(id), competitionRequest({ ...getProjectById(id), ...details }))`` |
-| [src/data/TeamStore.js](../../src/data/TeamStore.js) (บรรทัด 6) | ``api[team.id ? 'put' : 'post'](team.id ? path + '/' + team.id : path, { teamName: team.name, projectDescription: team.description \|\| '', projectUrl: team.link \|\| '' })`` |
-| [src/data/TeamStore.js](../../src/data/TeamStore.js) (บรรทัด 12) | ``api.delete(projectPath(id) + '/teams/' + teamId)`` |
-| [src/data/TeamStore.js](../../src/data/TeamStore.js) (บรรทัด 16) | ``api.put(`${projectPath(id)}/teams/order`, { teamIds })`` |
+| [src/data/evaluations/CriteriaStore.js](../../src/data/evaluations/CriteriaStore.js) (บรรทัด 8) | ``api[criterion.id ? 'put' : 'post'](criterion.id ? path + '/' + criterion.id : path, { title: criterion.name, description: criterion.description \|\| '', scoringType: criterion.type, maxScore: criterion.maxScore, weightPercentage: criterion.weight })`` |
+| [src/data/evaluations/CriteriaStore.js](../../src/data/evaluations/CriteriaStore.js) (บรรทัด 15) | ``api.delete(projectPath(id) + '/criteria/' + criterionId)`` |
+| [src/data/evaluations/EvaluationStore.js](../../src/data/evaluations/EvaluationStore.js) (บรรทัด 6) | ``api.post('/evaluations/save', { competitionId: e.projectId, teamId: e.teamId, comment: e.comment \|\| '', status: e.status, scores: Object.entries(e.scores \|\| {}).filter(([, value]) => value !== null && value !== undefined) .map(([criterionId, scoreValue]) => ({ criterionId, scoreValue, comment: e.criteriaComments?.[criterionId] \|\| '' })) })`` |
+| [src/data/evaluations/EvaluationStore.js](../../src/data/evaluations/EvaluationStore.js) (บรรทัด 10) | ``api.get('/evaluations/competition/' + e.projectId + '/team/' + e.teamId + '/mine')`` |
+| [src/data/evaluations/EvaluationStore.js](../../src/data/evaluations/EvaluationStore.js) (บรรทัด 18) | ``api.post('/evaluations/submit-batch', { competitionId: projectId, teams: entries.map(entry => ({ teamId: entry.teamId, comment: entry.comment \|\| '', scores: Object.entries(entry.scores).filter(([, value]) => value !== null && value !== undefined) .map(([criterionId, scoreValue]) => ({ criterionId, scoreValue, comment: entry.criteriaComments?.[criterionId] \|\| '' })) })), }, { timeout: 60000 })`` |
+| [src/data/teams/GroupStore.js](../../src/data/teams/GroupStore.js) (บรรทัด 7) | ``api.post(projectPath(id) + '/groups', { groupName: name.trim() })`` |
+| [src/data/teams/GroupStore.js](../../src/data/teams/GroupStore.js) (บรรทัด 11) | ``api.put(projectPath(id) + '/groups/' + groupId, { groupName: name.trim() })`` |
+| [src/data/teams/GroupStore.js](../../src/data/teams/GroupStore.js) (บรรทัด 15) | ``api.put(projectPath(id) + '/teams/' + teamId + '/group', { groupId: groupId \|\| null })`` |
+| [src/data/teams/GroupStore.js](../../src/data/teams/GroupStore.js) (บรรทัด 21) | ``api.put(projectPath(id) + '/teams/group', { teamIds, groupId: groupId \|\| null }, { timeout: 30000 })`` |
+| [src/data/teams/GroupStore.js](../../src/data/teams/GroupStore.js) (บรรทัด 28) | ``api.delete(projectPath(id) + '/groups/' + groupId)`` |
+| [src/data/judges/JudgeTeamAssignmentStore.js](../../src/data/judges/JudgeTeamAssignmentStore.js) (บรรทัด 10) | ``api.delete(path + '/' + a.assignmentId)`` |
+| [src/data/judges/JudgeTeamAssignmentStore.js](../../src/data/judges/JudgeTeamAssignmentStore.js) (บรรทัด 12) | ``api.post(path, { judgeId, teamId })`` |
+| [src/data/notifications/NotificationStore.js](../../src/data/notifications/NotificationStore.js) (บรรทัด 5) | ``api.post('/notifications', { competitionId: n.projectId, email: n.userId, title: n.title, message: n.message, type: n.type })`` |
+| [src/data/notifications/NotificationStore.js](../../src/data/notifications/NotificationStore.js) (บรรทัด 9) | ``api.patch('/notifications/' + id + '/read')`` |
+| [src/data/notifications/NotificationStore.js](../../src/data/notifications/NotificationStore.js) (บรรทัด 13) | ``api.patch('/notifications/read-all')`` |
+| [src/data/projects/ProjectStore.js](../../src/data/projects/ProjectStore.js) (บรรทัด 21) | ``api.post('/competitions', competitionRequest(p))`` |
+| [src/data/projects/ProjectStore.js](../../src/data/projects/ProjectStore.js) (บรรทัด 25) | ``api.delete(projectPath(id))`` |
+| [src/data/projects/ProjectStore.js](../../src/data/projects/ProjectStore.js) (บรรทัด 31) | ``api.post(projectPath(id) + '/members', { email, role: 'JUDGE' })`` |
+| [src/data/projects/ProjectStore.js](../../src/data/projects/ProjectStore.js) (บรรทัด 35) | ``api.delete(projectPath(id) + '/members/' + judgeId)`` |
+| [src/data/projects/ProjectStore.js](../../src/data/projects/ProjectStore.js) (บรรทัด 39) | ``api.patch(projectPath(id) + '/status', { status: status.toUpperCase() })`` |
+| [src/data/projects/ProjectStore.js](../../src/data/projects/ProjectStore.js) (บรรทัด 44) | ``api.put(projectPath(id), competitionRequest({ ...getProjectById(id), ...details }))`` |
+| [src/data/teams/TeamStore.js](../../src/data/teams/TeamStore.js) (บรรทัด 6) | ``api[team.id ? 'put' : 'post'](team.id ? path + '/' + team.id : path, { teamName: team.name, projectDescription: team.description \|\| '', projectUrl: team.link \|\| '' })`` |
+| [src/data/teams/TeamStore.js](../../src/data/teams/TeamStore.js) (บรรทัด 12) | ``api.delete(projectPath(id) + '/teams/' + teamId)`` |
+| [src/data/teams/TeamStore.js](../../src/data/teams/TeamStore.js) (บรรทัด 16) | ``api.put(`${projectPath(id)}/teams/order`, { teamIds })`` |
 | [src/pages/CreateProject.jsx](../../src/pages/CreateProject.jsx) (บรรทัด 28) | ``api.get('/competitions/creation-quota')`` |
 | [src/pages/JudgeScoreMonitoring.jsx](../../src/pages/JudgeScoreMonitoring.jsx) (บรรทัด 29) | ``api.get(`/evaluations/competition/${projectId}/mine`)`` |
 | [src/pages/Login.jsx](../../src/pages/Login.jsx) (บรรทัด 54) | ``apiClient.post('/auth/forgot-password', { email: email.trim().toLowerCase() })`` |

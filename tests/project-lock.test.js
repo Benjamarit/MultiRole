@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isProjectStructureLocked } from '../src/data/ProjectLock.js';
+import { isProjectStructureLocked } from '../src/data/projects/ProjectLock.js';
 
 test('only a draft that has never opened permits setup writes, including legacy status responses', () => {
   assert.equal(isProjectStructureLocked({status:'Draft',criteriaLocked:false}), false);

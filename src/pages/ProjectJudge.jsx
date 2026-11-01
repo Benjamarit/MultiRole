@@ -1,5 +1,5 @@
 import ProjectStructureLock from '../components/ProjectStructureLock';
-import { isProjectStructureLocked } from '../data/ProjectLock';
+import { isProjectStructureLocked } from '../data/projects/ProjectLock';
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Plus, Search, UserCheck } from 'lucide-react';
@@ -20,7 +20,7 @@ import {
   inviteJudgeToProject,
   isProjectAdmin,
   removeJudgeAssignment,
-} from '../data/ProjectStore';
+} from '../data/projects/ProjectStore';
 import { getRegisteredUsers } from '../context/authStore';
 
 export default function ProjectJudges() {

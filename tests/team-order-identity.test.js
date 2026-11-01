@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveJudgeIdentity } from '../src/data/JudgeIdentity.js';
-import { orderTeams, filterAndSortTeams, moveTeamInOrder } from '../src/data/TeamOrdering.js';
+import { resolveJudgeIdentity } from '../src/data/judges/JudgeIdentity.js';
+import { orderTeams, filterAndSortTeams, moveTeamInOrder } from '../src/data/teams/TeamOrdering.js';
 
 const teams = [{ id: 'ten-uuid', name: 'ทีม 10' }, { id: 'two-uuid', name: 'ทีม 2' }, { id: 'one-uuid', name: 'ทีม 1' }];
 

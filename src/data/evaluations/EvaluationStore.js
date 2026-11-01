@@ -1,5 +1,5 @@
-import api from '../api/client';
-import { detail, loadProject, normalizeEvaluation, workspace } from '../api/workspace';
+import api from '../../api/client';
+import { detail, loadProject, normalizeEvaluation, workspace } from '../../api/workspace';
 export const getEvaluationsByProject = (id) => detail(id).evaluations;
 export const getEvaluation = (id, teamId, judgeId) => getEvaluationsByProject(id).find((e) => e.teamId === teamId && e.judgeId === judgeId);
 export async function saveEvaluation(e) {

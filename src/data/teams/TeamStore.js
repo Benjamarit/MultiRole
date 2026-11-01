@@ -1,5 +1,5 @@
-import api from '../api/client';
-import { detail, projectPath, loadProject, normalizeTeam } from '../api/workspace';
+import api from '../../api/client';
+import { detail, projectPath, loadProject, normalizeTeam } from '../../api/workspace';
 export const getTeamsByProject = (id) => detail(id).teams;
 export async function saveTeam(id, team) {
   const path = projectPath(id) + '/teams';
