@@ -26,8 +26,10 @@ export default apiClient;
 
 apiClient.interceptors.response.use((response) => response, (error) => {
   const body = error.response?.data;
+  const timedOut = ['ECONNABORTED', 'ETIMEDOUT'].includes(error.code);
   error.message = (typeof body === 'string' && body) || body?.message || body?.detail ||
-    (error.response ? 'ไม่สามารถดำเนินการได้ กรุณาลองอีกครั้ง' : 'เชื่อมต่อ BackEnd ไม่ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์กำลังทำงาน');
+    (timedOut ? 'เซิร์ฟเวอร์ตอบกลับช้าเกินเวลารอ กรุณาลองใหม่อีกครั้ง'
+      : error.response ? 'ไม่สามารถดำเนินการได้ กรุณาลองอีกครั้ง' : 'เชื่อมต่อ BackEnd ไม่ได้ กรุณาตรวจสอบว่าเซิร์ฟเวอร์กำลังทำงาน');
   if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/')) {
     window.dispatchEvent(new Event('ce:unauthorized'));
   }

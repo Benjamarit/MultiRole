@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Activity, AlertTriangle, ArrowRight, FolderKanban, LockKeyhole, RefreshCw, Settings2, ShieldCheck, ShieldOff, Trash2, Users, X } from 'lucide-react';
 import apiClient from '../api/client';
-import { normalizeUser } from '../api/workspace';
+import { loadSystemAdminData } from '../api/systemAdmin';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import SystemMonitoringOverview from '../components/SystemMonitoringOverview';
@@ -24,6 +24,7 @@ const PAGE_SIZE = 10;
 export default function UserManagement() {
   const { t, lang } = useLanguage();
   const [users, setUsers] = useState(() => getRegisteredUsers());
+  const [usersUpdatedAt, setUsersUpdatedAt] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [monitoring, setMonitoring] = useState(null);
@@ -44,15 +45,18 @@ export default function UserManagement() {
   const [userToDelete, setUserToDelete] = useState(null);
 
   const { loading: isLoading, error: refreshError, updatedAt, refresh: fetchUsers } = useVisiblePolling(async isActive => {
-      const [res, monitor] = await Promise.all([apiClient.get('/admin/users'), apiClient.get('/admin/monitoring')]);
-      if (!isActive()) return;
-      setMonitoring(monitor.data);
-      if (Array.isArray(res.data)) {
-        setUsers(res.data.map(normalizeUser));
-        setRegisteredUsersCache(res.data.map(normalizeUser));
-      }
+      await loadSystemAdminData({
+        isActive,
+        onUsers: loadedUsers => {
+          setUsers(loadedUsers);
+          setRegisteredUsersCache(loadedUsers);
+          setUsersUpdatedAt(new Date());
+        },
+        onMonitoring: setMonitoring,
+      });
   }, 30000, 'system-admin', !actionBusy && !changingAccess);
   const loadError = refreshError?.message;
+  const partialRefreshFailure = refreshError?.failures?.length === 1;
 
   const filteredUsers = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -169,14 +173,14 @@ export default function UserManagement() {
   ];
   const identity = user => <div className="flex min-w-0 items-center gap-3"><span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${user.role === 'SYSTEM_ADMIN' ? 'bg-violet-50 text-violet-600' : 'bg-blue-50 text-blue-600'}`}>{(user.name || user.email || '?').slice(0, 1)}</span><div className="min-w-0"><p className="break-words font-semibold text-slate-900">{user.name}</p><p className="break-all text-xs text-slate-500">{user.email}</p>{user.role === 'SYSTEM_ADMIN' && <span className="text-[11px] font-medium text-violet-600">System Admin</span>}</div></div>;
   const userStatus = user => <Badge variant={user.status === 'Suspended' ? 'error' : 'success'}>{user.status === 'Suspended' ? t('ระงับบัญชี', 'Suspended') : t('ใช้งานปกติ', 'Active')}</Badge>;
-  const signals = user => { const info = monitoredById.get(user.id); return <div className="flex flex-wrap gap-1.5">{info?.signals.length > 0 ? <Badge variant="warning"><AlertTriangle className="h-3 w-3" />{t('ควรตรวจสอบ', 'Review needed')} · {info.signals.length}</Badge> : <span className="text-xs text-slate-400">{t('ไม่พบสัญญาณ', 'No signals')}</span>}{info?.projectCreationBlocked && <Badge variant="error"><LockKeyhole className="h-3 w-3" />{t('ระงับการสร้าง', 'Creation blocked')}</Badge>}</div>; };
+  const signals = user => { const info = monitoredById.get(user.id); if (!info) return <span className="text-xs text-slate-400">{t('ยังไม่มีข้อมูลติดตาม', 'Monitoring data unavailable')}</span>; return <div className="flex flex-wrap gap-1.5">{info?.signals.length > 0 ? <Badge variant="warning"><AlertTriangle className="h-3 w-3" />{t('ควรตรวจสอบ', 'Review needed')} · {info.signals.length}</Badge> : <span className="text-xs text-slate-400">{t('ไม่พบสัญญาณ', 'No signals')}</span>}{info?.projectCreationBlocked && <Badge variant="error"><LockKeyhole className="h-3 w-3" />{t('ระงับการสร้าง', 'Creation blocked')}</Badge>}</div>; };
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:p-6 lg:p-8">
       <PageHeader title={t('ดูแลและติดตามระบบ', 'System Administration')} subtitle="SYSTEM ADMIN" badge={<Badge variant="info"><ShieldCheck className="h-3 w-3" />{t('ผู้ดูแลระบบ', 'Administrator')}</Badge>} action={<div className="flex flex-wrap items-center gap-3"><span className="text-xs text-slate-400">{t('อัปเดตทุก 30 วินาที', 'Updates every 30 seconds')}</span><span className="text-xs text-slate-400" role="status">{updatedAt && t(`อัปเดต ${updatedAt.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`, `Updated ${updatedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`)}</span><Button variant="secondary" onClick={fetchUsers} disabled={isLoading || actionBusy || changingAccess}><RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />{t('รีเฟรชข้อมูล', 'Refresh')}</Button></div>} />
-      {loadError && <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{t('อัปเดตข้อมูลไม่สำเร็จ', 'Could not refresh data')}</p><p className="mt-1">{loadError} {updatedAt && t('ข้อมูลที่แสดงเป็นข้อมูลก่อนหน้า', 'Showing previously loaded data.')}</p></div></div>}
+      {loadError && <div role="alert" className={`flex items-start gap-3 rounded-xl border p-4 text-sm ${partialRefreshFailure ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-red-200 bg-red-50 text-red-700'}`}><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{partialRefreshFailure ? t('อัปเดตข้อมูลบางส่วนไม่สำเร็จ', 'Some data could not be refreshed') : t('อัปเดตข้อมูลไม่สำเร็จ', 'Could not refresh data')}</p><p className="mt-1 whitespace-pre-line">{loadError}</p><p className="mt-1">{t('ข้อมูลส่วนที่โหลดสำเร็จยังแสดงได้ ระบบจะลองอัปเดตใหม่อัตโนมัติ', 'Successfully loaded data remains available. Retrying automatically.')}</p></div></div>}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MonitoringStat icon={Users} label={t('ผู้ใช้ทั้งหมด', 'Total users')} value={isLoading && !updatedAt ? '—' : users.length} hint={t(`${activeCount} ปกติ · ${suspendedCount} ระงับ`, `${activeCount} active · ${suspendedCount} suspended`)} onClick={() => { resetFilters(); setActiveTab('users'); }} />
+        <MonitoringStat icon={Users} label={t('ผู้ใช้ทั้งหมด', 'Total users')} value={isLoading && !usersUpdatedAt ? '—' : users.length} hint={t(`${activeCount} ปกติ · ${suspendedCount} ระงับ`, `${activeCount} active · ${suspendedCount} suspended`)} onClick={() => { resetFilters(); setActiveTab('users'); }} />
         <MonitoringStat icon={FolderKanban} label={t('โครงการทั้งหมด', 'Total projects')} value={monitoring?.totalProjects ?? '—'} onClick={() => showProjects('')} />
         <MonitoringStat icon={AlertTriangle} tone="amber" label={t('บัญชีที่ควรตรวจสอบ', 'Accounts to review')} value={monitoring ? flaggedCount : '—'} onClick={() => { setReviewOnly(true); setPage(1); setActiveTab('users'); }} active={activeTab === 'users' && reviewOnly} />
         <MonitoringStat icon={LockKeyhole} tone="slate" label={t('ระงับการสร้างโครงการ', 'Creation access blocked')} value={monitoring ? blockedCount : '—'} hint={t('สิทธิ์แยกจากสถานะบัญชี', 'Separate from account status')} />
@@ -185,7 +189,7 @@ export default function UserManagement() {
       {activeTab === 'users' ? <section role="tabpanel" id="system-users-panel" aria-labelledby="system-users-tab" className="space-y-4">
         <Card noPadding>
           <div className="space-y-4 border-b border-slate-100 p-4 sm:p-6"><div><h2 className="font-bold text-slate-900">{t('บัญชีผู้ใช้งาน', 'User accounts')}</h2><p className="mt-1 text-xs leading-5 text-slate-500">{t('ตรวจสอบสัญญาณก่อนเลือกจัดการสิทธิ์ การแจ้งเตือนไม่ได้หมายความว่าบัญชีกระทำผิด', 'Review signals before changing access. A signal does not establish misuse.')}</p></div><div className="flex flex-col gap-3 sm:flex-row"><MonitoringSearch id="user-search" label={t('ค้นหาชื่อหรืออีเมล', 'Search name or email')} value={searchTerm} onChange={updateSearch} /><select aria-label={t('กรองสถานะบัญชี', 'Filter account status')} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"><option value="ALL">{t('ทุกสถานะ', 'All statuses')}</option><option value="Active">{t('ใช้งานปกติ', 'Active')}</option><option value="Suspended">{t('ระงับบัญชี', 'Suspended')}</option></select><Button variant={reviewOnly ? 'primary' : 'secondary'} aria-pressed={reviewOnly} onClick={() => { setReviewOnly(!reviewOnly); setPage(1); }}><AlertTriangle className="h-4 w-4" />{t('ควรตรวจสอบ', 'Needs review')}</Button></div></div>
-          {isLoading && !updatedAt ? <MonitoringSkeleton /> : !pagedUsers.length ? <MonitoringEmpty title={t('ไม่พบบัญชีที่ตรงกับเงื่อนไข', 'No matching accounts')} description={t('ลองค้นหาด้วยชื่อ อีเมล หรือเลือกสถานะอื่น', 'Try a different name, email, or account status.')} onReset={searchTerm || reviewOnly || statusFilter !== 'ALL' ? resetFilters : undefined} /> : <>
+          {isLoading && !usersUpdatedAt ? <MonitoringSkeleton /> : !pagedUsers.length ? <MonitoringEmpty title={t('ไม่พบบัญชีที่ตรงกับเงื่อนไข', 'No matching accounts')} description={t('ลองค้นหาด้วยชื่อ อีเมล หรือเลือกสถานะอื่น', 'Try a different name, email, or account status.')} onReset={searchTerm || reviewOnly || statusFilter !== 'ALL' ? resetFilters : undefined} /> : <>
             <div className="hidden overflow-x-auto md:block"><table className="w-full text-left text-sm"><thead><tr className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-500">{[t('ผู้ใช้งาน', 'User'), t('สถานะบัญชี', 'Account status'), t('โครงการ', 'Projects'), t('สัญญาณ / สิทธิ์สร้าง', 'Signals / Creation access'), t('จัดการ', 'Manage')].map(h => <th scope="col" className="px-5 py-3.5" key={h}>{h}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{pagedUsers.map(user => <tr key={user.id} className={`transition-colors hover:bg-slate-50/70 ${selectedId === user.id ? 'bg-blue-50/40' : ''}`}><td className="px-5 py-4">{identity(user)}<p className="ml-13 mt-1 text-[11px] text-slate-400">{t('สมัคร ', 'Joined ')}{formatDate(user.createdAt)}</p></td><td className="px-5 py-4">{userStatus(user)}</td><td className="px-5 py-4"><button className="inline-flex items-center gap-1 font-semibold text-blue-700 hover:underline" onClick={() => showProjects(user.id)} aria-label={t(`ดูโครงการของ ${user.name}`, `View projects owned by ${user.name}`)}>{monitoredById.get(user.id)?.projectCount ?? '—'}<ArrowRight className="h-3 w-3" /></button><p className="mt-1 text-[11px] text-slate-400">{monitoredById.get(user.id)?.createdLast24Hours ?? '—'} {t('ใน 24 ชม.', 'in 24h')}</p></td><td className="max-w-64 px-5 py-4">{signals(user)}</td><td className="px-5 py-4"><Button variant="secondary" size="sm" onClick={() => setSelectedId(user.id)} aria-expanded={selectedId === user.id} aria-controls="selected-user-access"><Settings2 className="h-3.5 w-3.5" />{t('จัดการสิทธิ์', 'Manage access')}</Button></td></tr>)}</tbody></table></div>
             <div className="divide-y divide-slate-100 md:hidden">{pagedUsers.map(user => <div key={user.id} className="space-y-3 p-4">{identity(user)}<div className="flex flex-wrap items-center gap-2">{userStatus(user)}{signals(user)}</div><div className="flex items-center justify-between gap-2"><button onClick={() => showProjects(user.id)} className="text-xs font-semibold text-blue-700 hover:underline">{monitoredById.get(user.id)?.projectCount ?? '—'} {t('โครงการ', 'projects')} →</button><Button variant="secondary" size="sm" onClick={() => setSelectedId(user.id)} aria-controls="selected-user-access"><Settings2 className="h-3.5 w-3.5" />{t('จัดการสิทธิ์', 'Manage access')}</Button></div></div>)}</div>
           </>}
