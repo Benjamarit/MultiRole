@@ -232,7 +232,7 @@ export default function TeamImportModal({ isOpen, onImport, onClose, isImporting
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-50">
                   <tr className="text-left text-xs font-semibold text-slate-500">
-                    <th className="px-3 py-2">{t('แถว', 'Row')}</th>
+                    <th className="px-3 py-2">{t('ลำดับ', 'No.')}</th>
                     <th className="px-3 py-2">{t('ชื่อทีม', 'Team Name')}</th>
                     <th className="px-3 py-2">{t('รายละเอียด', 'Description')}</th>
                     <th className="px-3 py-2">{t('ลิงก์', 'Link')}</th>
@@ -240,12 +240,12 @@ export default function TeamImportModal({ isOpen, onImport, onClose, isImporting
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {rows.map((row) => (
+                  {rows.map((row, index) => (
                     <tr
                       key={row.rowNumber}
                       className={row.error ? 'bg-red-50/50' : ''}
                     >
-                      <td className="px-3 py-2 text-slate-400">{row.rowNumber}</td>
+                      <td className="px-3 py-2 text-slate-400" title={t(`แถวที่ ${row.rowNumber} ใน Excel`, `Excel row ${row.rowNumber}`)}>{index + 1}</td>
                       <td className="px-3 py-2 font-medium text-slate-900">
                         {row.name || '—'}
                       </td>
@@ -257,7 +257,7 @@ export default function TeamImportModal({ isOpen, onImport, onClose, isImporting
                       </td>
                       <td className="px-3 py-2 text-xs font-medium">
                         {row.error ? (
-                          <span className="text-red-600">✕ {row.error}</span>
+                          <span className="text-red-600">✕ {t(`แถว Excel ${row.rowNumber}:`, `Excel row ${row.rowNumber}:`)} {row.error}</span>
                         ) : row.duplicate ? <span className="text-amber-700">{t('ข้ามชื่อซ้ำ', 'Skip duplicate')}</span> : (
                           <span className="text-emerald-600">
                             ✓ {t('พร้อม', 'Ready')}
