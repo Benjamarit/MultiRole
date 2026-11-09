@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   Plus,
   Trash2,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
@@ -21,6 +23,7 @@ import {
   deleteCriterion,
   getCriteriaByProject,
   saveCriterion,
+  reorderCriteria,
 } from '../data/evaluations/CriteriaStore';
 
 const SCORING_LIMITS = {
@@ -344,6 +347,22 @@ export default function CriteriaManagement() {
     return criteria;
   }, [criteria, editingRowId, editRowData, locked]);
 
+  const moveCriterion = async (criterionId, offset) => {
+    if (locked || savingRef.current || editingRowId) return;
+    const index = criteria.findIndex(item => item.id === criterionId);
+    if (index < 0 || index + offset < 0 || index + offset >= criteria.length) return;
+    const ids = criteria.map(item => item.id);
+    [ids[index], ids[index + offset]] = [ids[index + offset], ids[index]];
+    savingRef.current = true;
+    setIsSaving(true);
+    try {
+      await reorderCriteria(id, ids);
+      setCriteria(getCriteriaByProject(id));
+      toast.success(t('บันทึกลำดับเกณฑ์แล้ว', 'Criteria order saved'));
+    } catch (error) { await reportWriteError(error); }
+    finally { savingRef.current = false; setIsSaving(false); }
+  };
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <BackButton to={`/project/${id}/dashboard`}>
@@ -460,7 +479,7 @@ export default function CriteriaManagement() {
             </thead>
 
             <tbody className="divide-y divide-slate-100">
-              {displayRows.map((item) => {
+              {displayRows.map((item, rowIndex) => {
                 const isEditing = !locked && editingRowId === item.id;
                 const isNewRow = item.id === NEW_ROW_ID;
                 const maxAllowedForThisRow =
@@ -610,7 +629,14 @@ export default function CriteriaManagement() {
                         </div>
                       ) : (
                         <div>
-                          <p className="font-bold text-slate-900">{item.name}</p>
+                          <div className="flex items-start gap-3">
+                            <span className="pt-0.5 text-xs font-semibold text-slate-400">{rowIndex + 1}</span>
+                            <p className="flex-1 font-bold text-slate-900">{item.name}</p>
+                            {!locked && <div className="flex shrink-0 gap-1">
+                              <Button size="sm" variant="secondary" aria-label={t(`เลื่อน ${item.name} ขึ้น`, `Move ${item.name} up`)} disabled={isSaving || Boolean(editingRowId) || rowIndex === 0} onClick={() => moveCriterion(item.id, -1)}><ArrowUp className="h-3.5 w-3.5" /></Button>
+                              <Button size="sm" variant="secondary" aria-label={t(`เลื่อน ${item.name} ลง`, `Move ${item.name} down`)} disabled={isSaving || Boolean(editingRowId) || rowIndex === criteria.length - 1} onClick={() => moveCriterion(item.id, 1)}><ArrowDown className="h-3.5 w-3.5" /></Button>
+                            </div>}
+                          </div>
                           {item.description ? (
                             rubricPreviewItems.some((r) => r.label) ? (
                               <div className="mt-2 overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/70">

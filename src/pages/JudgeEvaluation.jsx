@@ -61,7 +61,7 @@ export default function JudgeEvaluation() {
   );
   const [comment, setComment] = useState(() => existingEvaluation?.comment || '');
   const [evaluationStatus, setEvaluationStatus] = useState(
-    () => existingEvaluation?.status || 'DRAFT'
+    () => existingEvaluation?.status || 'NOT_STARTED'
   );
   const [submittedAt, setSubmittedAt] = useState(
     () => existingEvaluation?.submittedAt || null
@@ -244,7 +244,7 @@ export default function JudgeEvaluation() {
               {t('ส่งคะแนนแล้ว', 'Submitted', { compact: true })}
             </Badge>
           ) : (
-            <Badge variant="warning">{t('ร่าง', 'Draft')}</Badge>
+              <Badge variant={evaluationStatus === 'DRAFT' ? 'warning' : 'default'}>{evaluationStatus === 'DRAFT' ? t('บันทึกร่างแล้ว', 'Draft saved') : t('ยังไม่บันทึก', 'Not saved')}</Badge>
           )
         }
       />

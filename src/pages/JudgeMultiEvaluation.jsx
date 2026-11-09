@@ -15,6 +15,7 @@ import {
   Save,
   Send,
   SlidersHorizontal,
+  AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
@@ -22,14 +23,15 @@ import BackButton from '../components/BackButton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
-import ConfirmDialog from '../components/ConfirmDialog';
 import BatchSubmissionDialog from '../components/BatchSubmissionDialog';
+import UnsavedChangesGuard from '../components/UnsavedChangesGuard';
 import { getBatchSubmissionCandidates } from '../data/evaluations/BatchSubmission';
 import { isValidCriterionScore } from '../data/evaluations/Scoring';
 import CriterionScoreInput from '../components/CriteriaScoreInput';
 import { getCriteriaByProject } from '../data/evaluations/CriteriaStore';
 import { getTeamsByProject } from '../data/teams/TeamStore';
-import { getEvaluation, saveEvaluation, submitEvaluationsBatch } from '../data/evaluations/EvaluationStore';
+import { getEvaluation, saveEvaluation, submitEvaluationsBatch, saveDraftsBatch } from '../data/evaluations/EvaluationStore';
+import { evaluationSnapshot, getUnsavedTeamIds } from '../data/evaluations/EvaluationPayload';
 import {
   getAssignedTeamIds,
   getProjectById,
@@ -56,7 +58,7 @@ import { parseRubricLevels } from '../data/evaluations/Rubric';
 export default function JudgeMultiEvaluation() {
   const { projectId } = useParams();
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const judgeId = user?.id || 'anonymous-judge';
 
   const criteria = getCriteriaByProject(projectId);
@@ -66,6 +68,9 @@ export default function JudgeMultiEvaluation() {
   const canEdit = isBeforeDeadline && canEvaluate;
   const [unlockedTeams, setUnlockedTeams] = useState({});
   const [savingTeams, setSavingTeams] = useState({});
+  const [isSavingAllDrafts, setIsSavingAllDrafts] = useState(false);
+  const draftBatchInFlight = useRef(false);
+  const teamSavesInFlight = useRef(new Set());
 
   const allTeams = getTeamsByProject(projectId);
   const assignedTeamIds = getAssignedTeamIds(projectId, judgeId);
@@ -147,9 +152,18 @@ export default function JudgeMultiEvaluation() {
     });
     return initialStatuses;
   });
+  const [savedSnapshots, setSavedSnapshots] = useState(() => Object.fromEntries(eligibleTeams.map(team => {
+    const saved = getEvaluation(projectId, team.id, judgeId);
+    return [team.id, evaluationSnapshot(team.id, saved?.scores, saved?.criteriaComments, saved?.comment || '')];
+  })));
+  const [lastSave, setLastSave] = useState(null);
+  const dirtyTeamIds = getUnsavedTeamIds({ teams: eligibleTeams, savedSnapshots, scores: matrixScores,
+    criteriaComments: matrixCriteriaComments, comments });
+  const dirtyTeams = new Set(dirtyTeamIds);
+  const pendingDrafts = eligibleTeams.filter(team => dirtyTeams.has(team.id) && statuses[team.id] !== 'SUBMITTED')
+    .map(team => evaluationSnapshot(team.id, matrixScores[team.id], matrixCriteriaComments[team.id], comments[team.id] || ''));
+  const dirtyPublishedCount = dirtyTeamIds.filter(teamId => statuses[teamId] === 'SUBMITTED').length;
 
-  const [confirmTeamId, setConfirmTeamId] = useState(null);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isBatchOpen, setIsBatchOpen] = useState(false);
   const [batchSnapshot, setBatchSnapshot] = useState(null);
   const [batchResults, setBatchResults] = useState(null);
@@ -163,10 +177,10 @@ export default function JudgeMultiEvaluation() {
 
 
   const isTeamEditable = (teamId) =>
-    canEdit && !isBatchOpen && !isBatchSubmitting && isBeforeEvaluationDeadline(getProjectById(projectId)) && !savingTeams[teamId] &&
+    canEdit && !isSavingAllDrafts && !isBatchOpen && !isBatchSubmitting && isBeforeEvaluationDeadline(getProjectById(projectId)) && !savingTeams[teamId] &&
     (statuses[teamId] !== 'SUBMITTED' || unlockedTeams[teamId]);
 
-  // คำนวณจำนวนข้อที่แต่ละทีมกรอกคะแนนแล้ว และสถานะสีของแต่ละทีม (SUBMITTED | IN_PROGRESS | NOT_STARTED)
+  // คำนวณจำนวนข้อที่แต่ละทีมกรอกคะแนนแล้ว และสถานะสีของแต่ละทีม (SUBMITTED | DRAFT | NOT_STARTED)
   const teamProgressByTeamId = useMemo(() => {
     const map = {};
     eligibleTeams.forEach((team) => {
@@ -178,8 +192,8 @@ export default function JudgeMultiEvaluation() {
       let visualStatus = 'NOT_STARTED';
       if (rawStatus === 'SUBMITTED') {
         visualStatus = 'SUBMITTED';
-      } else if (rawStatus === 'DRAFT' || scoredCount > 0) {
-        visualStatus = 'IN_PROGRESS';
+      } else if (rawStatus === 'DRAFT') {
+        visualStatus = 'DRAFT';
       }
       map[team.id] = {
         scoredCount,
@@ -192,7 +206,7 @@ export default function JudgeMultiEvaluation() {
 
   // นับจำนวนทีมในแต่ละกลุ่มสถานะเพื่อแสดงบนป้ายกำกับสี (Legend)
   const statusCounts = useMemo(() => {
-    const counts = { SUBMITTED: 0, IN_PROGRESS: 0, NOT_STARTED: 0 };
+    const counts = { SUBMITTED: 0, DRAFT: 0, NOT_STARTED: 0 };
     eligibleTeams.forEach((team) => {
       const st = teamProgressByTeamId[team.id]?.visualStatus || 'NOT_STARTED';
       counts[st] = (counts[st] || 0) + 1;
@@ -407,21 +421,23 @@ export default function JudgeMultiEvaluation() {
 
 
   const cancelTeamChanges = (teamId) => {
-    const saved = getEvaluation(projectId, teamId, judgeId);
+    const saved = savedSnapshots[teamId];
     setMatrixScores((prev) => ({ ...prev, [teamId]: saved?.scores || {} }));
     setMatrixCriteriaComments((prev) => ({ ...prev, [teamId]: saved?.criteriaComments || {} }));
     setComments((prev) => ({ ...prev, [teamId]: saved?.comment || '' }));
     setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
   };
 
-  const handleSaveDraft = async (teamId) => {
+  const handleSaveChanges = async (teamId) => {
+    if (draftBatchInFlight.current || teamSavesInFlight.current.has(teamId)) return;
     if (!isBeforeEvaluationDeadline(getProjectById(projectId))) {
       toast.error(
         t('หมดเขตการประเมินแล้ว ไม่สามารถบันทึกได้', 'Evaluation deadline has passed')
       );
       return;
     }
-    if (!isTeamEditable(teamId)) return;
+    if (statuses[teamId] !== 'SUBMITTED' || !isTeamEditable(teamId)) return;
+    teamSavesInFlight.current.add(teamId);
     setSavingTeams((prev) => ({ ...prev, [teamId]: true }));
     try {
       const saved = await saveEvaluation({
@@ -429,11 +445,9 @@ export default function JudgeMultiEvaluation() {
         teamId,
         judgeId,
         judgeName: user?.name || 'กรรมการ',
-        scores: matrixScores[teamId],
-        criteriaComments: matrixCriteriaComments[teamId] || {},
-        comment: comments[teamId] || '',
+        ...evaluationSnapshot(teamId, matrixScores[teamId], matrixCriteriaComments[teamId], comments[teamId] || ''),
         totalScore: Number(teamTotals[teamId]),
-        status: statuses[teamId] === 'SUBMITTED' ? 'SUBMITTED' : 'DRAFT',
+        status: 'SUBMITTED',
       });
       if (!saved) {
         toast.error(
@@ -442,63 +456,48 @@ export default function JudgeMultiEvaluation() {
         return;
       }
       setStatuses((prev) => ({ ...prev, [teamId]: saved.status }));
+      setSavedSnapshots(prev => ({ ...prev, [teamId]: evaluationSnapshot(teamId, saved.scores, saved.criteriaComments, saved.comment || '') }));
+      setLastSave({ kind: 'edit', count: 1, failed: 0, at: new Date() });
+      setMatrixScores(prev => ({ ...prev, [teamId]: { ...saved.scores } }));
+      setMatrixCriteriaComments(prev => ({ ...prev, [teamId]: { ...saved.criteriaComments } }));
+      setComments(prev => ({ ...prev, [teamId]: saved.comment || '' }));
       setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
-      toast.success(saved.status === 'SUBMITTED' ? t('บันทึกการแก้ไขคะแนนแล้ว', 'Score changes saved') : t('บันทึกแบบร่างเรียบร้อยแล้ว', 'Draft saved'));
+      toast.success(t('บันทึกการแก้ไขคะแนนแล้ว', 'Score changes saved'));
     } catch (error) {
       toast.error(error.message);
     } finally {
+      teamSavesInFlight.current.delete(teamId);
       setSavingTeams((prev) => ({ ...prev, [teamId]: false }));
     }
   };
 
-  const confirmSubmit = async () => {
-    const teamId = confirmTeamId;
-    if (!teamId) return;
-    if (!isBeforeEvaluationDeadline(getProjectById(projectId))) {
-      setIsConfirmOpen(false);
-      setConfirmTeamId(null);
-      toast.error(
-        t('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้', 'Evaluation deadline has passed')
-      );
-      return;
-    }
-    if (!isTeamEditable(teamId) || !isTeamAnswered(teamId)) return;
-    setSavingTeams((prev) => ({ ...prev, [teamId]: true }));
+  const handleSaveAllDrafts = async () => {
+    if (draftBatchInFlight.current || teamSavesInFlight.current.size || hasTeamSaves || !canEdit || isBatchOpen || isBatchSubmitting) return;
+    const entries = pendingDrafts;
+    if (!entries.length) { toast(t('ยังไม่มีข้อมูลร่างที่จะบันทึก', 'No draft content to save')); return; }
+    draftBatchInFlight.current = true;
+    setIsSavingAllDrafts(true);
     try {
-      const saved = await saveEvaluation({
-        projectId,
-        teamId,
-        judgeId,
-        judgeName: user?.name || 'กรรมการ',
-        scores: matrixScores[teamId],
-        criteriaComments: matrixCriteriaComments[teamId] || {},
-        comment: comments[teamId] || '',
-        totalScore: Number(teamTotals[teamId]),
-        status: 'SUBMITTED',
-      });
-      if (!saved) {
-        setIsConfirmOpen(false);
-        setConfirmTeamId(null);
-        toast.error(
-          t('หมดเขตการประเมินแล้ว ไม่สามารถส่งคะแนนได้', 'Evaluation deadline has passed')
-        );
-        return;
-      }
-      setStatuses((prev) => ({ ...prev, [teamId]: saved.status }));
-      setUnlockedTeams((prev) => ({ ...prev, [teamId]: false }));
-      setIsConfirmOpen(false);
-      setConfirmTeamId(null);
-      toast.success(t('ส่งคะแนนทีมเรียบร้อยแล้ว', 'Team score submitted'));
-    } catch (error) {
-      setIsConfirmOpen(false);
-      toast.error(error.message);
-    } finally {
-      setSavingTeams((prev) => ({ ...prev, [teamId]: false }));
-    }
+      const results = await saveDraftsBatch(projectId, entries);
+      const confirmed = results.filter(result => result.evaluation && ['DRAFT_SAVED', 'ALREADY_SUBMITTED'].includes(result.outcome));
+      setSavedSnapshots(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId,
+        evaluationSnapshot(result.teamId, result.evaluation.scores, result.evaluation.criteriaComments, result.evaluation.comment || '')])) }));
+      setStatuses(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.status])) }));
+      setMatrixScores(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.scores])) }));
+      setMatrixCriteriaComments(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.criteriaComments])) }));
+      setComments(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.comment || ''])) }));
+      setUnlockedTeams(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, false])) }));
+      const failed = results.filter(result => result.outcome === 'FAILED');
+      const savedCount = results.filter(result => result.outcome === 'DRAFT_SAVED').length;
+      setLastSave({ kind: 'draft', count: savedCount, failed: entries.length - confirmed.length, at: new Date() });
+      if (failed.length) toast.error(t(`บันทึกร่าง ${savedCount} ทีม · ไม่สำเร็จ ${failed.length} ทีม: ${failed.map(result => eligibleTeams.find(team => team.id === result.teamId)?.name || result.teamId).join(', ')} — ข้อมูลที่กรอกยังอยู่`, `Saved ${savedCount} drafts; ${failed.length} teams failed. Your input is retained.`), { duration: 8000 });
+      else toast.success(t(`บันทึกร่างแล้ว ${savedCount} ทีม`, `${savedCount} drafts saved`));
+    } catch (error) { setLastSave({ uncertain: true, at: new Date() }); toast.error(t(`${error.message} — ยังยืนยันผลไม่ได้ ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง`, `${error.message} — Save unconfirmed. Your input is retained; please retry.`)); }
+    finally { draftBatchInFlight.current = false; setIsSavingAllDrafts(false); }
   };
 
   const openBatchReview = () => {
-    if (batchInFlight.current || hasTeamSaves || isConfirmOpen) return;
+    if (draftBatchInFlight.current || batchInFlight.current || hasTeamSaves) return;
     setBatchSnapshot(batchCandidates);
     setBatchResults(null);
     setBatchError('');
@@ -506,7 +505,7 @@ export default function JudgeMultiEvaluation() {
   };
   const closeBatch = () => { if (!batchInFlight.current) setIsBatchOpen(false); };
   const sendBatch = async (retryFailed = false) => {
-    if (batchInFlight.current || hasTeamSaves || !batchSnapshot) return;
+    if (draftBatchInFlight.current || batchInFlight.current || hasTeamSaves || !batchSnapshot) return;
     if (!canEdit || !isBeforeEvaluationDeadline(getProjectById(projectId))) {
       setBatchError(t('ขณะนี้ไม่เปิดรับคะแนน หรือหมด deadline แล้ว', 'Submissions are closed or the deadline has passed.'));
       return;
@@ -520,6 +519,9 @@ export default function JudgeMultiEvaluation() {
     try {
       const received = await submitEvaluationsBatch(projectId, targets);
       const confirmed = received.filter(result => result.evaluation && ['SUBMITTED', 'ALREADY_SUBMITTED'].includes(result.outcome));
+      setSavedSnapshots(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId,
+        evaluationSnapshot(result.teamId, result.evaluation.scores, result.evaluation.criteriaComments, result.evaluation.comment || '')])) }));
+      setLastSave({ kind: 'submit', count: confirmed.length, failed: targets.length - confirmed.length, at: new Date() });
       setStatuses(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.status])) }));
       setUnlockedTeams(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, false])) }));
       setMatrixScores(prev => ({ ...prev, ...Object.fromEntries(confirmed.map(result => [result.teamId, result.evaluation.scores])) }));
@@ -532,6 +534,7 @@ export default function JudgeMultiEvaluation() {
       if (received.some(result => result.outcome === 'FAILED')) toast.error(t('ส่งได้บางทีม กรุณาตรวจผลรายทีมในหน้าสรุป', 'Some teams failed. Review the per-team results.'));
       else toast.success(t(`ยืนยันการส่งสำเร็จ ${confirmed.length} ทีม`, `Submission confirmed for ${confirmed.length} teams`));
     } catch (error) {
+      setLastSave({ uncertain: true, at: new Date() });
       setBatchError(t(`${error.message} — ยังยืนยันผลการส่งทั้งหมดไม่ได้ คะแนนที่กรอกยังอยู่ ลองส่งซ้ำได้โดยระบบจะไม่ส่งทับทีมที่ส่งแล้ว`, `${error.message} — Some results may be unconfirmed. Your scores are retained. Retrying will not overwrite submitted teams.`));
     } finally {
       batchInFlight.current = false;
@@ -546,7 +549,9 @@ export default function JudgeMultiEvaluation() {
   };
 
   return (
-    <div className="mx-auto max-w-[1440px] space-y-6 p-6">
+    <div className="mx-auto max-w-[1440px] space-y-6 p-4 sm:p-6">
+      <UnsavedChangesGuard when={dirtyTeamIds.length > 0 || hasTeamSaves || isSavingAllDrafts || isBatchSubmitting}
+        busy={hasTeamSaves || isSavingAllDrafts || isBatchSubmitting} />
       <BackButton to={`/judge/project/${projectId}/teams`}>
         {t('กลับไปหน้ารายชื่อทีม', 'Back to Assigned Teams')}
       </BackButton>
@@ -557,9 +562,6 @@ export default function JudgeMultiEvaluation() {
       />
 
       <EvaluationDeadlineNotice project={project} isBeforeDeadline={isBeforeDeadline} />
-      {eligibleTeams.length > 0 && <Card noPadding><div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Send className="h-4 w-4 text-blue-600" />{t('ส่งคะแนนรวม', 'Submit evaluations together')}</h2><p className="mt-2 text-xs leading-6 text-slate-500">{t(`บันทึกร่าง ${savedDraftCount} ทีม · พร้อมส่ง ${batchCandidates.ready.length} ทีม · ยังไม่พร้อม ${batchCandidates.incomplete.length} ทีม · ส่งแล้ว ${batchCandidates.submitted.length} ทีม`, `${savedDraftCount} saved drafts · ${batchCandidates.ready.length} ready · ${batchCandidates.incomplete.length} incomplete · ${batchCandidates.submitted.length} submitted`)}</p></div><div className="flex flex-wrap gap-2"><Button variant="secondary" disabled={hasTeamSaves || isBatchSubmitting || isConfirmOpen} onClick={openBatchReview}>{t('ตรวจความพร้อม', 'Review readiness')}</Button><Button disabled={!canEdit || !batchCandidates.ready.length || hasTeamSaves || isBatchSubmitting || isConfirmOpen} onClick={openBatchReview}><Send className="h-4 w-4" />{t(`ส่งทีมที่พร้อม (${batchCandidates.ready.length})`, `Submit ready teams (${batchCandidates.ready.length})`)}</Button></div></div></Card>}
-      {batchResults && !isBatchOpen && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3 text-xs text-blue-800"><span>{t(`ผลการส่งล่าสุด: ยืนยันแล้ว ${batchResults.filter(result => result.outcome !== 'FAILED').length} ทีม · ไม่สำเร็จ ${batchResults.filter(result => result.outcome === 'FAILED').length} ทีม`, `Latest submission: ${batchResults.filter(result => result.outcome !== 'FAILED').length} confirmed · ${batchResults.filter(result => result.outcome === 'FAILED').length} failed`)}</span><Button variant="text" size="sm" onClick={() => setIsBatchOpen(true)}>{t('ดูผลรายทีม', 'View results')}</Button></div>}
-
       {Object.values(unlockedTeams).some(Boolean) && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{t('กำลังแก้ไขคะแนน คะแนนเดิมยังใช้จนกว่าจะบันทึกการแก้ไข', 'Editing scores. Previously submitted scores remain in use until changes are saved.')}</p>}
       {!canEvaluate && project?.status === 'Active' && <Card>{t('เกณฑ์ยังไม่ครบ 100% กรุณาติดต่อผู้ดูแลโครงการ', 'Criteria weights must total 100%. Contact the competition admin.')}</Card>}
 
@@ -629,27 +631,27 @@ export default function JudgeMultiEvaluation() {
 
                   <button
                     type="button"
-                    onClick={() => filterTeamsByVisualStatus('IN_PROGRESS')}
+                    onClick={() => filterTeamsByVisualStatus('DRAFT')}
                     title={t(
-                      'คลิกเพื่อแสดงเฉพาะทีมที่กำลังประเมินหรือบันทึกร่าง',
-                      'Click to show only in-progress or draft teams'
+                      'คลิกเพื่อแสดงเฉพาะทีมที่บันทึกร่างแล้ว',
+                      'Click to show only saved drafts'
                     )}
                     className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-0.5 font-semibold text-amber-900 transition-transform hover:scale-105"
                   >
-                    {t('กำลังประเมิน / ร่าง', 'In Progress / Draft')} (
-                    {statusCounts.IN_PROGRESS})
+                    {t('บันทึกร่างแล้ว', 'Draft saved')} (
+                    {statusCounts.DRAFT})
                   </button>
 
                   <button
                     type="button"
                     onClick={() => filterTeamsByVisualStatus('NOT_STARTED')}
                     title={t(
-                      'คลิกเพื่อแสดงเฉพาะทีมที่ยังไม่เริ่มประเมิน',
-                      'Click to show only not-started teams'
+                      'คลิกเพื่อแสดงเฉพาะทีมที่ยังไม่บันทึก',
+                      'Click to show only teams without a saved evaluation'
                     )}
                     className="inline-flex items-center gap-1.5 rounded-full border border-blue-300 bg-blue-100 px-2.5 py-0.5 font-semibold text-blue-800 transition-transform hover:scale-105"
                   >
-                    {t('ยังไม่เริ่มประเมิน', 'Not Started')} (
+                    {t('ยังไม่บันทึก', 'Not saved')} (
                     {statusCounts.NOT_STARTED})
                   </button>
                 </div>
@@ -669,7 +671,7 @@ export default function JudgeMultiEvaluation() {
                     if (teamProg.visualStatus === 'SUBMITTED') {
                       statusHighlightClasses =
                         'border-emerald-300 bg-emerald-100 text-emerald-800 shadow-2xs ring-1 ring-emerald-200';
-                    } else if (teamProg.visualStatus === 'IN_PROGRESS') {
+                    } else if (teamProg.visualStatus === 'DRAFT') {
                       statusHighlightClasses =
                         'border-amber-300 bg-amber-100 text-amber-900 shadow-2xs ring-1 ring-amber-200';
                     }
@@ -993,12 +995,13 @@ export default function JudgeMultiEvaluation() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left">
-                  <thead>
+              <div role="region" aria-label={t('ตารางประเมิน เลื่อนได้ทั้งแนวตั้งและแนวนอน', 'Evaluation matrix, scroll vertically and horizontally')}
+                tabIndex={0} className="max-h-[65dvh] overflow-auto overscroll-contain">
+                <table className="w-full border-separate border-spacing-0 text-left">
+                  <thead className="sticky top-0 z-20 bg-slate-100 shadow-sm">
                     <tr className="border-b border-slate-200 bg-slate-100/90">
                       {/* แบบ A + B: ขยายความกว้างขั้นต่ำของคอลัมน์เกณฑ์ด้านซ้าย และเพิ่มปุ่มพับ/กาง Rubric ทั้งหมด */}
-                      <th className="sticky left-0 z-10 min-w-[300px] max-w-[380px] bg-slate-100 px-6 py-4 text-sm font-bold text-slate-800 shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
+                      <th className="sticky left-0 z-10 w-36 min-w-36 max-w-44 sm:w-auto sm:max-w-[380px] bg-slate-100 px-3 py-3 text-sm font-bold sm:px-6 sm:py-4 text-slate-800 shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
                         <div className="flex flex-col gap-2">
                           <span>
                             {t('เกณฑ์ประเมิน / ชื่อทีม', 'Criteria / Teams')}
@@ -1019,17 +1022,17 @@ export default function JudgeMultiEvaluation() {
                         const teamProg = teamProgressByTeamId[team.id] || {
                           visualStatus: 'NOT_STARTED',
                         };
-                        let headerToneClass = 'bg-blue-50/40';
+                        let headerToneClass = 'bg-blue-50';
                         if (teamProg.visualStatus === 'SUBMITTED') {
-                          headerToneClass = 'bg-emerald-50/60';
-                        } else if (teamProg.visualStatus === 'IN_PROGRESS') {
-                          headerToneClass = 'bg-amber-50/60';
+                          headerToneClass = 'bg-emerald-50';
+                        } else if (teamProg.visualStatus === 'DRAFT') {
+                          headerToneClass = 'bg-amber-50';
                         }
 
                         return (
                           <th
                             key={team.id}
-                            className={`min-w-[300px] border-l border-slate-200 px-6 py-4 text-center font-bold text-slate-900 ${headerToneClass}`}
+                            className={`min-w-60 border-l border-slate-200 px-3 py-3 sm:min-w-[300px] sm:px-6 sm:py-4 text-center font-bold text-slate-900 ${headerToneClass}`}
                           >
                             <div className="text-base">{team.name}</div>
                             {team.link && (
@@ -1050,56 +1053,29 @@ export default function JudgeMultiEvaluation() {
                                 <Badge variant="success">
                                   {t('ส่งคะแนนแล้ว', 'Submitted')}
                                 </Badge>
-                              ) : teamProg.visualStatus === 'IN_PROGRESS' ? (
+                              ) : teamProg.visualStatus === 'DRAFT' ? (
                                 <Badge variant="warning">
-                                  {t('กำลังประเมิน / ร่าง', 'In Progress / Draft')}
+                                  {t('บันทึกร่างแล้ว', 'Draft saved')}
                                 </Badge>
                               ) : (
                                 <Badge variant="info">
-                                  {t('ยังไม่เริ่มประเมิน', 'Not Started')}
+                                  {t('ยังไม่บันทึก', 'Not saved')}
                                 </Badge>
                               )}
                             </div>
-                            <div className="mt-3 flex flex-wrap justify-center gap-2">
-                              {statuses[team.id] === 'SUBMITTED' && !unlockedTeams[team.id] ? (
-                                <Button size="sm" variant="secondary" disabled={!canEdit || isBatchOpen || isBatchSubmitting || savingTeams[team.id]} onClick={() => setUnlockedTeams((prev) => ({ ...prev, [team.id]: true }))}>{t('แก้ไขคะแนน', 'Edit Scores')}</Button>
-                              ) : (
-                                <>
-                                  {unlockedTeams[team.id] && <Button size="sm" variant="secondary" disabled={isBatchOpen || isBatchSubmitting || savingTeams[team.id]} onClick={() => cancelTeamChanges(team.id)}>{t('ยกเลิกการแก้ไข', 'Cancel Changes')}</Button>}
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() => handleSaveDraft(team.id)}
-                                    disabled={!isTeamEditable(team.id) || (statuses[team.id] === 'SUBMITTED' && !isTeamAnswered(team.id))}
-                                    isLoading={Boolean(savingTeams[team.id])}
-                                  >
-                                    <Save className="h-3.5 w-3.5" />
-                                    {statuses[team.id] === 'SUBMITTED' ? t('บันทึกการแก้ไข', 'Save Changes') : t('บันทึกร่าง', 'Save Draft')}
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    onClick={() => {
-                                      if (
-                                        !isTeamEditable(team.id) ||
-                                        !isTeamAnswered(team.id)
-                                      )
-                                        return;
-                                      setConfirmTeamId(team.id);
-                                      setIsConfirmOpen(true);
-                                    }}
-                                    disabled={
-                                      !isTeamEditable(team.id) ||
-                                      !isTeamAnswered(team.id)
-                                    }
-                                  >
-                                    <Send className="h-3.5 w-3.5" />
-                                    {statuses[team.id] === 'SUBMITTED'
-                                      ? t('ส่งอีกครั้ง', 'Resubmit')
-                                      : t('ส่งคะแนน', 'Submit')}
-                                  </Button>
-                                </>
-                              )}
-                            </div>
+                            {dirtyTeams.has(team.id) && <p className="mt-1.5 text-xs font-medium text-amber-800">{t('มีการแก้ไขที่ยังไม่บันทึก', 'Unsaved changes')}</p>}
+                            {statuses[team.id] === 'SUBMITTED' && (
+                              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                                {!unlockedTeams[team.id] ? (
+                                  <Button size="sm" variant="secondary" disabled={!canEdit || isSavingAllDrafts || isBatchOpen || isBatchSubmitting || savingTeams[team.id]} onClick={() => setUnlockedTeams(prev => ({ ...prev, [team.id]: true }))}>{t('แก้ไขคะแนน', 'Edit Scores')}</Button>
+                                ) : (
+                                  <>
+                                    <Button size="sm" variant="secondary" disabled={isSavingAllDrafts || isBatchOpen || isBatchSubmitting || savingTeams[team.id]} onClick={() => cancelTeamChanges(team.id)}>{t('ยกเลิกการแก้ไข', 'Cancel Changes')}</Button>
+                                    <Button size="sm" variant="secondary" disabled={!isTeamEditable(team.id) || !isTeamAnswered(team.id)} isLoading={Boolean(savingTeams[team.id])} onClick={() => handleSaveChanges(team.id)}><Save className="h-3.5 w-3.5" />{t('บันทึกการแก้ไข', 'Save Changes')}</Button>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </th>
                         );
                       })}
@@ -1107,7 +1083,7 @@ export default function JudgeMultiEvaluation() {
                   </thead>
                   <tbody>
                     <tr className="border-b border-slate-200 bg-blue-50/60">
-                      <td className="sticky left-0 z-10 min-w-[300px] max-w-[380px] bg-blue-50 px-6 py-3.5 text-sm font-bold text-blue-900 shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
+                      <td className="sticky left-0 z-10 w-36 min-w-36 max-w-44 sm:w-auto sm:max-w-[380px] bg-blue-50 px-3 py-3.5 text-sm font-bold sm:px-6 text-blue-900 shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
                         {t(
                           'คะแนนรวมถ่วงน้ำหนัก (เต็ม 100)',
                           'Weighted Total Score (/100)'
@@ -1134,7 +1110,7 @@ export default function JudgeMultiEvaluation() {
                           className="border-b border-slate-200 hover:bg-slate-50/40"
                         >
                           {/* คอลัมน์ซ้ายสุด: ชื่อเกณฑ์ + ปุ่มพับ/กาง Rubric + ตารางระดับคะแนนเรียงเป็นแถวสะอาดตา */}
-                          <td className="sticky left-0 z-10 min-w-[300px] max-w-[380px] bg-white px-6 py-4 align-top shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
+                          <td className="sticky left-0 z-10 w-36 min-w-36 max-w-44 sm:w-auto sm:max-w-[380px] bg-white px-3 py-4 align-top sm:px-6 shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
                             <div className="flex items-start justify-between gap-2">
                               <p className="font-bold text-slate-900">
                                 {criterion.name}
@@ -1213,7 +1189,7 @@ export default function JudgeMultiEvaluation() {
                             return (
                               <td
                                 key={team.id}
-                                className="border-l border-slate-200 px-6 py-4 align-top"
+                                className="border-l border-slate-200 px-3 py-4 align-top sm:px-6"
                               >
                                 <div className="space-y-2.5">
                                   <CriterionScoreInput
@@ -1275,7 +1251,7 @@ export default function JudgeMultiEvaluation() {
                     })}
 
                     <tr className="border-b border-slate-200">
-                      <td className="sticky left-0 z-10 min-w-[300px] max-w-[380px] bg-white px-6 py-4 align-top shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
+                      <td className="sticky left-0 z-10 w-36 min-w-36 max-w-44 sm:w-auto sm:max-w-[380px] bg-white px-3 py-4 align-top sm:px-6 shadow-[1px_0_0_0_#e2e8f0] sm:min-w-[340px]">
                         <p className="font-bold text-slate-900">
                           {t('ข้อเสนอแนะภาพรวม', 'Overall Feedback')}
                         </p>
@@ -1289,7 +1265,7 @@ export default function JudgeMultiEvaluation() {
                       {displayedTeams.map((team) => (
                         <td
                           key={team.id}
-                          className="border-l border-slate-200 px-6 py-4 align-top"
+                          className="border-l border-slate-200 px-3 py-4 align-top sm:px-6"
                         >
                           <textarea
                             aria-label={`${t('ข้อเสนอแนะภาพรวม', 'Overall feedback')} ${team.name}`}
@@ -1316,29 +1292,35 @@ export default function JudgeMultiEvaluation() {
         </>
       )}
 
+      {eligibleTeams.length > 0 && <Card noPadding>
+        {dirtyTeamIds.length > 0 && <div role="status" className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:px-5">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div><p className="font-semibold">{t(`มีการแก้ไขที่ยังไม่บันทึก ${dirtyTeamIds.length} ทีม`, `${dirtyTeamIds.length} teams have unsaved changes`)}</p>
+            <p className="mt-1 text-xs">{t('รวมทีมที่ซ่อนด้วยตัวกรอง กรุณาบันทึกก่อนออกจากหน้า', 'Includes filtered-out teams. Save your work before leaving.')}</p>
+            {dirtyPublishedCount > 0 && <p className="mt-1 text-xs">{t(`มี ${dirtyPublishedCount} ทีมที่ส่งแล้วและเปิดแก้ไข ให้กด “บันทึกการแก้ไข” ที่หัวทีมนั้น`, `${dirtyPublishedCount} submitted teams have edits. Use “Save Changes” in their column headers.`)}</p>}
+          </div>
+        </div>}
+        <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div><h2 className="flex items-center gap-2 text-sm font-bold text-slate-800"><Save className="h-4 w-4 text-blue-600" />{t('บันทึกและส่งคะแนน', 'Save and submit evaluations')}</h2>
+            <p className="mt-2 text-xs leading-6 text-slate-500">{t(`บันทึกร่าง ${savedDraftCount} ทีม · พร้อมส่ง ${batchCandidates.ready.length} ทีม · ยังไม่พร้อม ${batchCandidates.incomplete.length} ทีม · ส่งแล้ว ${batchCandidates.submitted.length} ทีม`, `${savedDraftCount} saved drafts · ${batchCandidates.ready.length} ready · ${batchCandidates.incomplete.length} incomplete · ${batchCandidates.submitted.length} submitted`)}</p>
+            <p className="mt-1 text-xs text-slate-500">{t('บันทึกร่างทั้งหมดครอบคลุมทุกกลุ่ม รวมทีมที่ซ่อนอยู่ และไม่ส่งคะแนนเข้าจัดอันดับ', 'Save all drafts includes all groups and hidden teams, without publishing scores.')}</p>
+            {lastSave && <p role="status" className={`mt-2 text-xs font-medium ${lastSave.uncertain || lastSave.failed ? 'text-amber-800' : 'text-emerald-700'}`}>
+              {lastSave.uncertain ? t('ยังยืนยันผลไม่ได้ ข้อมูลที่กรอกยังอยู่ กรุณาลองอีกครั้ง', 'Save unconfirmed. Your input is retained; please retry.') :
+                `${lastSave.kind === 'submit' ? t('ส่งคะแนนสำเร็จ', 'Submitted') : lastSave.kind === 'draft' ? t('บันทึกร่างสำเร็จ', 'Drafts saved') : t('บันทึกการแก้ไขสำเร็จ', 'Changes saved')} ${lastSave.count} ${t('ทีม', 'teams')}${lastSave.failed ? t(` · ไม่สำเร็จ ${lastSave.failed} ทีม`, ` · ${lastSave.failed} failed`) : ''}`}
+              {' · '}{lastSave.at.toLocaleTimeString(lang === 'EN' ? 'en-GB' : 'th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </p>}
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+            <Button variant="secondary" isLoading={isSavingAllDrafts} disabled={!canEdit || !pendingDrafts.length || hasTeamSaves || isBatchOpen || isBatchSubmitting} onClick={handleSaveAllDrafts}><Save className="h-4 w-4" />{t(`บันทึกร่างทั้งหมด (${pendingDrafts.length} ทีม)`, `Save all drafts (${pendingDrafts.length} teams)`)}</Button>
+            <Button variant="secondary" disabled={isSavingAllDrafts || hasTeamSaves || isBatchSubmitting} onClick={openBatchReview}>{t('ตรวจความพร้อม', 'Review readiness')}</Button>
+            <Button disabled={!canEdit || !batchCandidates.ready.length || isSavingAllDrafts || hasTeamSaves || isBatchSubmitting} onClick={openBatchReview}><Send className="h-4 w-4" />{t(`ส่งทีมที่พร้อม (${batchCandidates.ready.length})`, `Submit ready teams (${batchCandidates.ready.length})`)}</Button>
+          </div>
+        </div>
+      </Card>}
+      {batchResults && !isBatchOpen && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/50 px-4 py-3 text-xs text-blue-800"><span>{t(`ผลการส่งล่าสุด: ยืนยันแล้ว ${batchResults.filter(result => result.outcome !== 'FAILED').length} ทีม · ไม่สำเร็จ ${batchResults.filter(result => result.outcome === 'FAILED').length} ทีม`, `Latest submission: ${batchResults.filter(result => result.outcome !== 'FAILED').length} confirmed · ${batchResults.filter(result => result.outcome === 'FAILED').length} failed`)}</span><Button variant="text" size="sm" onClick={() => setIsBatchOpen(true)}>{t('ดูผลรายทีม', 'View results')}</Button></div>}
+
       <BatchSubmissionDialog isOpen={isBatchOpen} snapshot={batchSnapshot} results={batchResults} error={batchError} busy={isBatchSubmitting} canSubmit={canEdit && !hasTeamSaves} onConfirm={() => sendBatch(false)} onRetry={() => sendBatch(true)} onClose={closeBatch} onFixTeam={fixIncompleteTeam} />
-      <ConfirmDialog
-        isOpen={isConfirmOpen}
-        isLoading={Boolean(savingTeams[confirmTeamId])}
-        isDanger={false}
-        title={t('ยืนยันการส่งคะแนน', 'Confirm Score Submission')}
-        message={t(
-          `ยืนยันการส่งคะแนน${
-            displayedTeams.find((team) => team.id === confirmTeamId)?.name
-              ? `ของทีม "${displayedTeams.find((team) => team.id === confirmTeamId).name}"`
-              : ''
-          } หรือไม่? สามารถแก้ไขคะแนนได้จนถึง deadline ขณะโครงการเปิดรับคะแนน`,
-          `Submit score for "${
-            displayedTeams.find((team) => team.id === confirmTeamId)?.name || 'this team'
-          }"? Scores can be edited until the deadline while the competition is active.`
-        )}
-        onConfirm={confirmSubmit}
-        onCancel={() => {
-          setIsConfirmOpen(false);
-          setConfirmTeamId(null);
-        }}
-        confirmText={t('ส่งคะแนน', 'Submit Score')}
-      />
+
     </div>
   );
 }

@@ -40,6 +40,12 @@ api.defaults.adapter = async (config) => {
       { teamId: teamB, outcome: 'FAILED', httpStatus: 409, message: 'Deadline passed', evaluation: null },
     ] }, status: 200, statusText: 'OK', headers: {}, config };
   }
+  if (config.method === 'post' && config.url === '/evaluations/draft-batch') {
+    return { data: { results: [
+      { teamId: teamA, outcome: 'DRAFT_SAVED', httpStatus: 200, evaluation: { ...evaluation, totalScore: 20, scores: [{ criterionId, scoreValue: 2, comment: 'A draft' }] } },
+      { teamId: teamB, outcome: 'FAILED', httpStatus: 409, message: 'Deadline passed', evaluation: null },
+    ] }, status: 200, statusText: 'OK', headers: {}, config };
+  }
 
   if (config.method === 'put' && config.url === '/competitions/' + id + '/teams/order') {
     const { teamIds } = JSON.parse(config.data);
@@ -91,6 +97,24 @@ test('evaluation writes use API score arrays and reload saved server results', a
   assert.deepEqual(request.body.scores, [{ criterionId, scoreValue: 8, comment: 'Good' }]);
   assert.equal('totalScore' in request.body, false, 'The server calculates totals');
   assert.equal(saved.totalScore, 80);
+  assert.equal(evaluations.getEvaluation(id, teamB, judgeId), undefined, 'Saving A must not create B');
+});
+
+test('draft-all sends one API request and applies only confirmed drafts, preserving failed teams', async () => {
+  await loadWorkspace(user);
+  const savedB = { id: 'saved-b', teamId: teamB, judgeId, status: 'DRAFT', scores: { [criterionId]: 9 }, totalScore: 90 };
+  workspace.details[id].evaluations.push(savedB);
+  const start = requests.length;
+  const result = await evaluations.saveDraftsBatch(id, [
+    { teamId: teamA, scores: { [criterionId]: 2 } },
+    { teamId: teamB, scores: {}, criteriaComments: { [criterionId]: 'Feedback before scoring' } },
+  ]);
+  assert.equal(requests.length - start, 1);
+  assert.equal(requests[start].url, '/evaluations/draft-batch');
+  assert.deepEqual(requests[start].body.teams[1].scores, [{ criterionId, scoreValue: null, comment: 'Feedback before scoring' }]);
+  assert.equal(result[1].outcome, 'FAILED');
+  assert.equal(evaluations.getEvaluation(id, teamA, judgeId).scores[criterionId], 2);
+  assert.equal(evaluations.getEvaluation(id, teamB, judgeId), savedB);
 });
 
 test('failed writes reject and leave the server cache unchanged', async () => {

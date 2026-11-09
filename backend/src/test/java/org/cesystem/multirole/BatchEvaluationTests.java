@@ -72,6 +72,43 @@ class BatchEvaluationTests {
     }
     JsonNode mine(Fixture f, String team) throws Exception { return call("GET", "/evaluations/competition/" + f.id + "/team/" + team + "/mine", f.judge, null, 200); }
 
+    @Test void savingOneDraftDoesNotCreateOrChangeAnyOtherTeamsDraft() throws Exception {
+        var f = fixture();
+        var draftA = new HashMap<>(entry(f, f.a, 3)); draftA.put("competitionId", f.id); draftA.put("status", "DRAFT");
+        call("POST", "/evaluations/save", f.judge, draftA, 200);
+        var onlyA = call("GET", "/evaluations/competition/" + f.id + "/mine", f.judge, null, 200);
+        assertEquals(1, onlyA.size());
+        assertEquals(f.a, onlyA.get(0).path("teamId").asText());
+        var draftB = new HashMap<>(entry(f, f.b, 9)); draftB.put("competitionId", f.id); draftB.put("status", "DRAFT");
+        call("POST", "/evaluations/save", f.judge, draftB, 200);
+        var beforeB = mine(f, f.b);
+        draftA.put("scores", List.of(Map.of("criterionId", f.criterion, "scoreValue", 1)));
+        call("POST", "/evaluations/save", f.judge, draftA, 200);
+        assertEquals(beforeB, mine(f, f.b));
+        assertEquals(8, mine(f, f.a).path("totalScore").asDouble());
+    }
+
+    @Test void draftBatchAllowsIncompleteWorkButNeverOverwritesPublishedScoresAndReportsFailures() throws Exception {
+        var f = fixture();
+        batch(f, List.of(entry(f, f.a, 8)));
+        var publishedA = mine(f, f.a);
+        var incompleteB = Map.of("teamId", f.b, "scores", List.of(Map.of("criterionId", f.criterion, "scoreValue", 0)));
+        var response = call("POST", "/evaluations/draft-batch", f.judge, Map.of("competitionId", f.id,
+            "teams", List.of(entry(f, f.a, 1), incompleteB, entry(f, f.unassigned, 7))), 200).path("results");
+        assertEquals("ALREADY_SUBMITTED", response.get(0).path("outcome").asText());
+        assertEquals(publishedA, mine(f, f.a));
+        assertEquals("DRAFT_SAVED", response.get(1).path("outcome").asText());
+        assertEquals("DRAFT", mine(f, f.b).path("status").asText());
+        assertEquals(0, mine(f, f.b).path("totalScore").asDouble());
+        assertEquals(403, response.get(2).path("httpStatus").asInt());
+        var ownerVisible = call("GET", "/evaluations/competition/" + f.id, f.owner, null, 200);
+        assertEquals(1, ownerVisible.size(), "Another judge's draft is private and cannot enter the owner's leaderboard");
+        call("POST", "/evaluations/draft-batch", f.judge, Map.of("competitionId", f.id, "teams", List.of(incompleteB, incompleteB)), 400);
+        call("PATCH", "/competitions/" + f.id + "/status", f.owner, Map.of("status", "CLOSED"), 200);
+        var closed = call("POST", "/evaluations/draft-batch", f.judge, Map.of("competitionId", f.id, "teams", List.of(incompleteB)), 200);
+        assertEquals(409, closed.path("results").get(0).path("httpStatus").asInt());
+    }
+
     @Test void partialFailureCommitsSuccessAndPreservesFailedDraft() throws Exception {
         var f = fixture();
         var draft = new HashMap<>(entry(f, f.b, 7)); draft.put("competitionId", f.id); draft.put("status", "DRAFT");

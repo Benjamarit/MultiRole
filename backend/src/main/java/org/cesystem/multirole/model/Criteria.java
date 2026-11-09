@@ -39,4 +39,7 @@ public class Criteria {
 
     @Column(nullable = false, precision = 5, scale = 2)
     private BigDecimal weightPercentage;
+
+    // Explicit persisted ordering; nullable for databases created before ordering was supported.
+    private Integer displayOrder;
 }

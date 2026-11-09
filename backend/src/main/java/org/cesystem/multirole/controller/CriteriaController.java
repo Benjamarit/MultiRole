@@ -55,8 +55,33 @@ public class CriteriaController {
 
         Criteria criteria = new Criteria();
         criteria.setCompetition(competition);
+        List<Criteria> existing = criteriaRepository.findByCompetition_CompetitionId(competitionId);
+        // Backfill legacy rows once. Their historical insertion order was never stored.
+        int lastOrder = existing.stream().map(Criteria::getDisplayOrder).filter(java.util.Objects::nonNull)
+                .mapToInt(Integer::intValue).max().orElse(0);
+        for (Criteria previous : existing) {
+            if (previous.getDisplayOrder() == null) previous.setDisplayOrder(++lastOrder);
+        }
+        criteria.setDisplayOrder(lastOrder + 1);
         apply(criteria, request, competitionId, null);
         return CriteriaResponse.from(criteriaRepository.save(criteria));
+    }
+
+    @PutMapping("/order")
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public List<CriteriaResponse> reorder(@PathVariable UUID competitionId,
+            @RequestBody org.cesystem.multirole.dto.ApiDtos.CriteriaOrderRequest request, Principal principal) {
+        policy.requireEditable(access.requireCompetitionAdmin(competitionId, access.currentUser(principal)));
+        List<Criteria> criteria = criteriaRepository.findByCompetition_CompetitionId(competitionId);
+        List<UUID> ids = request.criterionIds();
+        var byId = criteria.stream().collect(java.util.stream.Collectors.toMap(Criteria::getCriterionId, c -> c));
+        if (ids == null || ids.size() != criteria.size() || new java.util.HashSet<>(ids).size() != ids.size()
+                || !byId.keySet().equals(new java.util.HashSet<>(ids))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "กรุณาส่งลำดับเกณฑ์ทุกข้อในโครงการโดยไม่ซ้ำกัน");
+        }
+        for (int i = 0; i < ids.size(); i++) byId.get(ids.get(i)).setDisplayOrder(i + 1);
+        criteriaRepository.saveAll(criteria);
+        return ids.stream().map(byId::get).map(CriteriaResponse::from).toList();
     }
 
     @PutMapping("/{criterionId}")

@@ -27,6 +27,7 @@ import { getRegisteredUsers } from '../context/authStore';
 import { normalizedScore } from '../data/evaluations/Scoring';
 import { loadProject } from '../api/workspace';
 import { useAuth } from '../context/AuthContext';
+import { rankEvaluatedTeams } from '../data/evaluations/Ranking';
 
 const EMPTY_ASSIGNMENTS = [];
 
@@ -94,16 +95,14 @@ export default function ProjectLeaderboard() {
       };
     });
 
-    return data
-      .sort((a, b) => b.averageScore - a.averageScore)
-      .map((team, index) => ({ ...team, rank: index + 1 }));
+    return rankEvaluatedTeams(data);
   }, [id, teams, evaluations, assignments, criteria]);
 
   // จัดเรียงลำดับแท่นโพเดียม: ซ้าย = อันดับ 2, กลาง = อันดับ 1 (สูงสุด), ขวา = อันดับ 3
   const podiumSlots = [
     {
       targetRank: 2,
-      team: leaderboard[1] || null,
+      teams: leaderboard.filter(team => team.rank === 2),
       label: t('รองชนะเลิศอันดับ 1', '1st Runner-Up'),
       subLabel: '2nd Place',
       icon: Medal,
@@ -119,7 +118,7 @@ export default function ProjectLeaderboard() {
     },
     {
       targetRank: 1,
-      team: leaderboard[0] || null,
+      teams: leaderboard.filter(team => team.rank === 1),
       label: t('ชนะเลิศอันดับ 1', 'Champion'),
       subLabel: '1st Place',
       icon: Crown,
@@ -136,7 +135,7 @@ export default function ProjectLeaderboard() {
     },
     {
       targetRank: 3,
-      team: leaderboard[2] || null,
+      teams: leaderboard.filter(team => team.rank === 3),
       label: t('รองชนะเลิศอันดับ 2', '2nd Runner-Up'),
       subLabel: '3rd Place',
       icon: Award,
@@ -151,6 +150,7 @@ export default function ProjectLeaderboard() {
       orderClass: 'order-3 sm:order-3',
     },
   ];
+  const podiumGroups = podiumSlots.filter(slot => slot.teams.length > 0);
 
   // ดาวน์โหลดแบบที่ 1: สรุปผลจัดอันดับ (Summary CSV)
   const handleExportSummaryCSV = () => {
@@ -440,10 +440,9 @@ export default function ProjectLeaderboard() {
           </div>
 
           {/* โครงสร้างแท่นโพเดียม 3 คอลัมน์ (2 - 1 - 3) */}
-          <div className="relative z-10 mx-auto grid max-w-4xl grid-cols-1 items-end gap-4 sm:grid-cols-3 sm:gap-5">
-            {podiumSlots.map((slot) => {
+          <div className={`relative z-10 mx-auto grid max-w-4xl grid-cols-1 items-end gap-4 sm:gap-5 ${podiumGroups.length === 1 ? 'sm:max-w-md' : podiumGroups.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+            {podiumGroups.map((slot) => {
               const Icon = slot.icon;
-              const team = slot.team;
               const isFirst = slot.targetRank === 1;
 
               return (
@@ -471,8 +470,8 @@ export default function ProjectLeaderboard() {
                       {slot.label}
                     </span>
 
-                    {team ? (
-                      <>
+                    {slot.teams.map(team => (
+                      <div key={team.id} className="mt-3 border-t border-slate-200 pt-2">
                         <h3
                           className={`mt-2 truncate font-extrabold text-slate-900 ${
                             isFirst ? 'text-xl' : 'text-base'
@@ -515,12 +514,8 @@ export default function ProjectLeaderboard() {
                             </Badge>
                           )}
                         </div>
-                      </>
-                    ) : (
-                      <div className="py-6 text-xs text-slate-400">
-                        {t('ยังไม่มีทีมในอันดับนี้', 'No team in this slot yet')}
                       </div>
-                    )}
+                    ))}
                   </div>
 
                   {/* แท่นยืนโพเดียม (Stepped Pedestal Block) */}
@@ -535,11 +530,9 @@ export default function ProjectLeaderboard() {
                         {slot.subLabel}
                       </span>
                     </div>
-                    {team && (
-                      <div className="w-full truncate rounded-lg bg-black/15 px-2.5 py-1 text-center text-xs font-semibold backdrop-blur-2xs">
-                        {team.name}
-                      </div>
-                    )}
+                    <div className="w-full rounded-lg bg-black/15 px-2.5 py-1 text-center text-xs font-semibold backdrop-blur-2xs">
+                      {slot.teams.length > 1 ? t(`อันดับร่วม ${slot.teams.length} ทีม`, `${slot.teams.length} teams tied`) : slot.teams[0].name}
+                    </div>
                   </div>
                 </div>
               );

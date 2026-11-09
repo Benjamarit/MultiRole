@@ -20,6 +20,14 @@ public class BatchEvaluationService {
 
     // Deliberately no outer transaction: every entry has its own commit/rollback boundary.
     public BatchEvaluationDtos.Response submit(BatchEvaluationDtos.Request request, Principal principal) {
+        return save(request, principal, false);
+    }
+
+    public BatchEvaluationDtos.Response saveDrafts(BatchEvaluationDtos.Request request, Principal principal) {
+        return save(request, principal, true);
+    }
+
+    private BatchEvaluationDtos.Response save(BatchEvaluationDtos.Request request, Principal principal, boolean draft) {
         var user = access.currentUser(principal);
         if (request == null || request.competitionId() == null || request.teams() == null || request.teams().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "กรุณาระบุโครงการและทีมที่จะส่งคะแนน");
@@ -39,7 +47,8 @@ public class BatchEvaluationService {
             evaluation.setComment(entry.comment());
             evaluation.setScores(entry.scores());
             try {
-                results.add(evaluations.submitUnsubmitted(evaluation, user.getEmail()));
+                results.add(draft ? evaluations.saveDraftUnsubmitted(evaluation, user.getEmail())
+                        : evaluations.submitUnsubmitted(evaluation, user.getEmail()));
             } catch (ResponseStatusException error) {
                 results.add(new BatchEvaluationDtos.Result(entry.teamId(), "FAILED", error.getStatusCode().value(),
                         error.getReason(), null));

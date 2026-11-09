@@ -85,6 +85,12 @@ public class EvaluationController {
         }
     }
 
+    @PostMapping("/draft-batch")
+    public org.cesystem.multirole.dto.BatchEvaluationDtos.Response saveDraftBatch(
+            @RequestBody org.cesystem.multirole.dto.BatchEvaluationDtos.Request request, Principal principal) {
+        return batchEvaluationService.saveDrafts(request, principal);
+    }
+
     /**
      * ผลประเมินของการแข่งขัน: ผู้ดูแลเห็นเฉพาะใบที่ส่งแล้ว (SUBMITTED) ส่วนฉบับร่างเป็นของกรรมการ
      * กรรมการเห็นเฉพาะใบของตัวเอง ผู้ดูแลที่เป็นกรรมการด้วยเห็นฉบับร่างของตัวเองได้

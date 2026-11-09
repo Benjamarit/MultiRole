@@ -253,6 +253,7 @@ export default function ProjectJudges() {
 
       <JudgeAssignModal
         isOpen={isAssignOpen}
+        isAssigning={isAssigning}
         availableUsers={availableJudges}
         onAssign={handleAssignJudge}
         onClose={() => setIsAssignOpen(false)}

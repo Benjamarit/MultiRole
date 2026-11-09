@@ -80,6 +80,28 @@ class CriteriaPolicyTests {
         call("POST", f.path() + "/criteria", f.token, criterion("Replacement", 10), 200);
     }
 
+    @Test void criteriaAppendInCreationOrderAndReorderPersistsWithoutChangingScoresOrWeights() throws Exception {
+        var f = fixture();
+        var first = new HashMap<>(criterion("First", 10)); first.put("weightPercentage", 40);
+        call("PUT", f.path() + "/criteria/" + f.criterionId, f.token, first, 200);
+        var secondBody = new HashMap<>(criterion("Zulu", 10)); secondBody.put("weightPercentage", 30);
+        String second = call("POST", f.path() + "/criteria", f.token, secondBody, 200).path("criterionId").asText();
+        var thirdBody = new HashMap<>(criterion("Alpha", 10)); thirdBody.put("weightPercentage", 30);
+        String third = call("POST", f.path() + "/criteria", f.token, thirdBody, 200).path("criterionId").asText();
+        var before = call("GET", f.path() + "/criteria", f.token, null, 200);
+        assertEquals(List.of(f.criterionId, second, third), java.util.stream.StreamSupport.stream(before.spliterator(), false).map(c -> c.path("criterionId").asText()).toList());
+        call("PUT", f.path() + "/criteria/order", f.token, Map.of("criterionIds", List.of(third, f.criterionId, second)), 200);
+        var after = call("GET", f.path() + "/criteria", f.token, null, 200);
+        assertEquals(third, after.get(0).path("criterionId").asText());
+        assertEquals(1, after.get(0).path("displayOrder").asInt());
+        assertEquals(40, after.get(1).path("weightPercentage").asInt());
+        call("PUT", f.path() + "/criteria/order", f.token, Map.of("criterionIds", List.of(third, third, second)), 400);
+        call("PUT", f.path() + "/criteria/order", f.token, Map.of("criterionIds", List.of(third, f.criterionId, UUID.randomUUID().toString())), 400);
+        assertEquals(after, call("GET", f.path() + "/criteria", f.token, null, 200));
+        status(f, "ACTIVE", 200);
+        call("PUT", f.path() + "/criteria/order", f.token, Map.of("criterionIds", List.of(f.criterionId, second, third)), 409);
+    }
+
     @Test void openingLocksEveryCriteriaWriteEvenWithoutScoresAndAcrossPausesAndClosure() throws Exception {
         var f = fixture();
         assertTrue(status(f, "ACTIVE", 200).path("criteriaLocked").asBoolean());

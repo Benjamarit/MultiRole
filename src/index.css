@@ -39,3 +39,9 @@ body {
 	outline: 2px solid #2563EB;
 	outline-offset: 2px;
 }
+
+/* The search field's parent already provides the visible focus indicator. */
+.judge-user-picker-input:focus-visible {
+	outline: none;
+	outline-offset: 0;
+}

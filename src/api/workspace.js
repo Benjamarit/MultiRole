@@ -15,7 +15,7 @@ export const normalizeUser = (u) => ({ ...u, id: u.userId || u.id, name: u.fullN
   role: u.role === 'ADMIN' ? 'SYSTEM_ADMIN' : u.role,
   status: u.status?.toUpperCase() === 'SUSPENDED' ? 'Suspended' : 'Active' });
 export const normalizeTeam = (t) => ({ id: t.teamId, name: t.teamName, description: t.projectDescription || '', link: t.projectUrl || '', displayOrder: t.displayOrder ?? null });
-export const normalizeCriterion = (c) => ({ id: c.criterionId, name: c.title, description: c.description || '', type: c.scoringType, maxScore: c.maxScore, weight: c.weightPercentage });
+export const normalizeCriterion = (c) => ({ id: c.criterionId, name: c.title, description: c.description || '', type: c.scoringType, maxScore: c.maxScore, weight: c.weightPercentage, displayOrder: c.displayOrder ?? null });
 export const normalizeEvaluation = (e) => ({ ...e, id: e.evaluationId, projectId: e.competitionId,
   judgeName: resolveJudgeIdentity(e, detail(e.competitionId).members).name,
   judgeEmail: resolveJudgeIdentity(e, detail(e.competitionId).members).email,

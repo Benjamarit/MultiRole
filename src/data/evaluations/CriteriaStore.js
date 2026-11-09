@@ -15,3 +15,7 @@ export async function deleteCriterion(id, criterionId) {
   await api.delete(projectPath(id) + '/criteria/' + criterionId);
   await loadProject(id);
 }
+export async function reorderCriteria(id, criterionIds) {
+  await api.put(projectPath(id) + '/criteria/order', { criterionIds });
+  await loadProject(id);
+}

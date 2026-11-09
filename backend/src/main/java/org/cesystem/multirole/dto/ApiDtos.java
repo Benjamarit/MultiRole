@@ -40,13 +40,14 @@ public final class ApiDtos {
     // ---------- Criteria ----------
     public record CriteriaRequest(String title, String description, String scoringType,
                                   BigDecimal maxScore, BigDecimal weightPercentage) {}
+    public record CriteriaOrderRequest(List<UUID> criterionIds) {}
 
     public record CriteriaResponse(UUID criterionId, UUID competitionId, String title, String description,
-                                   String scoringType, BigDecimal maxScore, BigDecimal weightPercentage) {
+                                   String scoringType, BigDecimal maxScore, BigDecimal weightPercentage, Integer displayOrder) {
         public static CriteriaResponse from(Criteria c) {
             return new CriteriaResponse(c.getCriterionId(), c.getCompetition().getCompetitionId(),
                     c.getTitle(), c.getDescription(), c.getScoringType(), c.getMaxScore(),
-                    c.getWeightPercentage());
+                    c.getWeightPercentage(), c.getDisplayOrder());
         }
     }
 

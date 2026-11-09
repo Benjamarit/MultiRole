@@ -81,6 +81,17 @@ public class EvaluationService {
         return judge;
     }
 
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
+            isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public org.cesystem.multirole.dto.BatchEvaluationDtos.Result saveDraftUnsubmitted(EvaluationRequest request, String judgeEmail) {
+        request.setStatus(DRAFT);
+        SaveOutcome saved = persistEvaluation(request, lockJudge(judgeEmail), true);
+        return new org.cesystem.multirole.dto.BatchEvaluationDtos.Result(request.getTeamId(),
+                saved.alreadySubmitted() ? "ALREADY_SUBMITTED" : "DRAFT_SAVED", 200,
+                saved.alreadySubmitted() ? "ทีมนี้ส่งคะแนนแล้ว จึงไม่บันทึกทับ" : "บันทึกร่างสำเร็จ",
+                org.cesystem.multirole.dto.ApiDtos.EvaluationResponse.from(saved.evaluation()));
+    }
+
     private SaveOutcome persistEvaluation(EvaluationRequest request, User judge, boolean onlyUnsubmitted) {
         if (request == null || request.getCompetitionId() == null || request.getTeamId() == null) {
             throw bad("กรุณาระบุการแข่งขันและทีม");
