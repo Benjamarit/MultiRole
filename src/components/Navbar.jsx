@@ -12,6 +12,16 @@ import {
   MoreHorizontal,
   Trophy,
   X,
+  LayoutDashboard,
+  Users,
+  Scale,
+  UserCheck,
+  ClipboardList,
+  BarChart3,
+  LayoutGrid,
+  ListChecks,
+  ShieldCheck,
+  Plus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { workspace, refreshNotifications } from '../api/workspace';
@@ -113,26 +123,37 @@ function getProjectNavigation(projectId, email, t) {
 }
 
 function NavigationLink({ item, onNavigate, mobile = false }) {
+  const Icon = item.icon || (item.path.endsWith('/leaderboard') ? Trophy
+    : item.path.endsWith('/assignments') ? UserCheck
+    : item.path.endsWith('/judges') ? Scale
+    : item.path.endsWith('/criteria') ? ClipboardList
+    : item.path.endsWith('/evaluations') ? BarChart3
+    : item.path.endsWith('/evaluate-multi') ? LayoutGrid
+    : item.path.endsWith('/scores') ? ListChecks
+    : item.path.endsWith('/teams') ? Users
+    : item.path === '/admin/users' ? ShieldCheck
+    : item.path === '/projects/new' ? Plus : LayoutDashboard);
   return (
     <NavLink
       to={item.path}
       end
       onClick={onNavigate}
       className={({ isActive }) =>
-        `flex items-center whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-precision-blue ${
+        `relative flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-medium transition-colors motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
           mobile
-            ? `w-full rounded-lg border-l-2 border-b-0 px-4 py-3 ${
+            ? `my-1 w-full px-4 py-3 ${
                 isActive
-                  ? 'border-l-precision-blue bg-blue-50/80 font-semibold text-precision-blue'
-                  : 'border-l-transparent text-slate-700 hover:bg-slate-50'
+                  ? 'border-blue-300 bg-blue-100 font-semibold text-blue-900'
+                  : 'border-transparent bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50'
               }`
             : isActive
-              ? 'border-precision-blue font-semibold text-precision-blue'
-              : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-primary-text'
+              ? 'border-blue-300 bg-blue-100 font-semibold text-blue-900 shadow-xs after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-blue-600'
+              : 'border-slate-200/90 bg-white text-slate-700 shadow-2xs hover:border-blue-300 hover:bg-blue-50 hover:text-blue-900'
         }`
       }
       aria-label={item.label}
     >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       {item.label}
     </NavLink>
   );
@@ -153,15 +174,15 @@ function ProjectSelector({
   if (!project) return null;
 
   return (
-    <div className={`relative ${mobile ? 'w-full' : ''}`}>
+    <div className="relative w-full">
       <button
         ref={triggerRef}
         type="button"
         onClick={onToggle}
-        className={`group flex min-w-0 items-center gap-3 rounded-xl border border-slate-200/90 bg-slate-50/60 text-left shadow-2xs transition-all hover:border-blue-200 hover:bg-blue-50/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-precision-blue ${
-          mobile ? 'w-full px-3 py-2.5' : 'w-full max-w-[22rem] px-3 py-1.5'
+        className={`group flex min-h-11 min-w-0 items-center gap-2.5 rounded-xl border border-blue-300 bg-white text-left shadow-xs transition-colors hover:border-blue-400 hover:bg-blue-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+          mobile ? 'w-full px-3 py-2.5' : 'w-full px-3 py-1.5'
         }`}
-        aria-label="Current competition"
+        aria-label={t(`สลับโครงการ: ${project.name}`, `Switch competition: ${project.name}`)}
         aria-haspopup="true"
         aria-expanded={isOpen}
         aria-controls={menuId}
@@ -280,7 +301,7 @@ export default function Navbar() {
             type: 'workspace',
             items: [
               {
-                label: t('พื้นที่ทำงาน', 'Workspace', { compact: true }),
+                label: t('แดชบอร์ด', 'Dashboard', { compact: true }),
                 path: '/workspace',
                 section: 'Overview',
               },
@@ -496,29 +517,6 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {project && projects.length > 0 && (
-          <div className="hidden min-w-0 flex-1 pl-4 md:block" ref={projectDesktopRef}>
-            <ProjectSelector
-              project={project}
-              projects={projects}
-              isOpen={isProjectOpen}
-              triggerRef={projectDesktopButtonRef}
-              menuId="competition-picker-desktop"
-              userEmail={user?.email}
-              t={t}
-              onToggle={() =>
-                updateMenuState({
-                  projectOpen: !isProjectOpen,
-                  notifOpen: false,
-                  profileOpen: false,
-                  moreOpen: false,
-                })
-              }
-              onSelect={navigateToProject}
-            />
-          </div>
-        )}
-
         <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
           <LanguageSwitcher />
 
@@ -687,7 +685,7 @@ export default function Navbar() {
                       className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100"
                     >
                       <Building2 className="h-4 w-4 text-slate-500" aria-hidden="true" />
-                      {t('กลับหน้า Workspace รวม', 'All Competitions (Workspace)', { compact: true })}
+                      {t('กลับหน้าแดชบอร์ด', 'Back to Dashboard', { compact: true })}
                     </button>
                   )}
                   <button
@@ -746,29 +744,52 @@ export default function Navbar() {
         </div>
       )}
 
-      <div className="hidden border-t border-slate-100 bg-slate-50/40 md:block">
+      <div className="hidden border-t border-blue-100 bg-blue-50/80 md:block">
         <nav
-          className="mx-auto flex h-12 max-w-[1600px] items-stretch justify-between gap-2 overflow-visible px-4 sm:px-6"
-          aria-label="Primary navigation"
+          className="mx-auto flex min-h-16 max-w-[1600px] items-center gap-3 px-4 py-2 sm:px-6"
+          aria-label={t('เมนูลัด', 'Quick navigation')}
         >
-          <div className="flex min-w-0 items-stretch">
+        {project && projects.length > 0 && (
+          <div className="min-w-0 w-52 shrink-0 border-r border-blue-200 pr-3 xl:w-60" ref={projectDesktopRef}>
+            <ProjectSelector
+              project={project}
+              projects={projects}
+              isOpen={isProjectOpen}
+              triggerRef={projectDesktopButtonRef}
+              menuId="competition-picker-desktop"
+              userEmail={user?.email}
+              t={t}
+              onToggle={() =>
+                updateMenuState({
+                  projectOpen: !isProjectOpen,
+                  notifOpen: false,
+                  profileOpen: false,
+                  moreOpen: false,
+                })
+              }
+              onSelect={navigateToProject}
+            />
+          </div>
+        )}
+          <span className="hidden shrink-0 text-xs font-semibold text-blue-800 2xl:block">{t('เมนูลัด', 'Quick links')}</span>
+          <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overscroll-x-contain p-1">
             {navigation.items.map((item, index) => (
               <div
                 key={item.path}
                 className={`flex items-stretch ${
                   index > 0 && item.section !== navigation.items[index - 1].section
-                    ? 'border-l border-slate-200/80 pl-2'
+                    ? 'border-l border-blue-200 pl-2'
                     : ''
                 }`}
               >
-                <div className={`${index < 4 ? '' : 'hidden lg:flex'} items-stretch`}>
+                <div className={`${index < 4 ? '' : 'hidden xl:flex'} items-stretch`}>
                   <NavigationLink item={item} />
                 </div>
               </div>
             ))}
           </div>
           {tabletMoreItems.length > 0 && (
-            <div className="relative flex items-center lg:hidden" ref={moreRef}>
+            <div className="relative flex shrink-0 items-center xl:hidden" ref={moreRef}>
               <button
                 ref={moreButtonRef}
                 type="button"
@@ -780,7 +801,7 @@ export default function Navbar() {
                     projectOpen: false,
                   });
                 }}
-                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                className={`flex min-h-11 items-center gap-1 rounded-lg border px-3 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${tabletMoreItems.some(item => item.path === location.pathname) ? 'border-blue-300 bg-blue-100 text-blue-900' : 'border-blue-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-100'}`}
                 aria-haspopup="menu"
                 aria-expanded={isMoreOpen}
               >
@@ -801,10 +822,10 @@ export default function Navbar() {
                       role="menuitem"
                       onClick={() => updateMenuState({ moreOpen: false })}
                       className={({ isActive }) =>
-                        `block rounded-lg px-3 py-2 text-sm font-medium ${
+                        `flex min-h-11 items-center rounded-lg border px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-blue-600 ${
                           isActive
-                            ? 'bg-blue-50 text-precision-blue'
-                            : 'text-slate-700 hover:bg-slate-50'
+                            ? 'border-blue-300 bg-blue-100 text-blue-900'
+                            : 'border-transparent text-slate-700 hover:bg-blue-50'
                         }`
                       }
                     >
@@ -822,7 +843,7 @@ export default function Navbar() {
         <nav
           id="primary-navigation-mobile"
           ref={mobileNavRef}
-          className="absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-slate-200 bg-surface shadow-xl md:hidden"
+          className="absolute inset-x-0 top-full z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-blue-200 bg-blue-50 shadow-xl md:hidden"
           aria-label="Primary navigation"
         >
           <div className="mx-auto max-w-[1600px] px-4 py-3">
@@ -857,7 +878,7 @@ export default function Navbar() {
                   ) : (
                     <NavigationLink
                       item={{
-                        label: t('พื้นที่ทำงาน', 'Workspace', { compact: true }),
+                        label: t('แดชบอร์ด', 'Dashboard', { compact: true }),
                         path: '/workspace',
                       }}
                       mobile
@@ -890,7 +911,7 @@ export default function Navbar() {
                   ))}
                   <NavigationLink
                     item={{
-                      label: t('พื้นที่ทำงานรวม', 'Workspace', { compact: true }),
+                      label: t('แดชบอร์ด', 'Dashboard', { compact: true }),
                       path: '/workspace',
                     }}
                     mobile

@@ -80,6 +80,70 @@ class CriteriaPolicyTests {
         call("POST", f.path() + "/criteria", f.token, criterion("Replacement", 10), 200);
     }
 
+    Map<String, Object> batchEntry(JsonNode row) {
+        var entry = new HashMap<String, Object>();
+        for (String field : List.of("criterionId", "title", "description", "scoringType", "maxScore", "weightPercentage", "displayOrder")) {
+            JsonNode value = row.path(field);
+            if (!value.isMissingNode() && !value.isNull()) entry.put(field, value);
+        }
+        return entry;
+    }
+
+    @Test void criteriaBatchCreatesEditsReordersDeletesAndRejectsStaleBaseline() throws Exception {
+        var f = fixture();
+        var baseline = call("GET", f.path() + "/criteria", f.token, null, 200);
+        var existing = batchEntry(baseline.get(0)); existing.put("weightPercentage", 60);
+        var added = new HashMap<>(criterion("Impact", 10)); added.put("weightPercentage", 40);
+        var saved = call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(added, existing), "expectedCriteria", List.of(batchEntry(baseline.get(0)))), 200);
+        assertEquals(2, saved.size());
+        assertEquals("Impact", saved.get(0).path("title").asText());
+        assertEquals(f.criterionId, saved.get(1).path("criterionId").asText());
+        assertEquals(2, saved.get(1).path("displayOrder").asInt());
+        call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(), "expectedCriteria", List.of(batchEntry(baseline.get(0)))), 409);
+        var updated = batchEntry(saved.get(1)); updated.put("title", "Updated"); updated.put("weightPercentage", 100);
+        var single = call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(updated), "expectedCriteria", List.of(batchEntry(saved.get(0)), batchEntry(saved.get(1)))), 200);
+        assertEquals(1, single.size());
+        assertEquals("Updated", single.get(0).path("title").asText());
+        assertEquals(f.criterionId, single.get(0).path("criterionId").asText());
+        call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(), "expectedCriteria", List.of(batchEntry(single.get(0)))), 200);
+        assertEquals(0, call("GET", f.path() + "/criteria", f.token, null, 200).size());
+    }
+
+    @Test void invalidCriteriaBatchRollsBackAndActivatedProjectRejectsBatch() throws Exception {
+        var f = fixture();
+        var baseline = batchEntry(call("GET", f.path() + "/criteria", f.token, null, 200).get(0));
+        var edited = new HashMap<>(baseline); edited.put("title", "Must roll back");
+        call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(edited, criterion("Extra", 10)), "expectedCriteria", List.of(baseline)), 400);
+        assertEquals("Quality", call("GET", f.path() + "/criteria", f.token, null, 200).get(0).path("title").asText());
+        call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(edited, edited), "expectedCriteria", List.of(baseline)), 400);
+        assertEquals("Quality", call("GET", f.path() + "/criteria", f.token, null, 200).get(0).path("title").asText());
+        status(f, "ACTIVE", 200);
+        call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(edited), "expectedCriteria", List.of(baseline)), 409);
+    }
+
+    @Test void criteriaBatchRejectsForeignIdsJudgesAndConcurrentEdits() throws Exception {
+        var f = fixture(); var other = fixture();
+        var baseline = batchEntry(call("GET", f.path() + "/criteria", f.token, null, 200).get(0));
+        var foreign = new HashMap<>(baseline); foreign.put("criterionId", other.criterionId);
+        call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(foreign), "expectedCriteria", List.of(baseline)), 400);
+        String otherEmail = call("GET", "/auth/me", other.token, null, 200).path("email").asText();
+        call("POST", f.path() + "/members", f.token, Map.of("email", otherEmail, "role", "JUDGE"), 200);
+        call("PUT", f.path() + "/criteria/batch", other.token,
+                Map.of("criteria", List.of(baseline), "expectedCriteria", List.of(baseline)), 403);
+        call("PUT", f.path() + "/criteria/" + f.criterionId, f.token, criterion("Changed elsewhere", 20), 200);
+        call("PUT", f.path() + "/criteria/batch", f.token,
+                Map.of("criteria", List.of(baseline), "expectedCriteria", List.of(baseline)), 409);
+        assertEquals("Changed elsewhere", call("GET", f.path() + "/criteria", f.token, null, 200).get(0).path("title").asText());
+    }
+
     @Test void criteriaAppendInCreationOrderAndReorderPersistsWithoutChangingScoresOrWeights() throws Exception {
         var f = fixture();
         var first = new HashMap<>(criterion("First", 10)); first.put("weightPercentage", 40);

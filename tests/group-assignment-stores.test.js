@@ -28,6 +28,9 @@ const evaluation = { evaluationId: 'evaluation-uuid', competitionId: id, teamId:
 api.defaults.adapter = async (config) => {
   requests.push({ method: config.method, url: config.url, body: config.data ? JSON.parse(config.data) : undefined });
   if (failure) throw new Error('Server unavailable');
+  if (config.method === 'put' && config.url === '/competitions/' + id + '/criteria/batch') {
+    return { data: JSON.parse(config.data).criteria.map((entry, index) => ({ ...entry, criterionId: entry.criterionId || `new-${index}`, displayOrder: index + 1 })), status: 200, statusText: 'OK', headers: {}, config };
+  }
   if (config.method === 'put' && config.url === '/competitions/' + id + '/teams/group') {
     const body = JSON.parse(config.data);
     return { data: { movedCount: body.teamIds.length, unchangedCount: 0, groups: [
@@ -73,6 +76,22 @@ api.defaults.adapter = async (config) => {
   assert.ok(config.url in paths, 'Unexpected endpoint: ' + config.url);
   return { data: paths[config.url], status: 200, statusText: 'OK', headers: {}, config };
 };
+
+test('criteria batch uses one request, updates cache on success and preserves it on failure', async () => {
+  await loadWorkspace(user);
+  const baseline = criteria.getCriteriaByProject(id);
+  const start = requests.length;
+  const saved = await criteria.saveCriteriaBatch(id, [{ ...baseline[0], weight: 60 }, { id: 'local-extra', name: 'Impact', type: 'STAR', maxScore: 5, weight: 40 }], baseline);
+  assert.equal(requests.length - start, 1);
+  assert.equal(requests[start].url, '/competitions/' + id + '/criteria/batch');
+  assert.equal(requests[start].body.expectedCriteria[0].weightPercentage, 100);
+  assert.equal(saved[1].id, 'new-1');
+  assert.deepEqual(criteria.getCriteriaByProject(id), saved);
+  failure = true;
+  try { await assert.rejects(criteria.saveCriteriaBatch(id, [], saved)); }
+  finally { failure = false; }
+  assert.deepEqual(criteria.getCriteriaByProject(id), saved);
+});
 
 test('UUIDs distinguish projects, teams, memberships and judge ownership after server hydration', async () => {
   await loadWorkspace(user);

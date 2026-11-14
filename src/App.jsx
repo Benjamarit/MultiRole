@@ -4,7 +4,7 @@ import Login from './pages/Login.jsx';
 import SignUp from './pages/SignUp.jsx';
 import VerifyEmail from './pages/VerifyEmail.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
-import WorkSpace from './pages/WorkSpace.jsx';
+import Dashboard from './pages/Dashboard.jsx';
 import CreateProject from './pages/CreateProject.jsx';
 import UserManagement from './pages/UserManagement.jsx';
 import AppLayout from './layouts/AppLayout.jsx';
@@ -59,7 +59,7 @@ function App() {
 
             {/* สำหรับผู้ใช้งานทั่วไป (Project Admin & Judge) */}
             <Route element={<ProtectedRoute allowedRoles={['USER']} />}>
-              <Route path="/workspace" element={<WorkSpace />} />
+              <Route path="/workspace" element={<Dashboard />} />
               <Route path="/projects/new" element={<CreateProject />} />
 
               {/* เฉพาะเจ้าของโครงการ (Project Admin ของโครงการนั้น) */}

@@ -41,6 +41,9 @@ public final class ApiDtos {
     public record CriteriaRequest(String title, String description, String scoringType,
                                   BigDecimal maxScore, BigDecimal weightPercentage) {}
     public record CriteriaOrderRequest(List<UUID> criterionIds) {}
+    public record CriteriaBatchEntry(UUID criterionId, String title, String description, String scoringType,
+                                     BigDecimal maxScore, BigDecimal weightPercentage, Integer displayOrder) {}
+    public record CriteriaBatchRequest(List<CriteriaBatchEntry> criteria, List<CriteriaBatchEntry> expectedCriteria) {}
 
     public record CriteriaResponse(UUID criterionId, UUID competitionId, String title, String description,
                                    String scoringType, BigDecimal maxScore, BigDecimal weightPercentage, Integer displayOrder) {

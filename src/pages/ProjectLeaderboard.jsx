@@ -470,52 +470,20 @@ export default function ProjectLeaderboard() {
                       {slot.label}
                     </span>
 
-                    {slot.teams.map(team => (
-                      <div key={team.id} className="mt-3 border-t border-slate-200 pt-2">
-                        <h3
-                          className={`mt-2 truncate font-extrabold text-slate-900 ${
-                            isFirst ? 'text-xl' : 'text-base'
-                          }`}
-                          title={team.name}
-                        >
-                          {team.name}
-                        </h3>
-                        <p className="mt-0.5 truncate text-xs text-slate-500">
-                          {t('กลุ่ม:', 'Group:')} {team.groupName}
-                        </p>
-
-                        <div className="my-3 rounded-xl border border-slate-100 bg-slate-50/90 py-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                            {t('คะแนนเฉลี่ย', 'Average Score')}
-                          </p>
-                          <p
-                            className={`font-mono font-extrabold ${
-                              isFirst ? 'text-3xl' : 'text-2xl'
-                            } ${slot.scoreColor}`}
-                          >
-                            {team.averageScore.toFixed(2)}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-500">
-                          <span>
-                            {t('ตรวจแล้ว:', 'Judges:')}{' '}
-                            <strong className="text-slate-700">
-                              {team.evaluatedCount}/{team.expectedCount}
-                            </strong>
-                          </span>
-                          {team.isComplete ? (
-                            <Badge variant="success">
-                              {t('ครบถ้วน', 'Complete')}
-                            </Badge>
-                          ) : (
-                            <Badge variant="warning">
-                              {t('รอผล', 'Pending')}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                    <h3 className={`mt-4 break-words font-extrabold text-slate-900 ${isFirst ? 'text-xl' : 'text-base'}`}>
+                      {slot.teams.map(team => team.name).join(', ')}
+                    </h3>
+                    {slot.teams.length === 1 && <p className="mt-1 text-xs text-slate-500">{t('กลุ่ม:', 'Group:')} {slot.teams[0].groupName}</p>}
+                    <div className="my-3 rounded-xl border border-slate-100 bg-slate-50/90 py-2">
+                      <p className="text-[10px] font-semibold text-slate-400">{t('คะแนนเฉลี่ย', 'Average Score')}</p>
+                      <p className={`font-mono font-extrabold ${isFirst ? 'text-3xl' : 'text-2xl'} ${slot.scoreColor}`}>{slot.teams[0].averageScore.toFixed(2)}</p>
+                    </div>
+                    <div className="space-y-2">
+                      {slot.teams.map(team => <div key={team.id} className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                        <span>{slot.teams.length > 1 ? team.name + ': ' : t('ตรวจแล้ว: ', 'Judges: ')}<strong className="text-slate-700">{team.evaluatedCount}/{team.expectedCount}</strong></span>
+                        <Badge variant={team.isComplete ? 'success' : 'warning'}>{team.isComplete ? t('ครบถ้วน', 'Complete') : t('รอผล', 'Pending')}</Badge>
+                      </div>)}
+                    </div>
                   </div>
 
                   {/* แท่นยืนโพเดียม (Stepped Pedestal Block) */}

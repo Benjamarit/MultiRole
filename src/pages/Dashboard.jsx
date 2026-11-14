@@ -87,7 +87,7 @@ function compareByUpcomingDeadline(a, b) {
   return timeB - timeA; // หมดเขตล่าสุดขึ้นก่อน
 }
 
-export default function Workspace() {
+export default function Dashboard() {
   const navigate = useNavigate();
   const { user, refresh, revision } = useAuth();
   const { t } = useLanguage();
@@ -215,16 +215,13 @@ export default function Workspace() {
     <div className="mx-auto max-w-7xl space-y-8 p-6">
       {refreshError && <p role="status" className="text-sm text-amber-700">{t('อัปเดตไม่สำเร็จ ระบบจะลองใหม่', 'Update failed. Retrying automatically.')}</p>}
       <PageHeader
-        title={t(
-          `สวัสดี, ${user?.name || 'ผู้ใช้งาน'}`,
-          `Welcome, ${user?.name || 'User'}`
-        )}
-        description={t('เลือกโครงการเพื่อเริ่มใช้งาน', 'Choose a competition to get started')}
+        title={t('แดชบอร์ด', 'Dashboard')}
+        description={t(`สวัสดี, ${user?.name || 'ผู้ใช้งาน'} เลือกโครงการเพื่อเริ่มใช้งาน`, `Welcome, ${user?.name || 'User'}. Choose a competition to get started.`)}
         action={
           <div className="flex gap-2">
           <Button variant="secondary" isLoading={isRefreshing} disabled={isRefreshing} onClick={async () => {
             if (isRefreshing) return;
-            if (await refreshWorkspace()) toast.success(t('อัปเดตข้อมูลแล้ว', 'Workspace updated'));
+            if (await refreshWorkspace()) toast.success(t('อัปเดตข้อมูลแล้ว', 'Dashboard updated'));
           }}>{t('รีเฟรชข้อมูล', 'Refresh')}</Button>
           <Button onClick={() => navigate('/projects/new')}>
             <Plus className="h-4 w-4" />
@@ -278,7 +275,7 @@ export default function Workspace() {
         <div
           className="inline-flex rounded-xl border border-slate-200 bg-slate-100/80 p-1"
           role="tablist"
-          aria-label="Workspace view selector"
+          aria-label="Dashboard view selector"
         >
           {[
             {

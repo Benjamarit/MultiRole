@@ -8,11 +8,18 @@ test('ranking excludes unscored teams but keeps a legitimately submitted zero', 
   assert.deepEqual(rankEvaluatedTeams([{ id: 'empty', evaluatedCount: 0, averageScore: 0 },
     { id: 'zero', evaluatedCount: 1, averageScore: 0 }]).map(t => [t.id, t.rank]), [['zero', 1]]);
 });
-test('shared ranks follow 1, 1, 3 and use displayed precision without mutating inputs', () => {
+test('shared ranks follow 1, 1, 2 and use displayed precision without mutating inputs', () => {
   const teams = [70, 90.001, 90.002, 70, 0].map((averageScore, id) => ({ id, averageScore, evaluatedCount: 2 }));
   const ranked = rankEvaluatedTeams(teams);
-  assert.deepEqual(ranked.map(t => [t.averageScore, t.rank]), [[90, 1], [90, 1], [70, 3], [70, 3], [0, 5]]);
+  assert.deepEqual(ranked.map(t => [t.averageScore, t.rank]), [[90, 1], [90, 1], [70, 2], [70, 2], [0, 3]]);
   assert.equal(teams[1].averageScore, 90.001);
+});
+
+test('dense ranks do not skip the next place after a tie at any position', () => {
+  const ranked = scores => rankEvaluatedTeams(scores.map((averageScore, id) => ({ id, averageScore, evaluatedCount: 1 }))).map(team => team.rank);
+  assert.deepEqual(ranked([100, 90, 90, 80]), [1, 2, 2, 3]);
+  assert.deepEqual(ranked([100, 100, 100, 100]), [1, 1, 1, 1]);
+  assert.deepEqual(ranked([100, 90, 80, 70]), [1, 2, 3, 4]);
 });
 test('draft-all captures hidden/incomplete teams with content, skips empty and submitted teams', () => {
   const input = { teams: ['a', 'b', 'c', 'd', 'e'].map(id => ({ id })), statuses: { a: 'DRAFT', c: 'SUBMITTED' },

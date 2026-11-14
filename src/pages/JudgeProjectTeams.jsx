@@ -57,7 +57,7 @@ export default function JudgeProjectTeams() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <BackButton to="/workspace">
-        {t('กลับไปหน้า Workspace', 'Back to Workspace', { compact: true })}
+        {t('กลับไปหน้าแดชบอร์ด', 'Back to Dashboard', { compact: true })}
       </BackButton>
 
       <PageHeader

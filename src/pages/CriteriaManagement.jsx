@@ -8,6 +8,8 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
+  Save,
+  RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../components/PageHeader';
@@ -16,14 +18,14 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
 import ConfirmDialog from '../components/ConfirmDialog';
+import UnsavedChangesGuard from '../components/UnsavedChangesGuard';
+import { criteriaFingerprint } from '../data/evaluations/CriteriaBatch';
 import { getProjectById } from '../data/projects/ProjectStore';
 import { loadProject } from '../api/workspace';
 import { useLanguage } from '../context/LanguageContext';
 import {
-  deleteCriterion,
   getCriteriaByProject,
-  saveCriterion,
-  reorderCriteria,
+  saveCriteriaBatch,
 } from '../data/evaluations/CriteriaStore';
 
 const SCORING_LIMITS = {
@@ -57,8 +59,7 @@ export default function CriteriaManagement() {
     if (error.response?.status === 409) {
       try {
         await loadProject(id);
-        setCriteria(getCriteriaByProject(id));
-        setEditingRowId(null); setEditRowData(null); setIsConfirmOpen(false);
+        // Keep the local staged list intact so a failed/conflicting batch cannot erase input.
       } catch { /* Keep the original write error if refreshing is unavailable. */ }
     }
     toast.error(error.message);
@@ -75,6 +76,11 @@ export default function CriteriaManagement() {
   );
 
   const [criteria, setCriteria] = useState(() => getCriteriaByProject(id));
+  const [baseline, setBaseline] = useState(() => getCriteriaByProject(id));
+  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
+  const [batchError, setBatchError] = useState('');
+  const [lastSavedAt, setLastSavedAt] = useState(null);
+  const isDirty = criteriaFingerprint(criteria) !== criteriaFingerprint(baseline);
 
   // editingRowId เก็บ id ของแถวที่กำลังแก้ไข หรือ NEW_ROW_ID หากเป็นแถวที่เพิ่งกด "+ เพิ่มเกณฑ์ประเมิน"
   const [editingRowId, setEditingRowId] = useState(null);
@@ -215,7 +221,7 @@ export default function CriteriaManagement() {
     });
   };
 
-  const saveInlineEdit = async () => {
+  const saveInlineEdit = () => {
     if (savingRef.current) return;
     if (locked) { toast.error(lockMessage); return; }
     try {
@@ -273,34 +279,30 @@ export default function CriteriaManagement() {
         return;
       }
 
-      savingRef.current = true;
-      setIsSaving(true);
-      const savedCriterion = await saveCriterion(id, {
+      const savedCriterion = {
         ...(isAddingNew ? {} : originalItem),
+        id: isAddingNew ? `local-${crypto.randomUUID()}` : originalItem.id,
         name,
         description,
         type: editRowData.type,
         weight: weightValue,
         maxScore,
-      });
+      };
 
       if (isAddingNew) {
         setCriteria((prev) => [...prev, savedCriterion]);
-        toast.success(t('เพิ่มเกณฑ์ประเมินเรียบร้อย', 'Criterion added'));
+        toast.success(t('เพิ่มในรายการแล้ว กรุณาบันทึกทั้งหมดเมื่อพร้อม', 'Added to the list. Save all criteria when ready.'));
       } else {
         setCriteria((prev) =>
           prev.map((item) => (item.id === editingRowId ? savedCriterion : item))
         );
-        toast.success(t('อัปเดตเกณฑ์ประเมินเรียบร้อย', 'Criterion updated'));
+        toast.success(t('อัปเดตรายการแล้ว ยังไม่บันทึกบนเซิร์ฟเวอร์', 'List updated. Changes have not been saved to the server.'));
       }
 
       setEditingRowId(null);
       setEditRowData(null);
     } catch (error) {
-      await reportWriteError(error);
-    } finally {
-      savingRef.current = false;
-      setIsSaving(false);
+      toast.error(error.message);
     }
   };
 
@@ -311,16 +313,15 @@ export default function CriteriaManagement() {
     }
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (locked) { toast.error(lockMessage); return; }
     try {
-      await deleteCriterion(id, deleteId);
       setCriteria((prev) => prev.filter((criterion) => criterion.id !== deleteId));
       setIsConfirmOpen(false);
       setDeleteId(null);
-      toast.success(t('ลบเกณฑ์ประเมินเรียบร้อย', 'Criterion deleted'));
+      toast.success(t('นำออกจากรายการแล้ว กรุณาบันทึกทั้งหมดเพื่อยืนยัน', 'Removed from the list. Save all criteria to confirm.'));
     } catch (error) {
-      await reportWriteError(error);
+      toast.error(error.message);
     }
   };
 
@@ -347,37 +348,55 @@ export default function CriteriaManagement() {
     return criteria;
   }, [criteria, editingRowId, editRowData, locked]);
 
-  const moveCriterion = async (criterionId, offset) => {
+  const moveCriterion = (criterionId, offset) => {
     if (locked || savingRef.current || editingRowId) return;
     const index = criteria.findIndex(item => item.id === criterionId);
     if (index < 0 || index + offset < 0 || index + offset >= criteria.length) return;
-    const ids = criteria.map(item => item.id);
-    [ids[index], ids[index + offset]] = [ids[index + offset], ids[index]];
+    const next = [...criteria];
+    [next[index], next[index + offset]] = [next[index + offset], next[index]];
+    setCriteria(next);
+  };
+
+  const submitCriteria = async () => {
+    if (locked || savingRef.current || editingRowId || !isDirty) return;
     savingRef.current = true;
     setIsSaving(true);
+    setBatchError('');
     try {
-      await reorderCriteria(id, ids);
-      setCriteria(getCriteriaByProject(id));
-      toast.success(t('บันทึกลำดับเกณฑ์แล้ว', 'Criteria order saved'));
-    } catch (error) { await reportWriteError(error); }
-    finally { savingRef.current = false; setIsSaving(false); }
+      const saved = await saveCriteriaBatch(id, criteria, baseline);
+      setCriteria(saved);
+      setBaseline(saved);
+      setLastSavedAt(new Date());
+      toast.success(t(`บันทึกเกณฑ์ทั้งหมดแล้ว ${saved.length} ข้อ`, `Saved all ${saved.length} criteria`));
+    } catch (error) {
+      setBatchError(error.message);
+      await reportWriteError(error);
+    } finally { savingRef.current = false; setIsSaving(false); }
+  };
+
+  const discardChanges = () => {
+    const latest = getCriteriaByProject(id);
+    setCriteria(latest); setBaseline(latest);
+    setEditingRowId(null); setEditRowData(null);
+    setBatchError(''); setIsDiscardOpen(false);
   };
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
+      <UnsavedChangesGuard when={isDirty || Boolean(editingRowId) || isSaving} busy={isSaving} message={t('เกณฑ์ที่แก้ไขยังไม่ได้บันทึก หากออกจากหน้านี้รายการที่ยังไม่บันทึกจะหายไป', 'Your criteria changes have not been saved. Leaving will discard unsaved edits.')} />
       <BackButton to={`/project/${id}/dashboard`}>
         {t('กลับไปหน้า Dashboard โครงการ', 'Back to Dashboard')}
       </BackButton>
       <PageHeader
         title={t('จัดการเกณฑ์ประเมิน', 'Scoring Criteria Management')}
         description={locked ? t('ตรวจสอบหัวข้อและรายละเอียดเกณฑ์ที่ใช้ประเมินโครงการนี้', 'Review the scoring criteria and rubric used for this project.') : tDesc(
-          'กำหนดหัวข้อ รูปแบบการให้คะแนน คำอธิบายเกณฑ์ (Rubric) และค่าน้ำหนักรวมให้ครบ 100% สำหรับโครงการนี้',
-          'Define evaluation criteria, scoring formats, rubric levels, and weights totaling 100%.'
+          'เพิ่ม แก้ไข และจัดลำดับในรายการก่อน แล้วกดบันทึกเกณฑ์ทั้งหมดครั้งเดียว น้ำหนักรวมต้องครบ 100% ก่อนเปิดรับคะแนน',
+          'Prepare and reorder the list, then save all criteria together. Weights must total 100% before scoring opens.'
         )}
         action={
           <Button
             onClick={handleAddClick}
-            disabled={isSaving || locked || totalWeight >= 100 || editingRowId === NEW_ROW_ID}
+            disabled={isSaving || locked || totalWeight >= 100 || Boolean(editingRowId)}
             aria-describedby={locked ? 'criteria-lock-message' : undefined}
           >
             <Plus className="h-4 w-4" />
@@ -754,7 +773,7 @@ export default function CriteriaManagement() {
                         {locked ? <span className="inline-flex items-center gap-1 text-xs text-slate-500"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />{t('ดูอย่างเดียว', 'View only')}</span> : isEditing ? (
                           <>
                             <Button size="sm" onClick={saveInlineEdit} isLoading={isSaving} disabled={isSaving}>
-                              {isSaving ? t('กำลังบันทึก…', 'Saving…') : t('บันทึก', 'Save')}
+                              {editingRowId === NEW_ROW_ID ? t('เพิ่มในรายการ', 'Add to list') : t('อัปเดตรายการ', 'Update list')}
                             </Button>
                             <Button
                               variant="secondary"
@@ -771,14 +790,14 @@ export default function CriteriaManagement() {
                               variant="secondary"
                               size="sm"
                               onClick={() => startEditing(item)}
-                              disabled={isSaving}
+                              disabled={isSaving || Boolean(editingRowId)}
                             >
                               {t('แก้ไข', 'Edit')}
                             </Button>
                             <Button
                               variant="danger"
                               size="sm"
-                              disabled={isSaving}
+                              disabled={isSaving || Boolean(editingRowId)}
                               onClick={() => {
                                 setDeleteId(item.id);
                                 setIsConfirmOpen(true);
@@ -817,12 +836,28 @@ export default function CriteriaManagement() {
         </div>
       </Card>
 
+      {( !locked || isDirty) && <Card className="sticky bottom-4 z-20 border-blue-200 shadow-lg">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div role="status" aria-live="polite">
+            <p className="font-semibold text-slate-900">{isDirty ? t('มีการเปลี่ยนแปลงที่ยังไม่บันทึก', 'Unsaved changes') : t('รายการตรงกับข้อมูลที่บันทึกแล้ว', 'All changes saved')}</p>
+            <p className="mt-1 text-xs text-slate-500">{editingRowId ? t('เพิ่มหรืออัปเดตแถวที่กำลังแก้ไขให้เสร็จก่อนบันทึกทั้งหมด', 'Finish editing the current row before saving all criteria.') : lastSavedAt ? t(`บันทึกล่าสุด ${lastSavedAt.toLocaleTimeString('th-TH')}`, `Last saved ${lastSavedAt.toLocaleTimeString()}`) : t('บันทึกทั้งหมดจะยังไม่เปิดรับคะแนน', 'Saving does not open scoring.')}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" disabled={isSaving || (!isDirty && !editingRowId)} onClick={() => setIsDiscardOpen(true)}><RotateCcw className="h-4 w-4" />{t('ยกเลิกการเปลี่ยนแปลง', 'Discard changes')}</Button>
+            <Button disabled={locked || isSaving || !isDirty || Boolean(editingRowId)} isLoading={isSaving} onClick={submitCriteria}><Save className="h-4 w-4" />{isSaving ? t('กำลังบันทึกทั้งหมด…', 'Saving all…') : t(`บันทึกเกณฑ์ทั้งหมด (${criteria.length} ข้อ)`, `Save all criteria (${criteria.length})`)}</Button>
+          </div>
+        </div>
+        {batchError && <p role="alert" className="mt-3 text-sm text-red-700">{batchError} {t('ข้อมูลที่แก้ไขยังอยู่ในหน้านี้ หากข้อมูลบนเซิร์ฟเวอร์เปลี่ยน ให้ยกเลิกการเปลี่ยนแปลงเพื่อโหลดรายการล่าสุด', 'Your edits are kept here. If server data changed, discard changes to load the latest list.')}</p>}
+      </Card>}
+
+      <ConfirmDialog isOpen={isDiscardOpen} title={t('ยกเลิกการเปลี่ยนแปลงทั้งหมด?', 'Discard all changes?')} message={t('รายการที่ยังไม่บันทึกจะถูกแทนด้วยข้อมูลที่บันทึกไว้ล่าสุด', 'Unsaved edits will be replaced by the latest saved list.')} onConfirm={discardChanges} onCancel={() => setIsDiscardOpen(false)} confirmText={t('ยกเลิกการเปลี่ยนแปลง', 'Discard changes')} />
+
       <ConfirmDialog
         isOpen={!locked && isConfirmOpen}
         title={t('ยืนยันการลบเกณฑ์ประเมิน', 'Delete Evaluation Criterion')}
         message={t(
-          'คุณแน่ใจหรือไม่ว่าต้องการลบเกณฑ์ประเมินนี้? คะแนนที่กรรมการเคยให้ในเกณฑ์นี้อาจได้รับผลกระทบ',
-          'Are you sure you want to delete this criterion?'
+          'นำเกณฑ์นี้ออกจากรายการหรือไม่? การลบจะมีผลเมื่อกดบันทึกเกณฑ์ทั้งหมด',
+          'Remove this criterion from the list? The deletion takes effect when you save all criteria.'
         )}
         onConfirm={confirmDelete}
         onCancel={() => {

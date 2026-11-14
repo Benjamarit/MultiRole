@@ -167,6 +167,10 @@ export default function ProjectDashboard() {
       stat: t('อันดับและส่งออก', 'Rankings & export', { compact: true }),
     },
   ];
+  const scoringHasOpened = project?.criteriaLocked || project?.status === 'Active' || project?.status === 'Closed';
+  const quickMenus = scoringHasOpened
+    ? [...projectMenus.filter(menu => [BarChart3, Trophy].includes(menu.icon)), ...projectMenus.filter(menu => ![BarChart3, Trophy].includes(menu.icon))]
+    : projectMenus;
 
   const handleToggleStatus = async () => {
     if (isUpdatingStatus) return;
@@ -222,7 +226,7 @@ export default function ProjectDashboard() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <BackButton to="/workspace">
-        {t('กลับไปหน้า Workspace', 'Back to Workspace', { compact: true })}
+        {t('กลับไปหน้าแดชบอร์ด', 'Back to Dashboard', { compact: true })}
       </BackButton>
 
       <PageHeader
@@ -253,7 +257,7 @@ export default function ProjectDashboard() {
 
       {/* ตัวช่วยนำทางตั้งค่าโครงการ (Project Setup Guide / Stepper) */}
       <Card className="border-blue-200/80 bg-gradient-to-br from-blue-50/70 via-white to-indigo-50/40">
-        <details open={completedStepsCount < setupSteps.length} className="group/setup">
+        <details open={!scoringHasOpened && completedStepsCount < setupSteps.length} className="group/setup">
         <summary className="flex cursor-pointer list-none flex-col justify-between gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-blue-500 sm:flex-row sm:items-center [&::-webkit-details-marker]:hidden">
           <div className="flex items-center gap-2.5">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white shadow-2xs">
@@ -411,13 +415,16 @@ export default function ProjectDashboard() {
 
       {/* เมนูการจัดการทั้ง 6 ส่วน */}
       <ProjectStructureLock project={project} />
+      <section aria-labelledby="project-shortcuts-title" className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 sm:p-5">
+      <div className="mb-4 flex items-center gap-2"><Sparkles className="h-4 w-4 text-blue-600" aria-hidden="true" /><h2 id="project-shortcuts-title" className="text-sm font-bold text-slate-900">{t('เมนูลัดโครงการ', 'Project quick links')}</h2></div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {projectMenus.map((menu) => {
+        {quickMenus.map((menu) => {
           const Icon = menu.icon;
+          const emphasized = scoringHasOpened && [BarChart3, Trophy].includes(menu.icon);
           if (menu.icon === UserCheck && !setup.canAssign) return <div key={menu.path} aria-disabled="true"><Card className="h-full border-slate-200 bg-slate-50"><LockKeyhole className="mb-4 h-5 w-5 text-slate-400" aria-hidden="true" /><h3 className="text-base font-bold text-slate-500">{menu.title}</h3><p className="mt-2 text-xs text-slate-500">{t('เพิ่มทีมและกรรมการก่อนมอบหมาย', 'Add teams and judges before assigning')}</p></Card></div>;
           return (
-            <Link key={menu.path} to={menu.path} className="group block h-full">
-              <Card className="flex h-full flex-col justify-between transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-blue-400 group-hover:shadow-md">
+            <Link key={menu.path} to={menu.path} className="group block h-full rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+              <Card className={`flex h-full flex-col justify-between bg-white transition-all duration-150 motion-reduce:transition-none group-hover:border-blue-400 group-hover:shadow-md ${emphasized ? 'border-blue-300 shadow-sm' : 'border-slate-200'}`}>
                 <div>
                   <div className="mb-4 flex items-center justify-between">
                     <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-600 group-hover:text-white">
@@ -438,6 +445,7 @@ export default function ProjectDashboard() {
           );
         })}
       </div>
+      </section>
       <ConfirmDialog isOpen={Boolean(pendingDeadline)} isLoading={isSavingDeadline} isDanger={false}
         title={t('ยืนยันเปลี่ยนกำหนดปิดรับคะแนน', 'Confirm deadline change')}
         message={t(`เปลี่ยนจาก ${pendingDeadline?.previous ? new Date(pendingDeadline.previous).toLocaleString('th-TH') : 'ไม่กำหนดเวลา'} เป็น ${pendingDeadline?.value ? new Date(pendingDeadline.value).toLocaleString('th-TH') : 'ไม่กำหนดเวลา'} การเปลี่ยนนี้มีผลต่อเวลาที่กรรมการแก้ไขและส่งคะแนนได้ และจะบันทึกประวัติผู้เปลี่ยน`, `Change from ${pendingDeadline?.previous ? new Date(pendingDeadline.previous).toLocaleString('en-GB') : 'No deadline'} to ${pendingDeadline?.value ? new Date(pendingDeadline.value).toLocaleString('en-GB') : 'No deadline'}. This affects when judges may edit and submit scores. The change and actor will be recorded.`)}

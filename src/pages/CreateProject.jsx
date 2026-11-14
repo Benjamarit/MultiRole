@@ -103,7 +103,7 @@ export default function CreateProject() {
   return (
     <div className="mx-auto max-w-xl space-y-6 p-6">
       <BackButton to="/workspace">
-        {t('กลับไปหน้า Workspace', 'Back to Workspace')}
+        {t('กลับไปหน้าแดชบอร์ด', 'Back to Dashboard')}
       </BackButton>
 
       <PageHeader
